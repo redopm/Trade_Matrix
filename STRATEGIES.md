@@ -13,7 +13,7 @@ This document contains the plain-English rules for every algorithm running insid
 ### Parameters
 * **Universe:** Nifty 500 (or Top 200 Liquid Stocks)
 * **Timeframe:** Daily (End of Day Data)
-* **Position Type:** Swing Trading / Short-to-Medium Term
+* **Position Type:** Swing Trading / Short-to-Medium Term/Long term
 
 ### Filter Rules (Entry Conditions)
 **A. Fundamental Filters:**
@@ -155,3 +155,67 @@ The Documentation Add-on
 Apni STRATEGIES.md file mein "Fundamental Filters" ke section mein is line ko zaroor add kar lena:
 
 Event Risk Filter (Crucial): The algorithm must fetch the Next_Earnings_Date. If Current_Date is within ±3 days of the Next_Earnings_Date, the system will IGNORE all technical buy/sell signals to avoid gap-up/gap-down risk.
+
+
+### **Technical part for Trade Matrix**
+1. Trend Identification (Market Ka Flow Kahan Hai?)
+Kyun dekhna hai? Algo ka sabse pehla rule: "Trend is your friend." Agar market upar ja raha hai, toh algo sirf Buy ka signal dhoondhega, Short sell ka nahi.
+
+Moving Averages (SMA/EMA): 200 EMA long-term trend batata hai, aur 50 EMA short-term trend.
+
+Algo Logic: If Current_Price > 200 EMA -> Trend is Bullish (Only allow BUY signals).
+
+ADX (Average Directional Index): Ye batata hai ki trend mein "dum" kitna hai. Agar ADX > 25 hai, matlab trend strong hai, chalo trade lein. Agar < 20 hai, matlab market sideways hai, algo shant baithega.
+
+2. Momentum & Mean Reversion (Entry Timing)
+Kyun dekhna hai? Trend bullish hai iska matlab ye nahi ki abhi kharid lo. Hume saste mein (dip par) kharidna hai.
+
+RSI (Relative Strength Index): Oversold (sasta) aur Overbought (mehanga) zone batata hai.
+
+Algo Logic: If Trend == Bullish AND RSI(14) < 30 -> Executing BUY order (Matlab strong stock thoda gira hai, utha lo).
+
+MACD (Moving Average Convergence Divergence): Jab MACD line signal line ko neeche se kaat-ti hai, toh wo ek naye momentum ka start hota hai.
+
+3. Volatility & Dynamic Risk Management (The Pro Secret)
+Kyun dekhna hai? Retail trader hamesha fixed 5% ya 10 rupees ka Stop-Loss (SL) lagata hai aur wo jaldi hit ho jata hai. Algo trader hamesha Dynamic Stop-Loss lagata hai market ke mood ke hisaab se.
+
+ATR (Average True Range): Ye batata hai ki stock 1 din mein kitna utaar-chadav karta hai.
+
+Algo Logic: Agar stock ka ATR ₹15 hai, toh algo Stop-Loss entry price se 2 x ATR (yani ₹30) neeche lagayega. Isse market ke normal noise mein SL hit nahi hota.
+
+Bollinger Bands: Jab bands sikudne (squeeze) lagte hain, algo samajh jata hai ki ek bada blast (breakout) aane wala hai.
+
+4. Volume & Liquidity (Asliyat Check)
+Kyun dekhna hai? Chart par price upar ja raha hai, par kya bade khiladi (Institutions) actual mein paisa daal rahe hain? Agar volume nahi hai, toh wo ek "Trap" (dhoka) hai.
+
+Volume SMA: Algo hamesha check karta hai ki breakout ke din ka volume pichle 20 din ke average volume se zyada hona chahiye.
+
+VWAP (Volume Weighted Average Price): Intraday algo traders ka bhagwan. Ye batata hai ki volume ke hisaab se din ka average price kya hai. If Price > VWAP -> Buy.
+
+Liquidity Filter: Algo pehle hi check kar leta hai ki stock mein roz minimum ₹10 Crore ka trade hota hai ya nahi. Warna order execute karne mein 'Slippage' (price difference) bohot aayega.
+
+5. Mathematical Price Levels (Support/Resistance)
+Kyun dekhna hai? Algo ko support/resistance khud draw karna nahi aata, isliye wo math ka use karta hai automatically levels nikalne ke liye.
+
+Pivot Points (Standard/Fibonacci): Pichle din/hafte ke high, low aur close ke basis par math formula se aaj ke liye R1, R2 (Resistance) aur S1, S2 (Support) nikal deta hai.
+
+Algo Logic: If Price touches S1 AND RSI indicates Oversold -> BUY.
+
+Donchian Channels: Pichle X dino ka highest aur lowest point track karta hai (Jaise 52-week high breakout).
+
+6. Multi-Timeframe Analysis (MTF - The Holy Grail)
+Kyun dekhna hai? Koi bhi pro algo system sirf ek time-frame par trade nahi leta.
+
+Algo Logic: Algo pehle Daily Chart (1D) check karega trend ke liye (e.g., Bullish). Phir wo 15-Min Chart (15m) par aayega aur RSI oversold hone ka wait karega.
+
+Bada Timeframe = Direction.
+
+Chota Timeframe = Precision Entry.
+
+Robust System Ka Blueprint:
+Ek perfect technical algo wo nahi jisme 50 indicators hon. Ek perfect algo wo hai jisme:
+Ek Trend indicator ho (SMA)
+Ek Timing indicator ho (RSI)
+Ek Risk/SL indicator ho (ATR)
+Ek Confirmation indicator ho (Volume)
+
