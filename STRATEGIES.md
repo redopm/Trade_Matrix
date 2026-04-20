@@ -119,7 +119,30 @@ Promoter Holding: Minimum 50% honi chahiye.
 
 FII / DII Increasing Stake: Agar Foreign Investors ya Mutual Funds apna paisa badha rahe hain, toh wo ek bohot strong fundamental trigger hota hai.
 
-**5. Event-Driven Filters (Tumhara Master Idea! 🎯)**
+**5. Fundamental Momentum / Growth Metrics (Company Ki Speed Kya Hai?)**
+Kyun dekhna hai? Sasti aur profitable company agar grow nahi kar rahi (stagnant hai), toh uska stock price bhi nahi badhega. Algo ko trend ke saath 'Growth' bhi chahiye.
+
+QoQ / YoY EPS Growth: Pichle quarter ya pichle saal ke mukable Earnings Per Share (EPS) kitna badha. Algo filter lagata hai: EPS_Growth > 15%.
+
+Revenue/Sales Growth: Sirf kharche kam karke profit badhana acchi baat nahi hai, actual sales bhi badhni chahiye.
+
+**6. Quant Scoring Models (Algo Traders Ka Brahmastra! ⚡)**
+Kyun dekhna hai? Algo coding mein har baar 10 alag-alag metrics (ROCE, P/E, Debt) check karna complex ho jata hai. Isliye math experts ne kuch aise 'Scores' banaye hain jo ek single number mein company ki poori kundali nikal dete hain. Algos inko sabse zyada use karte hain.
+
+Piotroski F-Score (0 to 9): Ye 9 alag-alag accounting criteria check karta hai. Agar score 7, 8, ya 9 hai, toh company financially ekdum solid hai. Algo rule bohot simple ho jata hai: If F-Score >= 7, Pass.
+
+Altman Z-Score: Ye mathematically predict karta hai ki aane wale 2 saal mein company ke bankrupcy (doobne) ke kitne chance hain. Agar score < 1.8 hai, toh algo us stock ko reject kar dega.
+
+**7. Sector-Specific Exceptions (Zaroori Logic)**
+Kyun dekhna hai? Tumhara algo poore Nifty 500 par ek hi rule nahi laga sakta. Jo rule IT company par chalega, wo Bank par fail ho jayega. Banks karza (Debt) lekar hi dhandha karte hain, toh unka Debt-to-Equity hamesha high hoga.
+
+Banks / NBFCs ke liye: Yahan P/E ya Debt nahi dekhte. Yahan algo filter karega NPA (Non-Performing Assets) (Kam hona chahiye) aur NIM (Net Interest Margin) (Zyada hona chahiye).
+
+Capital Intensive (Jaise Power/Steel): Yahan P/B (Price to Book) zyada important hota hai.
+
+Algo Logic: If Sector == "Banking", apply Bank_Rules; Else apply Standard_Rules.
+
+**8. Event-Driven Filters (Tumhara Master Idea! 🎯)**
 Kyun dekhna hai? Risk ko manage karne aur high-volatility se bachne (ya uska fayda uthane) ke liye.
 
 Next Earnings Date (Quarterly Results): Humara algo check karega: Kya aane wale 3 din mein result hai? Agar haan, toh trade mat lo (Block Entry).
