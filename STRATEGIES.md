@@ -286,5 +286,62 @@ The local database (`tradematrix_local.db`) acts as the memory of the paper trad
 * `exit_reason` (TEXT) - e.g., 'SL_HIT', 'TARGET_HIT', 'MANUAL_EXIT'
 * `exit_time` (DATETIME)
 
+### Phase 4 documnetation
+. F&O Clearance Blueprint (Kaunsa Hathiyar Kab Use Karna Hai)
+# A. Futures Trading (The Linear Game)
 
+Fundament: Future ekdum cash stock ki tarah chalta hai. Isme time decay (Theta) ya Volatility (Vega) ka koi asar nahi hota.
 
+Kya Dekhna Hai: Yahan Greeks ko bhool jao. Sirf apna Phase 1 aur Phase 2 (Price Action, Trend, aur Volume) dekho.
+
+Algo Logic: Breakout aaya -> Future Buy karo -> Strict Stop Loss lagao. Pura khel leverage (kam paise mein zyada quantity) ka hai.
+
+# B. Option Buying (The Speed Game - Naked Buy)
+
+Fundament: Option buying mein sabse bada dushman hai Time (Theta). Agar market tumhari disha mein gaya, par dheere-dheere gaya, tab bhi tumhara loss hoga.
+
+Kya Dekhna Hai:
+
+Delta: Algo hamesha 0.50 se 0.60 (At-The-Money ya slight In-The-Money) wala strike chuega. OTM (Out of The Money) kabhi nahi buy karna hai.
+
+Gamma: Expiry ke din (Zero-Hero ke liye) high Gamma wale strikes uthane hain kyunki wo price ko rocket banate hain.
+
+Momentum: Algo sirf tab buy karega jab Phase 1 mein "Strong Momentum" (jaise ADX > 25) detect ho.
+
+# C. Option Selling (The Time Game - Naked Sell)
+
+Fundament: Yahan Theta tumhara best friend hai. Agar market tumhari disha mein na jaakar wahi khada bhi raha (sideways), toh bhi tum profit kamaoge.
+
+Kya Dekhna Hai:
+
+Delta (The Enemy): Algo OTM strikes select karega jinka Delta < 0.20 ho. Iska matlab us strike ke In-The-Money hone ke chances sirf 20% hain (Yani tumhari jeetne ki probability 80% hai).
+
+Theta: Jis strike mein sabse zyada theta decay bacha ho, use sell karna.
+
+# D. Hedging / Spreads (The Professional Game)
+
+Fundament: Jab tum ek option buy aur dusra sell ek sath karte ho (Jaise Bull Call Spread), toh tum apne Greeks ko "Neutral" kar dete ho.
+
+Kya Dekhna Hai: Yahan individual Greeks nahi dekhte. Algo Net Premium, Max Profit, aur Max Loss calculate karega. Hedging ka main target Vega (Volatility) aur Theta (Decay) ke risk ko aapas mein kaatna (cancel out) hota hai.
+
+# 2. Open Interest (OI) Kahan Fit Hota Hai?
+Greeks batate hain ki Option ka premium kaise move hoga, par OI batata hai ki Market/Index khud kahan jayega. OI option pricing ka hissa nahi hai, wo market ki Map/GPS hai.
+
+Highest Call OI: Ye market ka Resistance hai. (Yahan call sellers baithe hain, wo market ko iske upar nahi jaane denge).
+
+Highest Put OI: Ye market ka Support hai.
+
+Algo Logic: Agar Nifty 22000 par hai aur highest Call OI 22200 par hai, toh algo ko pata hai ki upside sirf 200 point ki bachi hai. Wo 22300 ka target kabhi set nahi karega.
+
+# 3. Kya Pro Algo Traders Itna Hi Dekhte Hain? (The Missing Secret)
+Nahi bhai, pro quants aur institutions iske alawa 3 Advanced Metrics ko apna master filter maante hain. Inke bina F&O ka system adhoora hai:
+
+Implied Volatility (IV) & IV Percentile (IVP): Ye sabse critical factor hai. IV batata hai ki options abhi "saste" hain ya "mehenge".
+
+Rule: Agar IVP > 80 (Options bohot mehenge hain), algo kabhi Option Buy nahi karega, wo Option Sell/Hedge karega. Agar IVP < 20 (Options saste hain), tabhi algo Naked Buy karega.
+
+Put-Call Ratio (PCR): Ye pure market ka sentiment batata hai.
+
+Rule: PCR > 1.5 matlab market Overbought hai (reversal aa sakta hai). PCR < 0.6 matlab Oversold hai (bounce aa sakta hai). Algo Phase 1 ke signals ko PCR se cross-verify karta hai.
+
+Max Pain Theory: Expiry wale din, market us strike price ke aas-paas close hone ki koshish karta hai jahan option buyers ko sabse zyada loss ho (aur sellers ko max profit). Algo is point ko calculate karke expiry day ki strategy banata hai.
