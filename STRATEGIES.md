@@ -81,7 +81,54 @@ Advance/Decline Ratio: Kitne stocks upar hain vs kitne neeche hain.
 Summary for your Notes:
 
 Kharidna hai ya nahi? -> Trend + Momentum dekho.
-
 Stop-Loss kahan lagana hai? -> Volatility (ATR) dekho.
-
 Asli move hai ya trap? -> Volume dekho.
+
+
+**Fundamentals ko 4 Core Categories + 1 Event Category** mein document kar lete hain. Ise bhi apne notes mein save kar lo:
+
+**1. Valuation Metrics (Stock Sasta Hai Ya Mehanga?)**
+Kyun dekhna hai? Taaki hum overhyped stocks ko top par kharidne se bach sakein.
+
+P/E Ratio (Price-to-Earnings): Industry average se kam hona chahiye. (Agar sector ka P/E 30 hai, aur stock 15 par mil raha hai, toh sasta hai).
+
+PEG Ratio (P/E to Growth): P/E ko uski growth se compare karta hai. PEG < 1 ko generally undervalued maana jata hai.
+
+Price to Book (P/B): Banking aur Financial stocks ke liye sabse important.
+
+**2. Profitability Metrics (Business Kaisa Chal Raha Hai?)**
+Kyun dekhna hai? Sasta stock 'Kachra' bhi ho sakta hai. Ye metrics batate hain ki company actual mein profit kama rahi hai ya nahi.
+
+ROCE (Return on Capital Employed): Tumhara favourite! Company apne total capital par kitna return nikal rahi hai. ROCE > 15% is excellent.
+
+ROE (Return on Equity): Shareholder ke paise par kitna return ban raha hai.
+
+Operating Profit Margin (OPM): Dhandhe mein actual margin kitna hai? Agar margin har saal badh raha hai, toh stock fundamentally strong hai.
+
+**3. Financial Health & Solvency (Kahin Company Doob Toh Nahi Jayegi?)**
+Kyun dekhna hai? Algo mein hume default hone wali companies se door rehna hai, chahe unka chart kitna bhi sundar ho.
+
+Debt-to-Equity Ratio: Company par karza kitna hai. D/E < 1 best hota hai. Banking stocks mein ise ignore karte hain.
+
+Free Cash Flow (FCF): Sab kharche nikalne ke baad company ke haath mein kitna actual cash bacha. Positive FCF matlab company king hai.
+
+**4. Shareholding Pattern (Bade Players Ka Bharosa)**
+Kyun dekhna hai? Agar Promoters (owners) hi apne share bech rahe hain, toh hum kyun kharidein?
+
+Promoter Holding: Minimum 50% honi chahiye.
+
+FII / DII Increasing Stake: Agar Foreign Investors ya Mutual Funds apna paisa badha rahe hain, toh wo ek bohot strong fundamental trigger hota hai.
+
+**5. Event-Driven Filters (Tumhara Master Idea! 🎯)**
+Kyun dekhna hai? Risk ko manage karne aur high-volatility se bachne (ya uska fayda uthane) ke liye.
+
+Next Earnings Date (Quarterly Results): Humara algo check karega: Kya aane wale 3 din mein result hai? Agar haan, toh trade mat lo (Block Entry).
+
+Earnings Surprise: Result aane ke baad check karna ki actual profit estimate se kitna zyada tha.
+
+Dividend Yield: Long-term portfolio banane ke liye.
+
+The Documentation Add-on
+Apni STRATEGIES.md file mein "Fundamental Filters" ke section mein is line ko zaroor add kar lena:
+
+Event Risk Filter (Crucial): The algorithm must fetch the Next_Earnings_Date. If Current_Date is within ±3 days of the Next_Earnings_Date, the system will IGNORE all technical buy/sell signals to avoid gap-up/gap-down risk.
