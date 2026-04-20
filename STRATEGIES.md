@@ -237,4 +237,54 @@ Ab hum in labeled images par ek lightweight CNN (Convolutional Neural Network) m
 Step 4: Live Integration (The Eye)
 Jab model ready ho jayega, toh live market mein humara system har 15 minute mein current chart ki image banayega, apne local CNN model me daalega, aur model millisecond mein batayega ki: "Confidence 85%: Double Bottom pattern detected." Iske baad humara pehle wala filter (ROCE, RSI) check karega ki trade lena hai ya nahi.
 
+## Phase 3: The Paper Trading & Confluence Engine
+
+**Objective:** To seamlessly bridge Phase 1 (Data Screener) and Phase 2 (Vision AI), and to execute/track simulated trades locally in real-time. This phase acts as a risk-free testing ground with zero-latency execution logic.
+
+### 1. The Confluence Logic (Filter -> Trigger -> Execute)
+The system uses a sequential pipeline to save compute power and maximize accuracy.
+* **Step 1 (The Filter - Phase 1):** The screener runs on the Nifty 500 universe. Output: A highly filtered shortlist of 10-15 stocks meeting fundamental (e.g., ROCE > 15) and technical (e.g., RSI < 30) criteria.
+* **Step 2 (The Trigger - Phase 2):** The local CNN model scans the charts of ONLY these 10-15 shortlisted stocks. If a bullish setup (e.g., Double Bottom) is detected with >80% confidence, it generates a `TRADE_TRIGGER`.
+* **Step 3 (The Execution):** The trigger is sent to the Paper Broker to initiate a simulated Buy order.
+
+### 2. Paper Broker Architecture
+A custom Python engine (`PaperBroker`) manages virtual capital, executes orders, and tracks P&L using a local SQLite database.
+
+**Core Mechanics:**
+* **Virtual Capital:** Initialized at ₹10,00,000.
+* **Position Sizing:** Auto-calculated based on a fixed risk model (e.g., risking only 2% of total capital per trade).
+* **The WebSocket Watchdog:** Instead of REST API polling (which causes slippage and rate limits), the engine connects to a WebSocket stream (e.g., Yahoo Finance or Broker API) for Live Traded Price (LTP).
+* **Zero-Latency Exit Logic:** The WebSocket event listener constantly checks:
+  `IF LTP <= Stop_Loss OR LTP >= Target -> IMMEDIATELY EXECUTE SELL ORDER`
+
+### 3. Database Schema (SQLite)
+The local database (`tradematrix_local.db`) acts as the memory of the paper trading system.
+
+**Table 1: `account_balance`**
+* `id` (INT, Primary Key)
+* `total_capital` (FLOAT) - Starting balance
+* `available_margin` (FLOAT) - Capital free to trade
+* `used_margin` (FLOAT) - Capital currently locked in active trades
+
+**Table 2: `active_positions`**
+* `trade_id` (TEXT, Primary Key)
+* `symbol` (TEXT) - e.g., 'RELIANCE.NS'
+* `entry_price` (FLOAT)
+* `quantity` (INT)
+* `stop_loss` (FLOAT)
+* `target` (FLOAT)
+* `entry_time` (DATETIME)
+* `strategy_used` (TEXT) - e.g., 'Alpha_Screener_v1'
+
+**Table 3: `trade_history` (The Ledger)**
+* `trade_id` (TEXT, Primary Key)
+* `symbol` (TEXT)
+* `buy_price` (FLOAT)
+* `sell_price` (FLOAT)
+* `pnl_amount` (FLOAT)
+* `pnl_percentage` (FLOAT)
+* `exit_reason` (TEXT) - e.g., 'SL_HIT', 'TARGET_HIT', 'MANUAL_EXIT'
+* `exit_time` (DATETIME)
+
+
 
