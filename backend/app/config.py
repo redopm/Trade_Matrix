@@ -18,9 +18,48 @@ class Settings(BaseSettings):
 
     # Application
     APP_NAME: str = "TradeMatrix"
-    APP_VERSION: str = "1.0.0"
+    APP_VERSION: str = "2.0.0"
     DEBUG: bool = False
     ENVIRONMENT: str = "development"
+
+    # ── Phase 2: Pattern Recognition ──────────────────────────────────────────
+    # Gemini Vision API
+    GEMINI_API_KEY: str = ""
+    GEMINI_MODEL: str = "gemini-1.5-flash"       # Fast + vision capable
+    GEMINI_RATE_LIMIT: int = 14                   # Requests per minute (free tier: 15)
+
+    # Chart Generation
+    CHART_WINDOW_DAYS: int = 60                   # Days per chart window
+    CHART_SLIDE_STEP: int = 10                    # Sliding window step
+    CHART_WIDTH_PX: int = 800
+    CHART_HEIGHT_PX: int = 600
+    CHART_DPI: int = 100
+    CHARTS_DIR: str = str(BASE_DIR / "data" / "charts")
+    LABELS_FILE: str = str(BASE_DIR / "data" / "labels.jsonl")
+
+    # Model
+    MODEL_DIR: str = str(BASE_DIR / "models")
+    MODEL_PATH: str = str(BASE_DIR / "models" / "pattern_classifier.pkl")
+    MODEL_METADATA_PATH: str = str(BASE_DIR / "models" / "model_metadata.json")
+    MIN_PATTERN_CONFIDENCE: float = 0.75          # Min confidence to report pattern
+    CONFLUENCE_CONFIDENCE: float = 0.80           # Min for confluence signal
+
+    # Training Universe
+    PATTERN_UNIVERSE: str = "NIFTY200"            # NIFTY50 | NIFTY200 | NIFTY500
+    TRAINING_PERIOD: str = "3y"                   # 3 years historical data
+
+    # Patterns to detect (8 total)
+    BULLISH_PATTERNS: list[str] = [
+        "double_bottom", "hs_bottom", "bull_flag",
+        "cup_handle", "ascending_triangle"
+    ]
+    BEARISH_PATTERNS: list[str] = [
+        "double_top", "bear_flag", "descending_triangle"
+    ]
+
+    # Feature Extraction
+    PEAK_PROMINENCE_PCT: float = 0.03             # Min peak prominence (3% of range)
+    PEAK_DISTANCE_DAYS: int = 5                   # Min days between peaks
 
     # Database
     DATABASE_URL: str = f"sqlite+aiosqlite:///{BASE_DIR}/database/tradematrix.db"
@@ -76,6 +115,15 @@ class Settings(BaseSettings):
     # Logging
     LOG_LEVEL: str = "INFO"
     LOG_FILE: str = str(BASE_DIR / "logs" / "tradematrix.log")
+
+    @property
+    def all_patterns(self) -> list[str]:
+        return self.BULLISH_PATTERNS + self.BEARISH_PATTERNS
+
+    @property
+    def is_pattern_model_ready(self) -> bool:
+        from pathlib import Path
+        return Path(self.MODEL_PATH).exists()
 
 
 @lru_cache()

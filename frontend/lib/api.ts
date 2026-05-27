@@ -87,6 +87,37 @@ export const stocksApi = {
   getFundamentals: (symbol: string) => api.get(`/stocks/${symbol}/fundamentals`),
 };
 
+// ── Patterns (Phase 2) ────────────────────────────────────────────────────────
+export const patternsApi = {
+  // Model status
+  getStatus: () => api.get("/patterns/status"),
+  getQuota: () => api.get("/patterns/quota"),
+
+  // Training
+  startTraining: (useFullNifty200 = true) =>
+    api.post("/patterns/train", null, { params: { use_full_nifty200: useFullNifty200 } }),
+  trainModelOnly: () => api.post("/patterns/train/model-only"),
+  cancelTraining: () => api.post("/patterns/train/cancel"),
+  importColabModel: () => api.post("/patterns/model/import"),
+
+  // Detection
+  detect: (symbol: string, phase1Passed = false, generateChart = true) =>
+    api.get(`/patterns/detect/${symbol}`, {
+      params: { phase1_passed: phase1Passed, generate_chart: generateChart },
+    }),
+  detectAll: (limit = 50) => api.get("/patterns/detect-all", { params: { limit } }),
+
+  // Chart image
+  getChartUrl: (symbol: string, date?: string) =>
+    `${BASE_URL}/patterns/chart/${symbol}${date ? `?date=${date}` : ""}`,
+
+  // Labels
+  getLabelStats: () => api.get("/patterns/labels/stats"),
+  getLabels: (params?: { pattern?: string; source?: string; limit?: number; offset?: number }) =>
+    api.get("/patterns/labels", { params }),
+  exportLabels: () => `${BASE_URL}/patterns/labels/export`,
+};
+
 // ── WebSocket ─────────────────────────────────────────────────────────────────
 export const createScreenerWebSocket = (
   runId: string,

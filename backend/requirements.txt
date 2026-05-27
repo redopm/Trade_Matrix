@@ -32,3 +32,24 @@ tenacity>=8.3.0
 
 # WebSocket support
 websockets>=12.0
+
+# ── Phase 2: Pattern Recognition ──────────────────────────────────────────────
+# Chart generation
+mplfinance>=0.12.10b0
+matplotlib>=3.8.0
+Pillow>=10.0.0
+
+# Signal processing & ML
+scipy>=1.13.0
+scikit-learn>=1.5.0
+xgboost>=2.0.0
+joblib>=1.4.0
+
+# Computer Vision
+opencv-python-headless>=4.9.0
+
+# Gemini Vision API
+google-generativeai>=0.7.0
+
+# Data storage
+pyarrow>=16.0.0

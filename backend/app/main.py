@@ -17,7 +17,7 @@ from fastapi.responses import JSONResponse
 
 from app.config import settings
 from app.database import init_db
-from app.routers import screener, trades, stocks, dashboard
+from app.routers import screener, trades, stocks, dashboard, patterns
 from app.services.scheduler import create_scheduler
 from app.utils.logger import get_logger
 
@@ -161,5 +161,6 @@ app.include_router(screener.router, prefix=API_PREFIX)
 app.include_router(trades.router, prefix=API_PREFIX)
 app.include_router(stocks.router, prefix=API_PREFIX)
 app.include_router(dashboard.router, prefix=API_PREFIX)
+app.include_router(patterns.router, prefix=API_PREFIX)  # Phase 2
 
 logger.info(f"API routes registered at prefix: {API_PREFIX}")

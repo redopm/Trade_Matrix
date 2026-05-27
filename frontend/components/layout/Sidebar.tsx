@@ -8,13 +8,16 @@ interface NavItem {
   label: string;
   icon: string;
   description?: string;
+  badge?: string;
 }
 
 const navItems: NavItem[] = [
   { href: "/", label: "Dashboard", icon: "⬡", description: "Overview & Stats" },
   { href: "/screener", label: "Screener", icon: "⚡", description: "Alpha Screener" },
+  { href: "/patterns", label: "Patterns", icon: "🔍", description: "Pattern Recognition", badge: "Phase 2" },
+  { href: "/training", label: "Training", icon: "🧠", description: "ML Pipeline" },
   { href: "/trades", label: "Trades", icon: "📊", description: "Paper Trades" },
-  { href: "/stocks", label: "Stocks", icon: "🔍", description: "Stock Lookup" },
+  { href: "/stocks", label: "Stocks", icon: "📈", description: "Stock Lookup" },
 ];
 
 export function Sidebar() {
@@ -39,7 +42,7 @@ export function Sidebar() {
               TRADEMATRIX
             </div>
             <div className="text-xs" style={{ color: "var(--text-muted)" }}>
-              Phase 1 · Alpha Screener
+              Phase 1+2 · Alpha + Patterns
             </div>
           </div>
         </div>
@@ -84,8 +87,23 @@ export function Sidebar() {
                 }}
               >
                 <span className="text-lg">{item.icon}</span>
-                <div>
-                  <div className="text-sm font-medium">{item.label}</div>
+                <div className="flex-1">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-medium">{item.label}</span>
+                    {item.badge && (
+                      <span
+                        className="text-xs px-1.5 py-0.5 rounded font-bold"
+                        style={{
+                          background: "rgba(79,172,254,0.15)",
+                          color: "var(--accent-blue)",
+                          fontSize: "9px",
+                          letterSpacing: "0.05em",
+                        }}
+                      >
+                        {item.badge}
+                      </span>
+                    )}
+                  </div>
                   {item.description && (
                     <div
                       className="text-xs"
