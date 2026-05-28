@@ -183,7 +183,7 @@ function SignalDetailModal({
               <div
                 key={f.label}
                 className="flex items-center justify-between p-2 rounded-lg"
-                style={{ background: "rgba(255,255,255,0.03)" }}
+                style={{ background: "rgba(0,0,0,0.03)" }}
               >
                 <div>
                   <div className="text-xs" style={{ color: "var(--text-secondary)" }}>
@@ -574,7 +574,7 @@ export default function ScreenerPage() {
                           <span
                             className="text-xs font-bold px-2 py-0.5 rounded flex items-center gap-1"
                             style={{
-                              background: (sig.pattern_confidence ?? 0) >= 0.70 ? "rgba(0,245,160,0.15)" : "rgba(255,255,255,0.05)",
+                              background: (sig.pattern_confidence ?? 0) >= 0.70 ? "rgba(0,245,160,0.15)" : "rgba(0,0,0,0.05)",
                               color: (sig.pattern_confidence ?? 0) >= 0.70 ? "var(--accent-green)" : "var(--text-secondary)",
                               border: (sig.pattern_confidence ?? 0) >= 0.70 ? "1px solid rgba(0,245,160,0.3)" : "none",
                             }}

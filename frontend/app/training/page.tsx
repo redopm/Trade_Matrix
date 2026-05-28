@@ -43,14 +43,14 @@ const STAGE_LABELS: Record<string, string> = {
 
 const STAGE_ORDER: Stage[] = ["download", "labeling", "training", "done"];
 
-function StageIndicator({ stage, active, pct }: { stage: Stage; active: boolean; pct?: number }) {
+function StageIndicator({ stage, active, pct }: { stage: Stage; active: string; pct?: number }) {
   const labels: Record<string, string> = {
     download: "Download Data",
     labeling: "Gemini Label",
     training: "Train Model",
     done: "Complete",
   };
-  const done = STAGE_ORDER.indexOf(stage) < STAGE_ORDER.indexOf(active as Stage);
+  const done = STAGE_ORDER.indexOf(stage) < STAGE_ORDER.indexOf(active as unknown as Stage);
   return (
     <div className="flex flex-col items-center gap-2 flex-1">
       <div
