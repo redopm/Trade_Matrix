@@ -5,6 +5,7 @@ Manages all application settings via Pydantic Settings (type-safe env variables)
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from functools import lru_cache
 from pathlib import Path
+from typing import Optional
 
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 
