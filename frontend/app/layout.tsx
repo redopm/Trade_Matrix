@@ -25,9 +25,9 @@ export default function RootLayout({
         />
       </head>
       <body>
-        <div className="flex">
+        <div className="flex bg-slate-50 min-h-screen">
           <Sidebar />
-          <main className="main-content flex-1">
+          <main className="flex-1 ml-64">
             {children}
           </main>
         </div>
