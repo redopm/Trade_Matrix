@@ -155,7 +155,7 @@ async def detect_pattern(
         sym = f"{sym}.NS"
 
     try:
-        df = await _fetcher.fetch_ohlcv(sym, period="2y")
+        df = await _fetcher.fetch_price_history(sym, period="2y")
         if df.empty:
             raise HTTPException(404, f"No data found for {symbol}")
 

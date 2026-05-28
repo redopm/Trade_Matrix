@@ -254,7 +254,7 @@ export default function StocksPage() {
                 className="bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold uppercase tracking-wider px-4 py-2 rounded-lg transition-colors border border-slate-200"
                 onClick={() => {
                   setQuery(sym);
-                  stocksApi.getSnapshot(sym).then((r) => setStockData(r.data)).catch(setError);
+                  stocksApi.getSnapshot(sym).then((r) => setStockData(r.data)).catch((e: any) => setError(e.message));
                 }}
               >
                 {sym}
