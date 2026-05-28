@@ -26,6 +26,23 @@ from app.utils.logger import get_logger
 
 logger = get_logger(__name__)
 
+def _clean_numpy(obj: Any) -> Any:
+    if isinstance(obj, dict):
+        return {k: _clean_numpy(v) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [_clean_numpy(v) for v in obj]
+    elif isinstance(obj, (np.integer, np.int64, np.int32)):
+        return int(obj)
+    elif isinstance(obj, (np.floating, np.float64, np.float32)):
+        if pd.isna(obj):
+            return None
+        return float(obj)
+    elif isinstance(obj, (np.bool_, bool)):
+        return bool(obj)
+    elif pd.isna(obj):
+        return None
+    return obj
+
 
 class PatternDetector:
     """
@@ -119,7 +136,7 @@ class PatternDetector:
 
         if df is None or df.empty or len(df) < 30:
             base_result["error"] = "Insufficient price data"
-            return base_result
+            return _clean_numpy(base_result)
 
         # Use last N days
         df_window = df.tail(window)
@@ -128,7 +145,7 @@ class PatternDetector:
         features = self.extractor.extract(df_window)
         if not features:
             base_result["error"] = "Feature extraction failed"
-            return base_result
+            return _clean_numpy(base_result)
 
         base_result["features"] = features
         feat_vec = self.extractor.features_to_vector(features)
@@ -198,7 +215,7 @@ class PatternDetector:
                 f"Phase1: {phase1_passed}"
             )
 
-        return base_result
+        return _clean_numpy(base_result)
 
     def _predict_with_model(
         self, feat_vec: np.ndarray, features: dict
