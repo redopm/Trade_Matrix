@@ -2,7 +2,17 @@
 
 import { useEffect, useState } from "react";
 import { patternsApi } from "@/lib/api";
-import Image from "next/image";
+import { 
+  Search, 
+  ScanSearch, 
+  AlertCircle, 
+  Activity, 
+  TrendingUp, 
+  TrendingDown, 
+  LineChart, 
+  X,
+  Target
+} from "lucide-react";
 
 interface PatternResult {
   symbol: string;
@@ -17,28 +27,33 @@ interface PatternResult {
   features?: Record<string, number>;
 }
 
-const PATTERN_LABELS: Record<string, { label: string; emoji: string; color: string }> = {
-  double_bottom: { label: "Double Bottom", emoji: "W", color: "var(--accent-green)" },
-  hs_bottom: { label: "Inv. H&S", emoji: "⊓", color: "var(--accent-green)" },
-  bull_flag: { label: "Bull Flag", emoji: "🚩", color: "var(--accent-green)" },
-  cup_handle: { label: "Cup & Handle", emoji: "☕", color: "var(--accent-green)" },
-  ascending_triangle: { label: "Asc. Triangle", emoji: "△", color: "var(--accent-green)" },
-  double_top: { label: "Double Top", emoji: "M", color: "var(--accent-red)" },
-  bear_flag: { label: "Bear Flag", emoji: "🚩", color: "var(--accent-red)" },
-  descending_triangle: { label: "Desc. Triangle", emoji: "▽", color: "var(--accent-red)" },
-  no_pattern: { label: "No Pattern", emoji: "—", color: "var(--text-muted)" },
+const PATTERN_LABELS: Record<string, { label: string; icon: React.ReactNode; color: string }> = {
+  double_bottom: { label: "Double Bottom", icon: <Activity size={16} />, color: "text-emerald-600 bg-emerald-50" },
+  hs_bottom: { label: "Inv. H&S", icon: <TrendingUp size={16} />, color: "text-emerald-600 bg-emerald-50" },
+  bull_flag: { label: "Bull Flag", icon: <TrendingUp size={16} />, color: "text-emerald-600 bg-emerald-50" },
+  cup_handle: { label: "Cup & Handle", icon: <Activity size={16} />, color: "text-emerald-600 bg-emerald-50" },
+  ascending_triangle: { label: "Asc. Triangle", icon: <TrendingUp size={16} />, color: "text-emerald-600 bg-emerald-50" },
+  double_top: { label: "Double Top", icon: <Activity size={16} />, color: "text-red-600 bg-red-50" },
+  bear_flag: { label: "Bear Flag", icon: <TrendingDown size={16} />, color: "text-red-600 bg-red-50" },
+  descending_triangle: { label: "Desc. Triangle", icon: <TrendingDown size={16} />, color: "text-red-600 bg-red-50" },
+  no_pattern: { label: "No Pattern", icon: <Target size={16} />, color: "text-slate-500 bg-slate-50" },
 };
 
-function ConfidenceBar({ value, color }: { value: number; color: string }) {
+function ConfidenceBar({ value, colorClass }: { value: number; colorClass: string }) {
+  const isGreen = colorClass.includes("emerald");
+  const isRed = colorClass.includes("red");
+  const barColor = isGreen ? "bg-emerald-500" : isRed ? "bg-red-500" : "bg-slate-400";
+  const textColor = isGreen ? "text-emerald-700" : isRed ? "text-red-700" : "text-slate-600";
+
   return (
-    <div className="flex items-center gap-2">
-      <div className="flex-1 h-1.5 rounded-full" style={{ background: "var(--bg-primary)" }}>
+    <div className="flex items-center gap-3">
+      <div className="flex-1 h-2 bg-slate-100 rounded-full overflow-hidden">
         <div
-          className="h-full rounded-full transition-all"
-          style={{ width: `${value * 100}%`, background: color }}
+          className={`h-full rounded-full transition-all ${barColor}`}
+          style={{ width: `${value * 100}%` }}
         />
       </div>
-      <span className="text-xs font-mono w-10" style={{ color }}>
+      <span className={`text-xs font-bold w-12 ${textColor}`}>
         {(value * 100).toFixed(0)}%
       </span>
     </div>
@@ -50,64 +65,68 @@ function PatternCard({ result, onChartClick }: {
   onChartClick: (result: PatternResult) => void;
 }) {
   const pname = result.pattern_name || "no_pattern";
-  const meta = PATTERN_LABELS[pname] || { label: pname, emoji: "?", color: "var(--text-muted)" };
+  const meta = PATTERN_LABELS[pname] || PATTERN_LABELS.no_pattern;
   const isSignificant = result.pattern_name && result.pattern_name !== "no_pattern";
 
   return (
-    <tr className="animate-fade-in cursor-pointer" onClick={() => isSignificant && onChartClick(result)}>
-      <td>
-        <div className="font-bold" style={{ color: "var(--text-bright)" }}>
+    <tr 
+      className={`border-b border-slate-100 transition-colors ${isSignificant ? "hover:bg-blue-50/50 cursor-pointer" : ""}`}
+      onClick={() => isSignificant && onChartClick(result)}
+    >
+      <td className="py-4 px-4">
+        <div className="font-bold text-slate-900">
           {result.symbol.replace(".NS", "")}
         </div>
-        <div className="text-xs" style={{ color: "var(--text-muted)" }}>
+        <div className="text-xs text-slate-500 font-medium">
           {result.detection_date}
         </div>
       </td>
-      <td>
+      <td className="py-4 px-4">
         {isSignificant ? (
-          <div
-            className="flex items-center gap-2 px-2 py-1 rounded-lg w-fit"
-            style={{ background: `${meta.color}20`, border: `1px solid ${meta.color}40` }}
-          >
-            <span style={{ color: meta.color }}>{meta.emoji}</span>
-            <span className="text-sm font-semibold" style={{ color: meta.color }}>
-              {meta.label}
-            </span>
+          <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md w-fit font-bold text-xs ${meta.color}`}>
+            {meta.icon}
+            <span>{meta.label}</span>
           </div>
         ) : (
-          <span className="text-sm" style={{ color: "var(--text-muted)" }}>—</span>
+          <span className="text-sm font-medium text-slate-400">-</span>
         )}
       </td>
-      <td className="w-40">
+      <td className="w-48 py-4 px-4">
         {isSignificant ? (
-          <ConfidenceBar value={result.confidence} color={meta.color} />
+          <ConfidenceBar value={result.confidence} colorClass={meta.color} />
         ) : (
-          <span style={{ color: "var(--text-muted)" }}>—</span>
+          <span className="text-sm font-medium text-slate-400">-</span>
         )}
       </td>
-      <td>
+      <td className="py-4 px-4">
         {result.is_confluence ? (
-          <span className="badge-green px-3 py-1">🎯 Confluence</span>
+          <span className="text-xs font-bold text-emerald-700 bg-emerald-100 px-2.5 py-1 rounded-md border border-emerald-200">
+            Confluence
+          </span>
         ) : result.is_bullish === true ? (
-          <span className="badge-blue">Bullish</span>
+          <span className="text-xs font-bold text-blue-700 bg-blue-100 px-2.5 py-1 rounded-md">
+            Bullish
+          </span>
         ) : result.is_bullish === false ? (
-          <span className="badge-red">Bearish</span>
+          <span className="text-xs font-bold text-red-700 bg-red-100 px-2.5 py-1 rounded-md">
+            Bearish
+          </span>
         ) : (
-          <span style={{ color: "var(--text-muted)" }}>—</span>
+          <span className="text-sm font-medium text-slate-400">-</span>
         )}
       </td>
-      <td>
-        <span className="text-xs" style={{ color: "var(--text-muted)" }}>
+      <td className="py-4 px-4">
+        <span className="text-xs font-medium text-slate-500 bg-slate-100 px-2 py-1 rounded">
           {result.model_used}
         </span>
       </td>
-      <td>
+      <td className="py-4 px-4">
         {isSignificant && (
           <button
-            className="btn-ghost text-xs py-1 px-2"
+            className="flex items-center gap-1 text-xs font-bold text-blue-600 hover:text-blue-700 hover:bg-blue-50 px-2 py-1 rounded transition-colors"
             onClick={(e) => { e.stopPropagation(); onChartClick(result); }}
           >
-            📈 Chart
+            <LineChart size={14} /> Chart
           </button>
         )}
       </td>
@@ -117,72 +136,70 @@ function PatternCard({ result, onChartClick }: {
 
 function ChartModal({ result, onClose }: { result: PatternResult; onClose: () => void }) {
   const pname = result.pattern_name || "no_pattern";
-  const meta = PATTERN_LABELS[pname] || { label: pname, emoji: "?", color: "var(--text-muted)" };
+  const meta = PATTERN_LABELS[pname] || PATTERN_LABELS.no_pattern;
   const chartUrl = `http://localhost:8000/api/v1/patterns/chart/${result.symbol.replace(".NS", "")}`;
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4"
-      style={{ background: "rgba(0,0,0,0.85)" }}
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm"
       onClick={onClose}
     >
       <div
-        className="card max-w-4xl w-full p-6 animate-slide-in"
+        className="bg-white rounded-2xl shadow-xl max-w-4xl w-full p-8 border border-slate-200"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-start justify-between mb-4">
+        <div className="flex items-start justify-between mb-6">
           <div>
             <div className="flex items-center gap-3">
-              <h2 className="text-2xl font-black" style={{ color: "var(--text-bright)" }}>
+              <h2 className="text-2xl font-black text-slate-900">
                 {result.symbol.replace(".NS", "")}
               </h2>
-              <div
-                className="px-3 py-1 rounded-lg text-sm font-bold"
-                style={{ background: `${meta.color}20`, color: meta.color, border: `1px solid ${meta.color}40` }}
-              >
-                {meta.emoji} {meta.label}
+              <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-bold ${meta.color}`}>
+                {meta.icon} {meta.label}
               </div>
               {result.is_confluence && (
-                <span className="badge-green text-sm">🎯 Confluence Signal</span>
+                <span className="text-sm font-bold text-emerald-700 bg-emerald-100 px-3 py-1.5 rounded-lg border border-emerald-200">
+                  Confluence Signal
+                </span>
               )}
             </div>
-            <p className="text-sm mt-1" style={{ color: "var(--text-muted)" }}>
-              Confidence: {(result.confidence * 100).toFixed(0)}% · {result.detection_date} · {result.model_used}
+            <p className="text-sm mt-2 text-slate-500 font-medium">
+              Confidence: <strong className="text-slate-700">{(result.confidence * 100).toFixed(0)}%</strong> &bull; {result.detection_date} &bull; {result.model_used}
             </p>
           </div>
-          <button onClick={onClose} className="text-xl" style={{ color: "var(--text-muted)" }}>✕</button>
+          <button onClick={onClose} className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors">
+            <X size={24} />
+          </button>
         </div>
 
         {/* Chart Image */}
-        <div
-          className="rounded-xl overflow-hidden mb-4"
-          style={{ background: "var(--bg-primary)", border: "1px solid var(--border-primary)" }}
-        >
+        <div className="bg-slate-50 border border-slate-200 rounded-xl overflow-hidden mb-6 flex justify-center p-4">
           <img
             src={chartUrl}
             alt={`${result.symbol} chart`}
-            className="w-full"
-            style={{ maxHeight: 400, objectFit: "contain" }}
+            className="w-full max-h-[400px] object-contain rounded-lg shadow-sm"
           />
         </div>
 
         {/* All Pattern Scores */}
         {result.all_scores && Object.keys(result.all_scores).length > 0 && (
-          <div>
-            <div className="text-xs font-semibold uppercase tracking-widest mb-3" style={{ color: "var(--text-muted)" }}>
+          <div className="bg-slate-50 p-5 rounded-xl border border-slate-100">
+            <div className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-4">
               All Pattern Scores
             </div>
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-2 gap-x-8 gap-y-3">
               {Object.entries(result.all_scores)
                 .sort(([, a], [, b]) => b - a)
                 .map(([pattern, score]) => {
-                  const m = PATTERN_LABELS[pattern];
+                  const m = PATTERN_LABELS[pattern] || PATTERN_LABELS.no_pattern;
                   return (
-                    <div key={pattern} className="flex items-center gap-2">
-                      <span className="text-xs w-32" style={{ color: "var(--text-secondary)" }}>
-                        {m?.label || pattern}
+                    <div key={pattern} className="flex items-center justify-between">
+                      <span className="text-sm font-medium text-slate-600 w-32">
+                        {m.label}
                       </span>
-                      <ConfidenceBar value={score} color={m?.color || "var(--text-muted)"} />
+                      <div className="flex-1 ml-4">
+                        <ConfidenceBar value={score} colorClass={m.color} />
+                      </div>
                     </div>
                   );
                 })}
@@ -256,60 +273,52 @@ export default function PatternsPage() {
   const patternCount = results.filter((r) => r.pattern_name && r.pattern_name !== "no_pattern").length;
 
   return (
-    <div className="flex flex-col gap-6 animate-slide-in">
+    <div className="p-8 flex flex-col gap-8 bg-slate-50 min-h-screen">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-black" style={{ color: "var(--text-bright)" }}>
+          <h1 className="text-3xl font-bold tracking-tight text-slate-900">
             Pattern Recognition
           </h1>
-          <p className="text-sm mt-1" style={{ color: "var(--text-muted)" }}>
-            Phase 2 · XGBoost/CNN detector · 8 classical patterns
+          <p className="text-sm mt-2 text-slate-500 font-medium">
+            Phase 2 &bull; XGBoost/CNN detector &bull; 8 classical patterns
           </p>
         </div>
-        <div className="flex gap-3 items-center">
-          <div className="flex gap-2">
+        <div className="flex gap-4 items-center">
+          <div className="flex gap-2 bg-white border border-slate-200 p-1 rounded-lg shadow-sm">
             <input
-              className="input-dark text-sm"
+              className="px-3 py-1.5 text-sm font-medium text-slate-700 outline-none w-32 bg-transparent"
               placeholder="RELIANCE"
               value={searchSym}
               onChange={(e) => setSearchSym(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && detectSingle()}
-              style={{ width: 140, padding: "8px 12px" }}
             />
             <button
               onClick={detectSingle}
               disabled={detecting || !modelReady}
-              className="btn-ghost px-3 py-2 text-sm"
+              className="flex items-center gap-1 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-bold rounded-md transition-colors disabled:opacity-50"
             >
-              {detecting ? "..." : "🔍"}
+              {detecting ? "..." : <Search size={16} />}
             </button>
           </div>
           <button
             onClick={detectAll}
             disabled={loading || !modelReady}
-            className="btn-primary px-4 py-2"
+            className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-lg text-sm font-bold shadow-sm transition-colors disabled:opacity-50"
           >
-            {loading ? "Scanning..." : "⚡ Detect All Signals"}
+            {loading ? "Scanning..." : <><ScanSearch size={18} /> Detect All Signals</>}
           </button>
         </div>
       </div>
 
       {!modelReady && (
-        <div
-          className="p-4 rounded-xl text-sm flex items-center gap-3"
-          style={{
-            background: "rgba(255,215,0,0.1)",
-            border: "1px solid rgba(255,215,0,0.3)",
-            color: "var(--accent-gold)",
-          }}
-        >
-          <span className="text-xl">⚠️</span>
+        <div className="bg-amber-50 border border-amber-200 p-4 rounded-xl flex items-start gap-3 text-amber-800 shadow-sm">
+          <AlertCircle className="text-amber-500 mt-0.5" size={20} />
           <div>
-            <strong>Model not trained yet.</strong>
-            <span className="ml-2">
+            <strong className="text-sm font-bold">Model not trained yet.</strong>
+            <span className="text-sm font-medium ml-2 opacity-90">
               Go to{" "}
-              <a href="/training" className="underline" style={{ color: "var(--accent-blue)" }}>
+              <a href="/training" className="underline text-blue-600 font-bold hover:text-blue-800">
                 Training Pipeline
               </a>{" "}
               to train the pattern classifier first.
@@ -320,40 +329,52 @@ export default function PatternsPage() {
 
       {/* Stats */}
       {results.length > 0 && (
-        <div className="grid grid-cols-3 gap-4">
-          <div className="stat-card card-green">
-            <div className="stat-label">Confluence Signals</div>
-            <div className="stat-value" style={{ color: "var(--accent-green)" }}>{confluenceCount}</div>
-            <div className="stat-change">Phase 1 + Pattern both ✓</div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="bg-white p-6 rounded-xl border border-emerald-200 shadow-sm relative overflow-hidden">
+            <div className="absolute top-0 right-0 p-4 opacity-10 text-emerald-600">
+              <Activity size={64} />
+            </div>
+            <div className="text-sm font-bold text-slate-500 mb-1 relative z-10">Confluence Signals</div>
+            <div className="text-3xl font-black text-emerald-600 mb-1 relative z-10">{confluenceCount}</div>
+            <div className="text-xs font-bold text-emerald-700 bg-emerald-50 inline-block px-2 py-0.5 rounded relative z-10">Phase 1 + Pattern</div>
           </div>
-          <div className="stat-card">
-            <div className="stat-label">Patterns Found</div>
-            <div className="stat-value" style={{ color: "var(--accent-blue)" }}>{patternCount}</div>
-            <div className="stat-change">of {results.length} scanned</div>
+          
+          <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
+            <div className="text-sm font-bold text-slate-500 mb-1">Patterns Found</div>
+            <div className="text-3xl font-black text-blue-600 mb-1">{patternCount}</div>
+            <div className="text-xs font-medium text-slate-400">of {results.length} scanned</div>
           </div>
-          <div className="stat-card">
-            <div className="stat-label">Detection Rate</div>
-            <div className="stat-value" style={{ color: "var(--accent-gold)" }}>
+          
+          <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
+            <div className="text-sm font-bold text-slate-500 mb-1">Detection Rate</div>
+            <div className="text-3xl font-black text-amber-600 mb-1">
               {results.length > 0 ? ((patternCount / results.length) * 100).toFixed(0) : 0}%
             </div>
-            <div className="stat-change">Pattern hit rate</div>
+            <div className="text-xs font-medium text-slate-400">Pattern hit rate</div>
           </div>
         </div>
       )}
 
       {/* Filters */}
       {results.length > 0 && (
-        <div className="flex gap-2">
+        <div className="flex items-center gap-3 bg-white p-2 rounded-xl border border-slate-200 shadow-sm w-fit">
           {(["ALL", "CONFLUENCE", "BULLISH", "BEARISH"] as const).map((f) => (
             <button
               key={f}
               onClick={() => setFilter(f)}
-              className={`filter-chip ${filter === f ? "active" : ""}`}
+              className={`px-4 py-1.5 text-sm font-bold rounded-lg transition-colors ${
+                filter === f 
+                  ? f === "CONFLUENCE" 
+                    ? "bg-emerald-100 text-emerald-700" 
+                    : "bg-slate-800 text-white" 
+                  : "text-slate-500 hover:bg-slate-100"
+              }`}
             >
-              {f === "CONFLUENCE" ? `🎯 ${f}` : f}
+              {f === "CONFLUENCE" ? "Confluence" : f}
             </button>
           ))}
-          <span className="ml-auto text-sm" style={{ color: "var(--text-muted)" }}>
+          <div className="h-6 w-px bg-slate-200 mx-2"></div>
+          <span className="text-sm font-medium text-slate-400 pr-3">
             {filtered.length} results
           </span>
         </div>
@@ -361,33 +382,35 @@ export default function PatternsPage() {
 
       {/* Results Table */}
       {loading ? (
-        <div className="card p-8">
-          {[...Array(5)].map((_, i) => <div key={i} className="skeleton h-12 rounded mb-2" />)}
+        <div className="bg-white border border-slate-200 rounded-xl p-8 shadow-sm">
+          {[...Array(5)].map((_, i) => <div key={i} className="h-12 bg-slate-100 rounded-lg mb-3 animate-pulse" />)}
         </div>
       ) : results.length === 0 ? (
-        <div className="card p-16 text-center">
-          <div className="text-6xl mb-4">🔍</div>
-          <p className="text-xl font-bold" style={{ color: "var(--text-bright)" }}>
+        <div className="bg-white border border-slate-200 rounded-xl p-16 flex flex-col items-center justify-center text-center shadow-sm">
+          <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mb-4">
+            <ScanSearch className="text-slate-300" size={32} />
+          </div>
+          <p className="text-xl font-bold text-slate-900 mb-2">
             No detections yet
           </p>
-          <p className="text-sm mt-2" style={{ color: "var(--text-muted)" }}>
+          <p className="text-sm font-medium text-slate-500 max-w-md">
             {modelReady
-              ? 'Click "⚡ Detect All Signals" to scan Phase 1 results for patterns'
-              : "Train the model first, then run detection"}
+              ? "Click 'Detect All Signals' to scan your Phase 1 screener results for classical chart patterns."
+              : "Train the model first in the Training Pipeline, then run detection."}
           </p>
         </div>
       ) : (
-        <div className="card">
-          <div className="table-container">
-            <table className="data-table">
+        <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left">
               <thead>
-                <tr>
-                  <th>Symbol</th>
-                  <th>Pattern</th>
-                  <th>Confidence</th>
-                  <th>Signal</th>
-                  <th>Model</th>
-                  <th>Chart</th>
+                <tr className="bg-slate-50/50 border-b border-slate-100">
+                  <th className="py-4 px-4 text-xs font-bold uppercase tracking-wider text-slate-400">Symbol</th>
+                  <th className="py-4 px-4 text-xs font-bold uppercase tracking-wider text-slate-400">Pattern</th>
+                  <th className="py-4 px-4 text-xs font-bold uppercase tracking-wider text-slate-400">Confidence</th>
+                  <th className="py-4 px-4 text-xs font-bold uppercase tracking-wider text-slate-400">Signal</th>
+                  <th className="py-4 px-4 text-xs font-bold uppercase tracking-wider text-slate-400">Model</th>
+                  <th className="py-4 px-4 text-xs font-bold uppercase tracking-wider text-slate-400">Action</th>
                 </tr>
               </thead>
               <tbody>
