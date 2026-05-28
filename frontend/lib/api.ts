@@ -5,7 +5,7 @@
 import axios from "axios";
 
 const isBrowser = typeof window !== "undefined";
-const defaultBaseUrl = isBrowser ? "/api/v1" : "http://localhost:8000/api/v1";
+const defaultBaseUrl = isBrowser ? "/api/v1" : "http://backend:8000/api/v1";
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL || defaultBaseUrl;
 
 const defaultWsUrl = isBrowser 
