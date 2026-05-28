@@ -5,9 +5,9 @@ import {
   screenerApi,
   tradesApi,
   createScreenerWebSocket,
-  type Signal,
   type ScreenerRunStatus,
 } from "@/lib/api";
+import { ChartModal } from "@/components/ChartModal";
 
 // ── Filter Pill ────────────────────────────────────────────────────────────────
 function FilterChip({
@@ -283,6 +283,7 @@ export default function ScreenerPage() {
     "composite_score"
   );
   const [selectedSignal, setSelectedSignal] = useState<Signal | null>(null);
+  const [viewChartSymbol, setViewChartSymbol] = useState<string | null>(null);
   const [tradeSuccess, setTradeSuccess] = useState<string | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
 
@@ -484,6 +485,7 @@ export default function ScreenerPage() {
                   <th>ROCE</th>
                   <th>D/E</th>
                   <th>F-Score</th>
+                  <th>Pattern</th>
                   <th>Score</th>
                   <th>R:R</th>
                   <th>Filters</th>
@@ -566,6 +568,36 @@ export default function ScreenerPage() {
                       </span>
                     </td>
                     <td>
+                      {sig.pattern_name && sig.pattern_name !== "no_pattern" ? (
+                        <div className="flex flex-col gap-1 items-start">
+                          <span
+                            className="text-xs font-bold px-2 py-0.5 rounded flex items-center gap-1"
+                            style={{
+                              background: (sig.pattern_confidence ?? 0) >= 0.70 ? "rgba(0,245,160,0.15)" : "rgba(255,255,255,0.05)",
+                              color: (sig.pattern_confidence ?? 0) >= 0.70 ? "var(--accent-green)" : "var(--text-secondary)",
+                              border: (sig.pattern_confidence ?? 0) >= 0.70 ? "1px solid rgba(0,245,160,0.3)" : "none",
+                            }}
+                          >
+                            {(sig.pattern_confidence ?? 0) >= 0.70 && "✨ "}
+                            {sig.pattern_name.replace("_", " ").toUpperCase()}
+                            <span className="opacity-70 ml-1 font-mono">{((sig.pattern_confidence ?? 0) * 100).toFixed(0)}%</span>
+                          </span>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setViewChartSymbol(sig.symbol);
+                            }}
+                            className="text-[10px] hover:underline"
+                            style={{ color: "var(--accent-blue)" }}
+                          >
+                            View Chart
+                          </button>
+                        </div>
+                      ) : (
+                        <span className="text-xs" style={{ color: "var(--text-muted)" }}>—</span>
+                      )}
+                    </td>
+                    <td>
                       <div className="flex items-center gap-2">
                         <span
                           className="font-mono text-sm font-bold"
@@ -643,6 +675,15 @@ export default function ScreenerPage() {
           signal={selectedSignal}
           onClose={() => setSelectedSignal(null)}
           onTrade={handleTrade}
+        />
+      )}
+
+      {/* Chart Modal */}
+      {viewChartSymbol && (
+        <ChartModal
+          symbol={viewChartSymbol}
+          chartPath=""
+          onClose={() => setViewChartSymbol(null)}
         />
       )}
     </div>

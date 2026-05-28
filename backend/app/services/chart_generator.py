@@ -98,11 +98,11 @@ class ChartGenerator:
 
             apds = [
                 mpf.make_addplot(
-                    ema50, color="#4facfe", linewidth=1.2, alpha=0.9,
+                    ema50, color="#4facfe", width=1.2, alpha=0.9,
                     label="EMA50"
                 ),
                 mpf.make_addplot(
-                    ema200, color="#ffd700", linewidth=1.5, alpha=0.9,
+                    ema200, color="#ffd700", width=1.5, alpha=0.9,
                     label="EMA200"
                 ),
             ]
@@ -111,15 +111,15 @@ class ChartGenerator:
             rsi = self._compute_rsi(chart_df["Close"], 14)
             apds.append(
                 mpf.make_addplot(
-                    rsi, panel=2, color="#a78bfa", linewidth=1.0,
+                    rsi, panel=2, color="#a78bfa", width=1.0,
                     ylabel="RSI(14)", ylim=(0, 100)
                 )
             )
             # RSI reference lines (30, 70)
             rsi_30 = pd.Series([30.0] * len(chart_df), index=chart_df.index)
             rsi_70 = pd.Series([70.0] * len(chart_df), index=chart_df.index)
-            apds.append(mpf.make_addplot(rsi_30, panel=2, color="#ff4466", linewidth=0.8, linestyle="--", alpha=0.6))
-            apds.append(mpf.make_addplot(rsi_70, panel=2, color="#00f5a0", linewidth=0.8, linestyle="--", alpha=0.6))
+            apds.append(mpf.make_addplot(rsi_30, panel=2, color="#ff4466", width=0.8, linestyle="--", alpha=0.6))
+            apds.append(mpf.make_addplot(rsi_70, panel=2, color="#00f5a0", width=0.8, linestyle="--", alpha=0.6))
 
             # Figure size
             figsize = (

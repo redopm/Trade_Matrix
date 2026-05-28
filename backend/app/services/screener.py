@@ -32,6 +32,8 @@ from app.models.signal import ScreenerSignal
 from app.services.data_fetcher import DataFetcher
 from app.services.fundamental import FundamentalAnalyzer
 from app.services.technical import TechnicalAnalyzer
+from app.services.pattern_detector import PatternDetector
+from app.services.alert_manager import AlertManager
 from app.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -101,6 +103,8 @@ class AlphaScreener:
         self.fetcher = DataFetcher()
         self.fundamental = FundamentalAnalyzer()
         self.technical = TechnicalAnalyzer()
+        self.pattern_detector = PatternDetector()
+        self.alert_manager = AlertManager()
         self.cfg = settings
 
     async def run_screener(
@@ -150,8 +154,17 @@ class AlphaScreener:
                                 f"[{run_id}] ✅ {symbol} PASSED | "
                                 f"ROCE={signal.get('roce')} "
                                 f"RSI={signal.get('rsi_14')} "
-                                f"Score={signal.get('composite_score')}"
+                                f"Score={signal.get('composite_score')} | "
+                                f"Pattern: {signal.get('pattern_name')} ({signal.get('pattern_confidence', 0):.0%})"
                             )
+                            
+                            # Phase 3: Send Live Alerts for Confluence Signals
+                            if signal.get("pattern_name") != "no_pattern" and signal.get("pattern_confidence", 0) >= 0.70:
+                                asyncio.create_task(
+                                    self.alert_manager.send_signal_alert(
+                                        signal, chart_path=signal.get("chart_image_path")
+                                    )
+                                )
                         else:
                             self._update_failure_counts(run, signal)
                     else:
@@ -228,6 +241,21 @@ class AlphaScreener:
 
         current_price = tech.get("current_price") or fund.get("current_price", 0)
 
+        # ── Step 6.5: Pattern Detection (Hybrid Mode) ─────────────────────────
+        pattern_data = {}
+        if passed_all:
+            pattern_result = await self.pattern_detector.detect(
+                symbol=symbol,
+                df=df,
+                phase1_passed=passed_all,
+                generate_chart=True,
+            )
+            pattern_data = {
+                "pattern_name": pattern_result.get("pattern_name", "no_pattern"),
+                "pattern_confidence": pattern_result.get("confidence", 0.0),
+                "chart_image_path": pattern_result.get("chart_path"),
+            }
+
         signal = {
             "symbol": symbol,
             "company_name": fund.get("company_name", symbol),
@@ -271,6 +299,11 @@ class AlphaScreener:
             "passed_piotroski": fund.get("passed_piotroski", False),
             "passed_earnings_blackout": passed_event_risk,
             "passed_all": passed_all,
+
+            # Phase 2 Pattern Data
+            "pattern_name": pattern_data.get("pattern_name"),
+            "pattern_confidence": pattern_data.get("pattern_confidence"),
+            "chart_image_path": pattern_data.get("chart_image_path"),
 
             # Score
             "composite_score": composite_score,

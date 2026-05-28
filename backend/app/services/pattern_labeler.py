@@ -117,7 +117,14 @@ class PatternLabeler:
         """Initialize Gemini client using new google.genai SDK."""
         try:
             from google import genai
-            self._gemini_client = genai.Client(api_key=self.cfg.GEMINI_API_KEY)
+            if self.cfg.GCP_PROJECT_ID:
+                self._gemini_client = genai.Client(
+                    vertexai=True, 
+                    project=self.cfg.GCP_PROJECT_ID,
+                    location="us-central1"
+                )
+            else:
+                self._gemini_client = genai.Client(api_key=self.cfg.GEMINI_API_KEY)
             logger.info(f"Gemini Vision initialized (google.genai): {self.cfg.GEMINI_MODEL}")
         except Exception as e:
             logger.error(f"Failed to initialize Gemini: {e}")

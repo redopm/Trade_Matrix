@@ -23,9 +23,11 @@ class Settings(BaseSettings):
     ENVIRONMENT: str = "development"
 
     # ── Phase 2: Pattern Recognition ──────────────────────────────────────────
-    # Gemini Vision API
-    GEMINI_API_KEY: str = ""
-    GEMINI_MODEL: str = "gemini-1.5-flash"       # Fast + vision capable
+    # Phase 2: Gemini Vision API & Vertex AI
+    GEMINI_API_KEY: Optional[str] = None
+    GCP_PROJECT_ID: Optional[str] = None
+    GOOGLE_APPLICATION_CREDENTIALS: Optional[str] = None
+    GEMINI_MODEL: str = "gemini-2.5-flash-lite"       # Fast + vision capable
     GEMINI_RATE_LIMIT: int = 14                   # Requests per minute (free tier: 15)
 
     # Chart Generation
@@ -88,6 +90,11 @@ class Settings(BaseSettings):
     TARGET_RSI_OVERBOUGHT: float = 70.0          # RSI exit threshold
     TARGET_PROFIT_PCT: float = 0.12              # 12% fixed target
     EARNINGS_BLACKOUT_DAYS: int = 3              # ±3 days event risk block
+
+    # Live Alerts (Phase 3)
+    LIVE_ALERTS_ENABLED: bool = True
+    TELEGRAM_BOT_TOKEN: str = ""
+    TELEGRAM_CHAT_ID: str = ""
 
     # Fundamental Thresholds
     MIN_ROCE: float = 15.0                       # Minimum ROCE %

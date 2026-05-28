@@ -1,0 +1,122 @@
+{
+  "trained_at": "2026-05-27T21:31:46.939032",
+  "n_samples": 4292,
+  "n_features": 23,
+  "n_classes": 4,
+  "classes": [
+    "double_bottom",
+    "double_top",
+    "hs_bottom",
+    "no_pattern"
+  ],
+  "cv_accuracy": 0.9923,
+  "cv_std": 0.0008,
+  "train_accuracy": 0.9956,
+  "classification_report": {
+    "double_bottom": {
+      "precision": 1.0,
+      "recall": 0.09090909090909091,
+      "f1-score": 0.16666666666666666,
+      "support": 11.0
+    },
+    "double_top": {
+      "precision": 1.0,
+      "recall": 0.5,
+      "f1-score": 0.6666666666666666,
+      "support": 4.0
+    },
+    "hs_bottom": {
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1-score": 0.0,
+      "support": 7.0
+    },
+    "no_pattern": {
+      "precision": 0.995570062951737,
+      "recall": 1.0,
+      "f1-score": 0.9977801144993574,
+      "support": 4270.0
+    },
+    "accuracy": 0.9955731593662628,
+    "macro avg": {
+      "precision": 0.7488925157379343,
+      "recall": 0.3977272727272727,
+      "f1-score": 0.4577783619581727,
+      "support": 4292.0
+    },
+    "weighted avg": {
+      "precision": 0.9939618287054793,
+      "recall": 0.9955731593662628,
+      "f1-score": 0.9937141400075155,
+      "support": 4292.0
+    }
+  },
+  "feature_importance": {
+    "n_peaks": 0.02958584390580654,
+    "n_troughs": 0.04265816509723663,
+    "peak_height_mean": 0.05191975086927414,
+    "peak_height_std": 0.028139915317296982,
+    "trough_depth_mean": 0.03677355498075485,
+    "trough_depth_std": 0.028965028002858162,
+    "peak_symmetry_score": 0.03423052653670311,
+    "trough_symmetry_score": 0.062067173421382904,
+    "upper_trendline_slope": 0.037813249975442886,
+    "lower_trendline_slope": 0.04913732782006264,
+    "trendline_convergence": 0.05335095152258873,
+    "neckline_level_pct": 0.03802703320980072,
+    "neckline_slope": 0.03574047610163689,
+    "volume_at_breakout_ratio": 0.03933617100119591,
+    "volume_trend_slope": 0.06599101424217224,
+    "volume_peak_alignment": 0.03468700870871544,
+    "obv_slope": 0.05367020517587662,
+    "rsi_at_window_end": 0.04006485268473625,
+    "rsi_trend_slope": 0.03453173488378525,
+    "macd_crossovers_count": 0.06328143179416656,
+    "price_range_pct": 0.029487838968634605,
+    "recovery_from_low_pct": 0.07299063354730606,
+    "pattern_compactness": 0.037550028413534164
+  },
+  "top_features": [
+    [
+      "recovery_from_low_pct",
+      0.07299063354730606
+    ],
+    [
+      "volume_trend_slope",
+      0.06599101424217224
+    ],
+    [
+      "macd_crossovers_count",
+      0.06328143179416656
+    ],
+    [
+      "trough_symmetry_score",
+      0.062067173421382904
+    ],
+    [
+      "obv_slope",
+      0.05367020517587662
+    ],
+    [
+      "trendline_convergence",
+      0.05335095152258873
+    ],
+    [
+      "peak_height_mean",
+      0.05191975086927414
+    ],
+    [
+      "lower_trendline_slope",
+      0.04913732782006264
+    ],
+    [
+      "n_troughs",
+      0.04265816509723663
+    ],
+    [
+      "rsi_at_window_end",
+      0.04006485268473625
+    ]
+  ],
+  "model_path": "C:\\Users\\Omprakash Maury\\Documents\\project\\Trade_matrix\\models\\pattern_classifier.pkl"
+}

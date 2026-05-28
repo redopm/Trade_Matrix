@@ -18,6 +18,7 @@ const navItems: NavItem[] = [
   { href: "/training", label: "Training", icon: "🧠", description: "ML Pipeline" },
   { href: "/trades", label: "Trades", icon: "📊", description: "Paper Trades" },
   { href: "/stocks", label: "Stocks", icon: "📈", description: "Stock Lookup" },
+  { href: "/settings", label: "Settings", icon: "⚙️", description: "Live Alerts & Prefs", badge: "Phase 3" },
 ];
 
 export function Sidebar() {

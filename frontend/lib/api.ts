@@ -4,8 +4,14 @@
  */
 import axios from "axios";
 
-const BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1";
-const WS_URL = process.env.NEXT_PUBLIC_WS_URL || "ws://localhost:8000/api/v1";
+const isBrowser = typeof window !== "undefined";
+const defaultBaseUrl = isBrowser ? "/api/v1" : "http://localhost:8000/api/v1";
+const BASE_URL = process.env.NEXT_PUBLIC_API_URL || defaultBaseUrl;
+
+const defaultWsUrl = isBrowser 
+  ? `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${window.location.host}/api/v1` 
+  : "ws://localhost:8000/api/v1";
+const WS_URL = process.env.NEXT_PUBLIC_WS_URL || defaultWsUrl;
 
 export const api = axios.create({
   baseURL: BASE_URL,
@@ -41,6 +47,15 @@ export const dashboardApi = {
   getHeatmap: () => api.get("/dashboard/heatmap"),
   getRecentSignals: (limit: number = 10) =>
     api.get(`/dashboard/recent-signals?limit=${limit}`),
+};
+
+// ── Settings (Phase 3) ────────────────────────────────────────────────────────
+export const settingsApi = {
+  getTelegram: () => api.get("/settings/telegram"),
+  updateTelegram: (data: { enabled: boolean; bot_token: string; chat_id: string }) =>
+    api.post("/settings/telegram", data),
+  testTelegram: (data: { enabled: boolean; bot_token: string; chat_id: string }) =>
+    api.post("/settings/telegram/test", data),
 };
 
 // ── Screener ──────────────────────────────────────────────────────────────────
@@ -183,6 +198,12 @@ export interface Signal {
   market_cap?: number;
   atr_14?: number;
   adx?: number;
+  
+  // Phase 2: Pattern Recognition
+  pattern_name?: string;
+  pattern_confidence?: number;
+  chart_image_path?: string;
+  
   is_traded: boolean;
   screener_run_id?: string;
 }

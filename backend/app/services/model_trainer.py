@@ -227,10 +227,10 @@ class PatternModelTrainer:
             confidence = float(label.get("confidence", 0))
             features_dict = label.get("features")
 
-            # Filter: skip low-confidence and no_pattern (for now use them as class)
+            # Filter: skip low-confidence patterns (but keep no_pattern)
             if not pattern:
                 continue
-            if confidence < 0.5:
+            if pattern != "no_pattern" and confidence < 0.5:
                 continue
 
             # Get features

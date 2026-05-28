@@ -61,6 +61,11 @@ class ScreenerSignal(Base):
     passed_earnings_blackout: Mapped[bool] = mapped_column(Boolean, default=True)
     passed_all: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
 
+    # ── Phase 2: Pattern Recognition ──────────────────────────────────────────
+    pattern_name: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    pattern_confidence: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    chart_image_path: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+
     # ── Status ────────────────────────────────────────────────────────────────
     is_traded: Mapped[bool] = mapped_column(Boolean, default=False)
     trade_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
