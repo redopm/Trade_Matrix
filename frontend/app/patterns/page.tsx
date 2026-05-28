@@ -137,7 +137,7 @@ function PatternCard({ result, onChartClick }: {
 function ChartModal({ result, onClose }: { result: PatternResult; onClose: () => void }) {
   const pname = result.pattern_name || "no_pattern";
   const meta = PATTERN_LABELS[pname] || PATTERN_LABELS.no_pattern;
-  const chartUrl = `http://localhost:8000/api/v1/patterns/chart/${result.symbol.replace(".NS", "")}`;
+  const chartUrl = `/api/v1/patterns/chart/${result.symbol.replace(".NS", "")}`;
 
   return (
     <div

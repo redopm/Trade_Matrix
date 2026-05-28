@@ -16,7 +16,7 @@ export function ChartModal({
   useEffect(() => {
     // If we already have the local file path from the backend, we can construct the API url to fetch it.
     // The backend provides /api/v1/patterns/chart/{symbol}
-    setImageUrl(`http://localhost:8000/api/v1/patterns/chart/${symbol.replace(".NS", "")}?t=${Date.now()}`);
+    setImageUrl(`/api/v1/patterns/chart/${symbol.replace(".NS", "")}?t=${Date.now()}`);
   }, [symbol]);
 
   return (

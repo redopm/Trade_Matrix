@@ -123,7 +123,8 @@ export default function TrainingPage() {
       await patternsApi.startTraining();
     } catch {}
 
-    const ws = new WebSocket(`ws://localhost:8000/api/v1/patterns/ws/train`);
+    const wsUrl = `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${window.location.host}/api/v1/patterns/ws/train`;
+    const ws = new WebSocket(wsUrl);
     wsRef.current = ws;
 
     ws.onmessage = (e) => {
@@ -384,9 +385,9 @@ export default function TrainingPage() {
               </p>
             </div>
             <a
-              href="http://localhost:8000/api/v1/patterns/labels/export"
-              download="tradematrix_labels.jsonl"
-              className="flex items-center gap-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold px-4 py-2 rounded-lg transition-colors"
+              href="/api/v1/patterns/labels/export"
+              download
+              className="flex items-center gap-2 bg-slate-100 hover:bg-slate-200 text-slate-700 px-4 py-2 rounded-lg font-medium transition-colors text-sm"
             >
               <DownloadCloud size={18} /> Export JSONL
             </a>
@@ -437,11 +438,14 @@ export default function TrainingPage() {
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-8">
               {[
-                { step: "1", title: "Export Labels", desc: "Download your labeled dataset from the Labels tab", action: (
-                  <a href="http://localhost:8000/api/v1/patterns/labels/export" download className="flex w-fit items-center gap-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold px-3 py-1.5 rounded transition-colors mt-2">
-                    <DownloadCloud size={14} /> Export JSONL
-                  </a>
-                )},
+                { step: "1", title: "Export Labels", desc: (
+                    <>
+                      <p className="text-sm text-slate-600 mt-2">Export your labeled dataset to JSONL format for training.</p>
+                      <a href="/api/v1/patterns/labels/export" download className="flex w-fit items-center gap-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold px-3 py-1.5 rounded transition-colors mt-2">
+                        <Download size={14} /> Export JSONL
+                      </a>
+                    </>
+                ), action: null },
                 { step: "2", title: "Open Colab Notebook", desc: "Upload TradeMatrix_Phase2_CNN_Colab.ipynb to Google Colab and select the free T4 GPU runtime.", action: null },
                 { step: "3", title: "Train CNN", desc: "Upload the labels.jsonl file to the Colab environment and run all cells. This takes ~20 mins on a T4 GPU.", action: null },
                 { step: "4", title: "Import Model", desc: "Download colab_model.pkl from Colab, place it in the backend models/ directory, and click Import.", action: (
