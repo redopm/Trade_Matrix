@@ -6,6 +6,7 @@ import {
   tradesApi,
   createScreenerWebSocket,
   type ScreenerRunStatus,
+  type Signal,
 } from "@/lib/api";
 import { ChartModal } from "@/components/ChartModal";
 
