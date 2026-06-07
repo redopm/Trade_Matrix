@@ -219,10 +219,15 @@ export default function PatternsPage() {
   const [filter, setFilter] = useState<"ALL" | "CONFLUENCE" | "BULLISH" | "BEARISH">("ALL");
   const [searchSym, setSearchSym] = useState("");
   const [detecting, setDetecting] = useState(false);
+  const [performance, setPerformance] = useState<any[]>([]);
 
   useEffect(() => {
     patternsApi.getStatus().then((res) => {
       setModelReady(res.data.model?.is_ready);
+    }).catch(() => {});
+    
+    patternsApi.getPerformance().then((res) => {
+      setPerformance(res.data || []);
     }).catch(() => {});
   }, []);
 
@@ -351,6 +356,73 @@ export default function PatternsPage() {
               {results.length > 0 ? ((patternCount / results.length) * 100).toFixed(0) : 0}%
             </div>
             <div className="text-xs font-medium text-slate-400">Pattern hit rate</div>
+          </div>
+        </div>
+      )}
+
+      {/* Self-Learning Performance */}
+      {performance.length > 0 && (
+        <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden mb-8">
+          <div className="p-5 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center">
+            <div>
+              <h2 className="text-lg font-bold text-slate-900">AI Self-Learning Performance</h2>
+              <p className="text-sm text-slate-500 font-medium">Win rates based on real market outcomes (Target hit before SL). Auto-updates every Saturday.</p>
+            </div>
+            <div className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-100 text-blue-700 text-xs font-bold rounded-md">
+              <Activity size={14} /> Live Feedback Loop Active
+            </div>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left">
+              <thead>
+                <tr className="bg-white border-b border-slate-100">
+                  <th className="py-3 px-5 text-xs font-bold uppercase tracking-wider text-slate-400">Pattern</th>
+                  <th className="py-3 px-5 text-xs font-bold uppercase tracking-wider text-slate-400">Direction</th>
+                  <th className="py-3 px-5 text-xs font-bold uppercase tracking-wider text-slate-400">Total Trades</th>
+                  <th className="py-3 px-5 text-xs font-bold uppercase tracking-wider text-slate-400">Winners</th>
+                  <th className="py-3 px-5 text-xs font-bold uppercase tracking-wider text-slate-400">Win Rate</th>
+                  <th className="py-3 px-5 text-xs font-bold uppercase tracking-wider text-slate-400">AI Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {performance.map((p, i) => {
+                  const meta = PATTERN_LABELS[p.pattern] || PATTERN_LABELS.no_pattern;
+                  return (
+                    <tr key={i} className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors">
+                      <td className="py-3 px-5">
+                        <div className={`flex items-center gap-1.5 w-fit font-bold text-sm ${meta.color} bg-transparent px-0`}>
+                          {meta.icon}
+                          <span>{meta.label}</span>
+                        </div>
+                      </td>
+                      <td className="py-3 px-5 text-sm font-bold text-slate-600">{p.direction}</td>
+                      <td className="py-3 px-5 text-sm font-medium text-slate-600">{p.total}</td>
+                      <td className="py-3 px-5 text-sm font-medium text-slate-600">{p.winners}</td>
+                      <td className="py-3 px-5">
+                        <div className="flex items-center gap-2">
+                          <div className="w-24 h-2 bg-slate-100 rounded-full overflow-hidden">
+                            <div 
+                              className={`h-full rounded-full ${p.win_rate >= 60 ? 'bg-emerald-500' : p.win_rate < 40 ? 'bg-red-500' : 'bg-amber-500'}`} 
+                              style={{ width: `${p.win_rate}%` }}
+                            />
+                          </div>
+                          <span className="text-sm font-bold text-slate-700">{p.win_rate}%</span>
+                        </div>
+                      </td>
+                      <td className="py-3 px-5">
+                        <span className={`text-xs font-bold px-2.5 py-1 rounded-md ${
+                          p.status.includes('Strong') ? 'bg-emerald-100 text-emerald-700' :
+                          p.status.includes('Weak') ? 'bg-red-100 text-red-700' :
+                          'bg-amber-100 text-amber-700'
+                        }`}>
+                          {p.status}
+                        </span>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
           </div>
         </div>
       )}

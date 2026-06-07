@@ -18,7 +18,9 @@ from pydantic import BaseModel
 
 from app.database import get_db
 from app.models.signal import ScreenerSignal
+from app.models.trade import PaperTrade, TradeStatus
 from app.services.screener import AlphaScreener, _active_runs
+from app.services.market_regime import MarketRegimeDetector
 from app.utils.helpers import paginate
 from app.utils.logger import get_logger
 
@@ -30,6 +32,7 @@ router = APIRouter(prefix="/screener", tags=["Screener"])
 
 class RunScreenerRequest(BaseModel):
     symbols: Optional[list[str]] = None
+    sector: Optional[str] = None          # Pass sector name instead of all symbols
     description: Optional[str] = None
 
 
@@ -68,6 +71,9 @@ class SignalOut(BaseModel):
     adx: Optional[float]
     is_traded: bool
     screener_run_id: Optional[str]
+    direction: Optional[str]
+    market_regime: Optional[str]
+    regime_confidence: Optional[float]
 
     class Config:
         from_attributes = True
@@ -90,11 +96,20 @@ async def start_screener_run(
     async def run_screener_bg():
         """Background task wrapper."""
         from app.database import AsyncSessionLocal
+        from app.services.data_fetcher import SECTOR_UNIVERSE
         screener = AlphaScreener()
+        
+        # Resolve symbols: explicit list > sector name > full universe
+        resolved_symbols = request.symbols
+        if not resolved_symbols and request.sector:
+            resolved_symbols = SECTOR_UNIVERSE.get(request.sector)
+            if not resolved_symbols:
+                logger.warning(f"Unknown sector: {request.sector}. Running full universe.")
+        
         async with AsyncSessionLocal() as bg_db:
             await screener.run_screener(
                 db=bg_db,
-                symbols=request.symbols,
+                symbols=resolved_symbols,
                 run_id=run_id,
             )
 
@@ -123,6 +138,45 @@ async def list_runs():
     return [run.to_dict() for run in _active_runs.values()]
 
 
+@router.get("/market-regime")
+async def get_market_regime():
+    """Get the current market regime (BULLISH, BEARISH, SIDEWAYS)."""
+    return await MarketRegimeDetector.get_current_regime()
+
+
+@router.get("/universe/sectors")
+async def get_sector_breakdown():
+    """
+    Get the full sector-wise stock universe with counts.
+    Shows how many stocks are in each sector.
+    """
+    from app.services.data_fetcher import SECTOR_UNIVERSE, NIFTY500_SYMBOLS
+    sector_info = {
+        sector: {
+            "count": len(symbols),
+            "symbols": symbols,
+        }
+        for sector, symbols in SECTOR_UNIVERSE.items()
+    }
+    return {
+        "total_stocks": len(NIFTY500_SYMBOLS),
+        "total_sectors": len(SECTOR_UNIVERSE),
+        "sectors": sector_info,
+    }
+
+
+@router.get("/universe")
+async def get_universe():
+    """Get the flat list of all NSE stocks in the screener universe."""
+    from app.services.data_fetcher import NIFTY500_SYMBOLS, SECTOR_COUNTS
+    return {
+        "total": len(NIFTY500_SYMBOLS),
+        "sector_counts": SECTOR_COUNTS,
+        "symbols": NIFTY500_SYMBOLS,
+    }
+
+
+
 @router.get("/results", response_model=dict)
 async def get_screener_results(
     db: AsyncSession = Depends(get_db),
@@ -131,8 +185,9 @@ async def get_screener_results(
     min_score: Optional[float] = Query(None, description="Minimum composite score"),
     date_from: Optional[str] = Query(None, description="Start date YYYY-MM-DD"),
     date_to: Optional[str] = Query(None, description="End date YYYY-MM-DD"),
+    direction: Optional[str] = Query(None, description="Filter by LONG or SHORT"),
     page: int = Query(1, ge=1),
-    page_size: int = Query(20, ge=1, le=100),
+    page_size: int = Query(20, ge=1, le=500),
     sort_by: str = Query("composite_score", description="Sort field"),
     sort_desc: bool = Query(True),
 ):
@@ -145,6 +200,8 @@ async def get_screener_results(
         conditions.append(ScreenerSignal.passed_all == True)
     if sector:
         conditions.append(ScreenerSignal.sector.ilike(f"%{sector}%"))
+    if direction:
+        conditions.append(ScreenerSignal.direction == direction.upper())
     if min_score is not None:
         conditions.append(ScreenerSignal.composite_score >= min_score)
     if date_from:
@@ -163,10 +220,42 @@ async def get_screener_results(
     result = await db.execute(stmt)
     signals = result.scalars().all()
 
-    paginated = paginate([s.__dict__ for s in signals], page, page_size)
+    # ── Auto-heal stale is_traded flags ──────────────────────────────────────
+    # If a signal has is_traded=True but no linked OPEN trade exists, reset it.
+    # This handles cases where old buggy code left flags stuck.
+    stale_signals = [s for s in signals if s.is_traded]
+    if stale_signals:
+        # Fetch all signal_ids of currently OPEN trades in one query
+        open_trade_signal_ids_result = await db.execute(
+            select(PaperTrade.signal_id).where(
+                PaperTrade.status == TradeStatus.OPEN,
+                PaperTrade.signal_id.isnot(None),
+            )
+        )
+        open_signal_ids = {row[0] for row in open_trade_signal_ids_result.fetchall()}
+
+        healed = 0
+        for sig in stale_signals:
+            if sig.id not in open_signal_ids:
+                # No open trade linked — stale flag, reset it
+                sig.is_traded = False
+                sig.trade_id = None
+                db.add(sig)
+                healed += 1
+        if healed:
+            await db.commit()
+            logger.info(f"Auto-healed {healed} stale is_traded flags")
+    # ─────────────────────────────────────────────────────────────────────────
+
+    def clean_dict(obj):
+        d = obj.__dict__.copy()
+        d.pop("_sa_instance_state", None)
+        return d
+
+    all_signals = [clean_dict(s) for s in signals]
+    paginated = paginate(all_signals, page, page_size)
 
     # Compute summary stats
-    all_signals = [s.__dict__ for s in signals]
     summary = {
         "total_screened": len(all_signals),
         "total_passed": sum(1 for s in all_signals if s.get("passed_all")),
@@ -205,6 +294,47 @@ async def get_signal(signal_id: int, db: AsyncSession = Depends(get_db)):
     if not signal:
         raise HTTPException(status_code=404, detail="Signal not found")
     return signal
+
+
+@router.post("/signals/{signal_id}/reset-trade", status_code=200)
+async def reset_signal_trade_flag(
+    signal_id: int,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Emergency endpoint: forcibly reset is_traded=False on a signal.
+    Use when a signal is stuck as 'Traded' but no open trade exists.
+    """
+    result = await db.execute(
+        select(ScreenerSignal).where(ScreenerSignal.id == signal_id)
+    )
+    signal = result.scalar_one_or_none()
+    if not signal:
+        raise HTTPException(status_code=404, detail="Signal not found")
+
+    # Check if there's actually an open trade — refuse reset if there is
+    if signal.trade_id:
+        trade_result = await db.execute(
+            select(PaperTrade).where(
+                PaperTrade.id == signal.trade_id,
+                PaperTrade.status == TradeStatus.OPEN,
+            )
+        )
+        open_trade = trade_result.scalar_one_or_none()
+        if open_trade:
+            raise HTTPException(
+                status_code=409,
+                detail=f"Signal {signal_id} has an active open trade (id={signal.trade_id}). Close it first."
+            )
+
+    was_traded = signal.is_traded
+    signal.is_traded = False
+    signal.trade_id = None
+    db.add(signal)
+    await db.commit()
+
+    logger.info(f"Signal {signal_id} ({signal.symbol}) is_traded reset manually. Was: {was_traded}")
+    return {"signal_id": signal_id, "symbol": signal.symbol, "is_traded": False, "was_traded": was_traded}
 
 
 @router.websocket("/ws/{run_id}")

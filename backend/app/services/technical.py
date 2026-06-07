@@ -9,6 +9,7 @@ Computes all technical indicators using pandas-ta:
 - Volume analysis (VWAP proxy, OBV, 20D avg volume)
 - Supertrend
 - ADX
+- Fibonacci Retracement (Phase 4)
 """
 from typing import Optional, Any
 import pandas as pd
@@ -17,6 +18,7 @@ import numpy as np
 
 from app.config import settings
 from app.utils.logger import get_logger
+from app.services.fibonacci import get_fib_analysis
 
 logger = get_logger(__name__)
 
@@ -59,6 +61,10 @@ class TechnicalAnalyzer:
 
             result = self._extract_latest(symbol, df, latest, prev)
             result.update(self._evaluate_filters(result))
+
+            # ── Phase 4: Fibonacci Retracement ────────────────────────────────
+            fib_data = get_fib_analysis(df, result["current_price"])
+            result.update(fib_data)
 
             return result
 
@@ -129,11 +135,13 @@ class TechnicalAnalyzer:
             df["SUPERTREND"] = st.iloc[:, 0]
             df["SUPERTREND_DIR"] = st.iloc[:, 1]  # 1 = bullish, -1 = bearish
 
-        # ── Pivot Points (Weekly) ─────────────────────────────────────────────
+        # ── Pivot Points (Weekly/Daily) ─────────────────────────────────────────────
         # Simple daily pivot
         df["PIVOT"] = (high + low + close) / 3
         df["R1"] = 2 * df["PIVOT"] - low
         df["S1"] = 2 * df["PIVOT"] - high
+        df["R2"] = df["PIVOT"] + (high - low)
+        df["S2"] = df["PIVOT"] - (high - low)
 
         # ── Price Position ────────────────────────────────────────────────────
         df["PCT_FROM_52W_HIGH"] = (close / close.rolling(252).max() - 1) * 100
@@ -166,16 +174,26 @@ class TechnicalAnalyzer:
             atr_sl_pct = round((atr_sl / close - 1) * 100, 2)
 
         # Fixed 5% stop loss
-        fixed_sl = round(close * (1 - self.cfg.FIXED_SL_PCT), 2)
+        fixed_sl_long = round(close * (1 - self.cfg.FIXED_SL_PCT), 2)
+        fixed_sl_short = round(close * (1 + self.cfg.FIXED_SL_PCT), 2)
 
-        # Take the more conservative (higher) SL
-        effective_sl = max(atr_sl, fixed_sl) if atr_sl else fixed_sl
-        target = round(close * (1 + self.cfg.TARGET_PROFIT_PCT), 2)
+        # LONG Trade Parameters
+        atr_sl_long = round(close - (self.cfg.ATR_SL_MULTIPLIER * atr), 2) if atr else None
+        effective_sl_long = atr_sl_long if atr_sl_long else fixed_sl_long
+        risk_long = close - effective_sl_long
+        target_long = round(close + (risk_long * 2), 2)
+        
+        reward_long = target_long - close
+        rr_ratio_long = round(reward_long / risk_long, 2) if risk_long > 0 else None
 
-        # Risk-Reward ratio
-        risk = close - effective_sl
-        reward = target - close
-        rr_ratio = round(reward / risk, 2) if risk > 0 else None
+        # SHORT Trade Parameters
+        atr_sl_short = round(close + (self.cfg.ATR_SL_MULTIPLIER * atr), 2) if atr else None
+        effective_sl_short = atr_sl_short if atr_sl_short else fixed_sl_short
+        risk_short = effective_sl_short - close
+        target_short = round(close - (risk_short * 2), 2)
+        
+        reward_short = close - target_short
+        rr_ratio_short = round(reward_short / risk_short, 2) if risk_short > 0 else None
 
         return {
             "symbol": symbol,
@@ -219,7 +237,7 @@ class TechnicalAnalyzer:
             # Supertrend
             "supertrend": safe(latest.get("SUPERTREND")),
             "supertrend_bullish": (
-                latest.get("SUPERTREND_DIR") == 1.0
+                bool(latest.get("SUPERTREND_DIR") == 1.0)
                 if latest.get("SUPERTREND_DIR") is not None
                 else None
             ),
@@ -228,12 +246,24 @@ class TechnicalAnalyzer:
             "pct_from_52w_low": safe(latest.get("PCT_FROM_52W_LOW")),
             "week_52_high": round(float(df["High"].rolling(252).max().iloc[-1]), 2),
             "week_52_low": round(float(df["Low"].rolling(252).min().iloc[-1]), 2),
-            # Trade Parameters
-            "atr_stop_loss": atr_sl,
-            "fixed_stop_loss": fixed_sl,
-            "effective_stop_loss": effective_sl,
-            "target_price": target,
-            "risk_reward_ratio": rr_ratio,
+            # Pivot Points
+            "pivot": safe(latest.get("PIVOT")),
+            "r1": safe(latest.get("R1")),
+            "s1": safe(latest.get("S1")),
+            "r2": safe(latest.get("R2")),
+            "s2": safe(latest.get("S2")),
+            # LONG Trade Parameters
+            "atr_stop_loss": atr_sl_long,
+            "fixed_stop_loss": fixed_sl_long,
+            "effective_stop_loss": effective_sl_long,
+            "target_price": target_long,
+            "risk_reward_ratio": rr_ratio_long,
+            # SHORT Trade Parameters
+            "atr_stop_loss_short": atr_sl_short,
+            "fixed_stop_loss_short": fixed_sl_short,
+            "effective_stop_loss_short": effective_sl_short,
+            "target_price_short": target_short,
+            "risk_reward_ratio_short": rr_ratio_short,
             # Data quality
             "data_points": len(df),
             "latest_candle_date": str(df.index[-1].date()),
@@ -249,33 +279,43 @@ class TechnicalAnalyzer:
         adx = data.get("adx")
         volume_ratio = data.get("volume_ratio")
 
-        # Core Alpha Screener filter: Price > 200 EMA
-        filters["passed_ema_200"] = (
+        # Core Alpha Screener filter (LONG): Price > 200 EMA
+        filters["passed_ema_200"] = bool(
             ema_200 is not None and close > 0 and close > ema_200
         )
 
-        # Core Alpha Screener filter: RSI < 30 (oversold)
-        filters["passed_rsi_oversold"] = (
+        # Core Alpha Screener filter (LONG): RSI < 30 (oversold)
+        filters["passed_rsi_oversold"] = bool(
             rsi is not None and rsi <= self.cfg.RSI_OVERSOLD
+        )
+        
+        # SHORT Filters: Price < 200 EMA
+        filters["passed_ema_200_short"] = bool(
+            ema_200 is not None and close > 0 and close < ema_200
+        )
+
+        # SHORT Filters: RSI > 65 (overbought)
+        filters["passed_rsi_overbought"] = bool(
+            rsi is not None and rsi >= self.cfg.RSI_OVERBOUGHT
         )
 
         # Additional quality filters
-        filters["passed_adx"] = (
+        filters["passed_adx"] = bool(
             adx is None or adx >= 20  # Some trend strength required
         )
 
-        filters["passed_volume"] = (
+        filters["passed_volume"] = bool(
             volume_ratio is None or volume_ratio >= 0.5  # Not dead volume
         )
 
         # RSI exit signal (for existing positions)
-        filters["rsi_overbought"] = (
+        filters["rsi_overbought"] = bool(
             rsi is not None and rsi >= self.cfg.TARGET_RSI_OVERBOUGHT
         )
 
         # Technical filters combined
-        filters["technicals_passed"] = (
-            filters["passed_ema_200"] and filters["passed_rsi_oversold"]
+        filters["technicals_passed"] = bool(
+            filters["passed_ema_200"] # Relaxed RSI requirement so AI can scan more patterns
         )
 
         return filters

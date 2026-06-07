@@ -196,8 +196,24 @@ export default function DashboardPage() {
               Live
             </span>
           </div>
-          <div className="text-sm font-medium text-slate-500 bg-white border border-slate-200 px-4 py-1.5 rounded-full shadow-sm">
-            Capital: <span className="text-slate-900 font-bold">{formatINR(config.capital)}</span>
+          <div className="text-sm font-medium text-slate-500 bg-white border border-slate-200 px-4 py-1.5 rounded-full shadow-sm flex items-center gap-4">
+            <div>
+              Available:{" "}
+              <span className="text-slate-900 font-bold">
+                {formatINR(
+                  (config.capital || 100000) +
+                    (portfolioStats?.realized_pnl || 0) -
+                    (portfolioStats?.total_invested || 0)
+                )}
+              </span>
+            </div>
+            <div className="w-px h-4 bg-slate-200" />
+            <div className="text-xs">
+              Invested:{" "}
+              <span className="text-slate-700 font-bold">
+                {formatINR(portfolioStats?.total_invested || 0)}
+              </span>
+            </div>
           </div>
         </div>
       </div>

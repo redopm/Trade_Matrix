@@ -47,3 +47,14 @@ desktop.ini
 htmlcov/
 .coverage
 coverage.xml
+Kronos/  
+*.tar.gz  
+*.db  
+data/charts/  
+Kronos/ 
+*.tar.gz 
+*.db 
+*.pth 
+*.pkl 
+data/charts/ 
+backend/database/ 

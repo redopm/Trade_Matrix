@@ -12,7 +12,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent.parent
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
-        env_file=BASE_DIR / ".env",
+        env_file=(".env", "/app/.env", BASE_DIR / "backend" / ".env"),
         env_file_encoding="utf-8",
         case_sensitive=False,
     )
@@ -31,6 +31,14 @@ class Settings(BaseSettings):
     GEMINI_MODEL: str = "gemini-2.5-flash-lite"       # Fast + vision capable
     GEMINI_RATE_LIMIT: int = 14                   # Requests per minute (free tier: 15)
 
+    # ── Phase 3: Fyers API Integration ─────────────────────────────────────────
+    FYERS_CLIENT_ID: Optional[str] = None
+    FYERS_APP_ID: Optional[str] = None
+    FYERS_SECRET_ID: Optional[str] = None
+    FYERS_TOTP_KEY: Optional[str] = None
+    FYERS_PIN: Optional[str] = None
+    FYERS_REDIRECT_URI: str = "http://127.0.0.1:8000/"
+
     # Chart Generation
     CHART_WINDOW_DAYS: int = 60                   # Days per chart window
     CHART_SLIDE_STEP: int = 10                    # Sliding window step
@@ -41,23 +49,48 @@ class Settings(BaseSettings):
     LABELS_FILE: str = str(BASE_DIR / "data" / "labels.jsonl")
 
     # Model
-    MODEL_DIR: str = str(BASE_DIR / "models")
-    MODEL_PATH: str = str(BASE_DIR / "models" / "pattern_classifier.pkl")
-    MODEL_METADATA_PATH: str = str(BASE_DIR / "models" / "model_metadata.json")
-    MIN_PATTERN_CONFIDENCE: float = 0.75          # Min confidence to report pattern
-    CONFLUENCE_CONFIDENCE: float = 0.80           # Min for confluence signal
+    MODEL_DIR: str = str(BASE_DIR / "backend" / "models")
+    MODEL_PATH: str = str(BASE_DIR / "backend" / "models" / "expert_model_weights.pth")
+    MODEL_METADATA_PATH: str = str(BASE_DIR / "backend" / "models" / "expert_model_meta.json")
+    MIN_PATTERN_CONFIDENCE: float = 0.50          # Kaggle model ~68% acc, set lower to capture signals
+    CONFLUENCE_CONFIDENCE: float = 0.52           # Phase1+Phase2 combo threshold
 
     # Training Universe
     PATTERN_UNIVERSE: str = "NIFTY200"            # NIFTY50 | NIFTY200 | NIFTY500
     TRAINING_PERIOD: str = "3y"                   # 3 years historical data
 
-    # Patterns to detect (8 total)
+    # Patterns to detect — 28 total (19 Macro + 9 Candlestick)
     BULLISH_PATTERNS: list[str] = [
-        "double_bottom", "hs_bottom", "bull_flag",
-        "cup_handle", "ascending_triangle"
+        "BUY (1)", # Expert Model
+        # Macro — Reversal
+        "double_bottom", "triple_bottom",
+        "head_and_shoulders_bottom",
+        "rounded_bottom",
+        "cup_and_handle",
+        # Macro — Continuation
+        "ascending_triangle",
+        "falling_wedge",
+        "bull_flag", "bull_pennant",
+        "bullish_rectangle",
+        # Candlestick
+        "cdl_hammer", "cdl_bullish_engulfing", "cdl_morning_star", "cdl_marubozu",
     ]
     BEARISH_PATTERNS: list[str] = [
-        "double_top", "bear_flag", "descending_triangle"
+        "SELL (2)", # Expert Model
+        # Macro — Reversal
+        "double_top", "triple_top",
+        "head_and_shoulders_top",
+        "rounded_top",
+        # Macro — Continuation
+        "descending_triangle",
+        "rising_wedge",
+        "bear_flag", "bear_pennant",
+        "bearish_rectangle",
+        # Candlestick
+        "cdl_shooting_star", "cdl_bearish_engulfing", "cdl_evening_star",
+    ]
+    NEUTRAL_PATTERNS: list[str] = [
+        "symmetrical_triangle", "cdl_doji", "cdl_spinning_top",
     ]
 
     # Feature Extraction
@@ -106,6 +139,7 @@ class Settings(BaseSettings):
 
     # Technical Thresholds
     RSI_OVERSOLD: float = 30.0                   # RSI oversold threshold
+    RSI_OVERBOUGHT: float = 65.0                 # RSI overbought threshold (for SHORTs)
     RSI_PERIOD: int = 14                         # RSI period
     EMA_LONG_PERIOD: int = 200                   # Long-term EMA
     EMA_SHORT_PERIOD: int = 50                   # Short-term EMA
@@ -113,6 +147,11 @@ class Settings(BaseSettings):
     MACD_FAST: int = 12
     MACD_SLOW: int = 26
     MACD_SIGNAL: int = 9
+
+    # SHORT Trading specific Thresholds
+    SHORT_MIN_DEBT_TO_EQUITY: float = 0.5        # Minimum D/E ratio for a good short candidate
+    SHORT_MAX_ROCE: float = 20.0                 # Max ROCE for a short candidate (weak business)
+    SHORT_TARGET_PCT: float = 0.12               # 12% target for shorts
 
     # Scheduler (IST timezone = UTC+5:30)
     SCREENER_CRON_HOUR: int = 15                 # 3 PM IST → 9:30 AM UTC

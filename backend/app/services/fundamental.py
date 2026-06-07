@@ -124,7 +124,7 @@ class FundamentalAnalyzer:
             filters["passed_roce"] = True  # Banking: apply NIM/NPA separately
             filters["roce_note"] = "Banking sector: ROCE filter bypassed, NIM applied"
         else:
-            filters["passed_roce"] = (
+            filters["passed_roce"] = bool(
                 roce is not None and roce >= self.cfg.MIN_ROCE
             )
 
@@ -134,30 +134,30 @@ class FundamentalAnalyzer:
             filters["passed_debt_to_equity"] = True
             filters["de_note"] = "Banking sector: D/E filter bypassed"
         else:
-            filters["passed_debt_to_equity"] = (
+            filters["passed_debt_to_equity"] = bool(
                 de is not None and de <= self.cfg.MAX_DEBT_TO_EQUITY
             )
 
         # Piotroski F-Score
         f_score = data.get("piotroski_f_score")
-        filters["passed_piotroski"] = (
+        filters["passed_piotroski"] = bool(
             f_score is not None and f_score >= self.cfg.MIN_PIOTROSKI_SCORE
         )
 
         # Altman Z-Score (only apply if calculable)
         z_score = data.get("altman_z_score")
-        filters["passed_altman"] = (
+        filters["passed_altman"] = bool(
             z_score is None or z_score > 1.8  # < 1.8 = distress zone
         )
 
         # EPS Growth
         eps_growth = data.get("eps_growth_yoy")
-        filters["passed_eps_growth"] = (
+        filters["passed_eps_growth"] = bool(
             eps_growth is None or eps_growth >= self.cfg.MIN_EPS_GROWTH
         )
 
         # Composite fundamentals pass
-        filters["fundamentals_passed"] = (
+        filters["fundamentals_passed"] = bool(
             filters["passed_roce"]
             and filters["passed_debt_to_equity"]
             # Piotroski is a bonus filter; not hard mandatory in Phase 1

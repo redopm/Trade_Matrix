@@ -24,7 +24,7 @@ export default function RootLayout({
           crossOrigin="anonymous"
         />
       </head>
-      <body>
+      <body suppressHydrationWarning>
         <div className="flex bg-slate-50 min-h-screen">
           <Sidebar />
           <main className="flex-1 ml-64">

@@ -364,10 +364,9 @@ class PatternLabeler:
             conf = min(0.5 + trough_sym * 0.3 + recovery * 0.2, 0.92)
             return "double_bottom", conf, True
 
-        # ── Double Top: 2 peaks, symmetric, bearish ──────────────────────────
-        if (n_peaks >= 2 and n_troughs >= 1 and peak_sym > 0.85
-                and recovery < 0.3 and obv_slope < 0):
-            conf = min(0.5 + peak_sym * 0.3 + (1 - recovery) * 0.2, 0.90)
+        # ── Double Top: 2 peaks, bearish ──────────────────────────
+        if n_peaks >= 2 and recovery < 0.8:
+            conf = min(0.6 + peak_sym * 0.2, 0.90)
             return "double_top", conf, False
 
         # ── Head & Shoulders Bottom (3 troughs, middle is deepest) ───────────
@@ -382,10 +381,9 @@ class PatternLabeler:
             conf = min(0.55 + min(lower_slope * 50, 0.3), 0.85)
             return "ascending_triangle", conf, True
 
-        # ── Descending Triangle: flat lower, declining upper ──────────────────
-        if (abs(lower_slope) < 0.005 and upper_slope < -0.003
-                and vol_breakout > 1.2):
-            conf = min(0.55 + min(abs(upper_slope) * 50, 0.3), 0.85)
+        # ── Descending Triangle: declining upper ──────────────────
+        if upper_slope < -0.001:
+            conf = min(0.6 + abs(upper_slope) * 10, 0.85)
             return "descending_triangle", conf, False
 
         # ── Bull Flag: strong uptrend + brief consolidation ───────────────────

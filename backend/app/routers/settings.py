@@ -63,3 +63,82 @@ async def test_telegram_alert(config: TelegramConfig):
         return {"status": "success", "message": "Test alert sent successfully!"}
     else:
         raise HTTPException(status_code=400, detail="Failed to send test alert. Check token and chat ID.")
+
+class ScreenerConfig(BaseModel):
+    min_roce: float
+    max_debt_to_equity: float
+    rsi_oversold: float
+    target_profit_pct: float
+    atr_sl_multiplier: float
+    short_max_roce: float
+    short_min_debt_to_equity: float
+    rsi_overbought: float
+    short_target_pct: float
+
+@router.get("/screener")
+async def get_screener_settings():
+    return {
+        "min_roce": settings.MIN_ROCE,
+        "max_debt_to_equity": settings.MAX_DEBT_TO_EQUITY,
+        "rsi_oversold": settings.RSI_OVERSOLD,
+        "target_profit_pct": settings.TARGET_PROFIT_PCT,
+        "atr_sl_multiplier": settings.ATR_SL_MULTIPLIER,
+        "short_max_roce": settings.SHORT_MAX_ROCE,
+        "short_min_debt_to_equity": settings.SHORT_MIN_DEBT_TO_EQUITY,
+        "rsi_overbought": settings.RSI_OVERBOUGHT,
+        "short_target_pct": settings.SHORT_TARGET_PCT,
+    }
+
+@router.post("/screener")
+async def update_screener_settings(config: ScreenerConfig):
+    # Update in memory
+    settings.MIN_ROCE = config.min_roce
+    settings.MAX_DEBT_TO_EQUITY = config.max_debt_to_equity
+    settings.RSI_OVERSOLD = config.rsi_oversold
+    settings.TARGET_PROFIT_PCT = config.target_profit_pct
+    settings.ATR_SL_MULTIPLIER = config.atr_sl_multiplier
+    settings.SHORT_MAX_ROCE = config.short_max_roce
+    settings.SHORT_MIN_DEBT_TO_EQUITY = config.short_min_debt_to_equity
+    settings.RSI_OVERBOUGHT = config.rsi_overbought
+    settings.SHORT_TARGET_PCT = config.short_target_pct
+
+    # Update .env file
+    env_path = BASE_DIR / ".env"
+    if env_path.exists():
+        content = env_path.read_text()
+        
+        # Keys to update mapping
+        updates = {
+            "MIN_ROCE": config.min_roce,
+            "MAX_DEBT_TO_EQUITY": config.max_debt_to_equity,
+            "RSI_OVERSOLD": config.rsi_oversold,
+            "TARGET_PROFIT_PCT": config.target_profit_pct,
+            "ATR_SL_MULTIPLIER": config.atr_sl_multiplier,
+            "SHORT_MAX_ROCE": config.short_max_roce,
+            "SHORT_MIN_DEBT_TO_EQUITY": config.short_min_debt_to_equity,
+            "RSI_OVERBOUGHT": config.rsi_overbought,
+            "SHORT_TARGET_PCT": config.short_target_pct,
+        }
+
+        new_lines = []
+        found_keys = set()
+        
+        for line in content.splitlines():
+            updated = False
+            for key, val in updates.items():
+                if line.startswith(f"{key}="):
+                    new_lines.append(f"{key}={val}")
+                    found_keys.add(key)
+                    updated = True
+                    break
+            if not updated:
+                new_lines.append(line)
+                
+        # Append missing keys
+        for key, val in updates.items():
+            if key not in found_keys:
+                new_lines.append(f"{key}={val}")
+
+        env_path.write_text("\n".join(new_lines) + "\n")
+
+    return {"status": "success", "message": "Screener rules saved successfully."}

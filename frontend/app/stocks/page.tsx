@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { stocksApi } from "@/lib/api";
-import { Search, TrendingUp, TrendingDown, CheckCircle2, XCircle, AlertCircle, Building2 } from "lucide-react";
+import { Search, TrendingUp, TrendingDown, CheckCircle2, XCircle, AlertCircle, Building2, Target, Crosshair } from "lucide-react";
 
 function IndicatorRow({ label, value, good, unit = "" }: {
   label: string;
@@ -230,6 +230,88 @@ export default function StocksPage() {
                   ))}
                 </div>
               </div>
+            </div>
+          </div>
+
+          {/* ========================================= */}
+          {/* CASH MARKET MASTER ENGINE (PRO SECTION)   */}
+          {/* ========================================= */}
+          <div className="bg-slate-900 border border-slate-800 rounded-xl p-6 shadow-lg text-white mt-4 relative overflow-hidden">
+            <div className="absolute top-0 right-0 p-4 opacity-10">
+               <Crosshair size={120} />
+            </div>
+            
+            <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-blue-400 mb-6">
+              <Target size={16} /> Institutional Master Engine (Pro)
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 relative z-10">
+              
+              {/* Pivot Matrix */}
+              <div className="bg-slate-800/50 rounded-xl p-5 border border-slate-700 shadow-inner">
+                <h3 className="text-sm font-bold text-slate-300 mb-4 border-b border-slate-700 pb-2">Advanced Pivot Matrix</h3>
+                <div className="space-y-3">
+                  <div className="flex justify-between items-center text-sm">
+                    <span className="text-red-400 font-bold">R2 (Extreme Resistance)</span>
+                    <span className="font-mono text-white font-bold">₹{tech.r2?.toFixed(2) || "-"}</span>
+                  </div>
+                  <div className="flex justify-between items-center text-sm">
+                    <span className="text-orange-400 font-bold">R1 (First Resistance)</span>
+                    <span className="font-mono text-white font-bold">₹{tech.r1?.toFixed(2) || "-"}</span>
+                  </div>
+                  <div className="flex justify-between items-center text-sm bg-blue-900/40 p-2 rounded border border-blue-800/50">
+                    <span className="text-blue-300 font-black tracking-wide">MASTER PIVOT</span>
+                    <span className="font-mono text-white font-black">₹{tech.pivot?.toFixed(2) || "-"}</span>
+                  </div>
+                  <div className="flex justify-between items-center text-sm">
+                    <span className="text-emerald-400 font-bold">S1 (First Support)</span>
+                    <span className="font-mono text-white font-bold">₹{tech.s1?.toFixed(2) || "-"}</span>
+                  </div>
+                  <div className="flex justify-between items-center text-sm">
+                    <span className="text-emerald-600 font-bold">S2 (Extreme Support)</span>
+                    <span className="font-mono text-white font-bold">₹{tech.s2?.toFixed(2) || "-"}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Fibonacci Demand Zones */}
+              <div className="bg-slate-800/50 rounded-xl p-5 border border-slate-700 shadow-inner">
+                <h3 className="text-sm font-bold text-slate-300 mb-4 border-b border-slate-700 pb-2 flex justify-between">
+                  <span>Fibonacci Demand & Supply</span>
+                  {tech.fib_confluence && (
+                    <span className="text-[10px] bg-emerald-500/20 text-emerald-400 px-2 py-1 rounded animate-pulse border border-emerald-500/30">
+                      Near {tech.fib_nearest_level}% Level
+                    </span>
+                  )}
+                </h3>
+                
+                <div className="space-y-3">
+                  <div className="flex justify-between items-center text-sm">
+                    <span className="text-slate-400">Swing High (0%)</span>
+                    <span className="font-mono text-slate-300">₹{tech.fib_swing_high?.toFixed(2) || "-"}</span>
+                  </div>
+                  <div className="flex justify-between items-center text-sm">
+                    <span className="text-slate-400">Minor Retracement (38.2%)</span>
+                    <span className="font-mono text-slate-300">₹{tech.fib_level_382?.toFixed(2) || "-"}</span>
+                  </div>
+                  <div className="flex justify-between items-center text-sm">
+                    <span className="text-slate-400">Halfway (50.0%)</span>
+                    <span className="font-mono text-slate-300">₹{tech.fib_level_500?.toFixed(2) || "-"}</span>
+                  </div>
+                  <div className="flex justify-between items-center text-sm bg-emerald-900/40 p-2 rounded border border-emerald-800/50 shadow-[0_0_15px_rgba(16,185,129,0.1)]">
+                    <span className="text-emerald-400 font-black">GOLDEN RATIO (61.8%)</span>
+                    <span className="font-mono text-emerald-300 font-black tracking-wide">₹{tech.fib_level_618?.toFixed(2) || "-"}</span>
+                  </div>
+                  <div className="flex justify-between items-center text-sm">
+                    <span className="text-slate-400">Swing Low (100%)</span>
+                    <span className="font-mono text-slate-300">₹{tech.fib_swing_low?.toFixed(2) || "-"}</span>
+                  </div>
+                </div>
+                <div className="mt-4 text-[10px] text-slate-500">
+                  * 61.8% Golden Ratio acts as the strongest Institutional Demand Zone.
+                </div>
+              </div>
+
             </div>
           </div>
         </div>

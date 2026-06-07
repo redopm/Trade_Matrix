@@ -34,6 +34,7 @@ from app.services.fundamental import FundamentalAnalyzer
 from app.services.technical import TechnicalAnalyzer
 from app.services.pattern_detector import PatternDetector
 from app.services.alert_manager import AlertManager
+from app.services.market_regime import MarketRegimeDetector
 from app.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -59,6 +60,8 @@ class ScreenerRun:
         self.status: str = "RUNNING"
         self.current_symbol: str = ""
         self.errors: list[str] = []
+        self.market_regime: str = "BULLISH"
+        self.regime_confidence: float = 0.0
 
     @property
     def progress_pct(self) -> float:
@@ -82,6 +85,8 @@ class ScreenerRun:
             "failed_event_risk": self.failed_event_risk,
             "current_symbol": self.current_symbol,
             "signals_count": len(self.signals),
+            "market_regime": self.market_regime,
+            "regime_confidence": self.regime_confidence,
         }
 
 
@@ -137,6 +142,11 @@ class AlphaScreener:
         logger.info(f"[{run_id}] Starting Alpha Screener on {len(symbols)} symbols")
 
         try:
+            # ── Detect Market Regime ──────────────────────────────────────
+            regime_data = await MarketRegimeDetector.get_current_regime()
+            run.market_regime = regime_data.get("regime", "SIDEWAYS")
+            run.regime_confidence = regime_data.get("confidence", 0.0)
+            
             for i, symbol in enumerate(symbols):
                 run.current_symbol = symbol
                 run.processed = i
@@ -145,7 +155,7 @@ class AlphaScreener:
                     await websocket_callback(run.to_dict())
 
                 try:
-                    signal = await self._screen_single(symbol, run_id)
+                    signal = await self._screen_single(symbol, run_id, run.market_regime, run.regime_confidence)
                     if signal:
                         run.signals.append(signal)
                         if signal["passed_all"]:
@@ -200,7 +210,7 @@ class AlphaScreener:
         return run
 
     async def _screen_single(
-        self, symbol: str, run_id: str
+        self, symbol: str, run_id: str, market_regime: str = "BULLISH", regime_confidence: float = 0.0
     ) -> Optional[dict[str, Any]]:
         """
         Screen a single stock symbol.
@@ -232,34 +242,59 @@ class AlphaScreener:
         # ── Step 5: Composite Scoring ─────────────────────────────────────────
         composite_score = self._compute_composite_score(fund, tech)
 
-        # ── Step 6: Overall Pass/Fail ─────────────────────────────────────────
-        passed_all = (
-            fund.get("fundamentals_passed", False)
-            and tech.get("technicals_passed", False)
-            and passed_event_risk
-        )
+        # ── Step 6: Direction & Pre-Filters based on Stock Trend ──────────────────
+        direction = "NONE"
+        passed_pre_filters = False
+        
+        # Always check the individual stock's trend, regardless of global market regime.
+        # This allows finding strong bullish stocks even in a bearish market, and vice versa.
+        if tech.get("passed_ema_200", False):
+            direction = "LONG"
+            passed_pre_filters = passed_event_risk
+        elif tech.get("passed_ema_200_short", False):
+            direction = "SHORT"
+            passed_pre_filters = passed_event_risk
 
         current_price = tech.get("current_price") or fund.get("current_price", 0)
 
         # ── Step 6.5: Pattern Detection (Hybrid Mode) ─────────────────────────
         pattern_data = {}
-        if passed_all:
+        passed_all = False
+        
+        if passed_pre_filters:
             pattern_result = await self.pattern_detector.detect(
                 symbol=symbol,
                 df=df,
-                phase1_passed=passed_all,
+                phase1_passed=passed_pre_filters,
                 generate_chart=True,
             )
+            pattern_name = pattern_result.get("pattern_name", "no_pattern")
+            confidence = pattern_result.get("confidence", 0.0)
+            is_bullish = pattern_result.get("is_bullish")
+            
             pattern_data = {
-                "pattern_name": pattern_result.get("pattern_name", "no_pattern"),
-                "pattern_confidence": pattern_result.get("confidence", 0.0),
+                "pattern_name": pattern_name,
+                "pattern_confidence": confidence,
                 "chart_image_path": pattern_result.get("chart_path"),
+                "is_bullish": is_bullish,
             }
+            
+            # The signal officially passes if the AI finds a pattern with high confidence
+            min_conf = self.cfg.MIN_PATTERN_CONFIDENCE
+            if market_regime == "SIDEWAYS":
+                min_conf = min_conf + 0.15 # Stricter in sideways
+                
+            if pattern_name != "no_pattern" and confidence >= min_conf:
+                if direction == "LONG" and is_bullish is True:
+                    passed_all = True
+                elif direction == "SHORT" and is_bullish is False:
+                    passed_all = True
 
         signal = {
             "symbol": symbol,
             "company_name": fund.get("company_name", symbol),
-            "sector": fund.get("sector"),
+            "sector": fund.get("sector", "Unknown"),
+            "interval": "1D",
             "signal_date": signal_date,
             "screener_run_id": run_id,
 
@@ -286,24 +321,44 @@ class AlphaScreener:
 
             # Trade Parameters
             "suggested_entry": current_price,
-            "suggested_sl": tech.get("atr_stop_loss"),
-            "suggested_sl_fixed": tech.get("fixed_stop_loss"),
-            "suggested_target": tech.get("target_price"),
-            "risk_reward_ratio": tech.get("risk_reward_ratio"),
+            "suggested_sl": tech.get("atr_stop_loss_short") if direction == "SHORT" else tech.get("atr_stop_loss"),
+            "suggested_sl_fixed": tech.get("fixed_stop_loss_short") if direction == "SHORT" else tech.get("fixed_stop_loss"),
+            "suggested_target": tech.get("target_price_short") if direction == "SHORT" else tech.get("target_price"),
+            "risk_reward_ratio": tech.get("risk_reward_ratio_short") if direction == "SHORT" else tech.get("risk_reward_ratio"),
 
             # Filter Results
-            "passed_roce": fund.get("passed_roce", False),
-            "passed_debt_to_equity": fund.get("passed_debt_to_equity", False),
-            "passed_ema_200": tech.get("passed_ema_200", False),
-            "passed_rsi": tech.get("passed_rsi_oversold", False),
+            "passed_roce": fund.get("passed_roce", False) if direction == "LONG" else (fund.get("roce") is not None and fund.get("roce") < self.cfg.SHORT_MAX_ROCE),
+            "passed_debt_to_equity": fund.get("passed_debt_to_equity", False) if direction == "LONG" else (fund.get("debt_to_equity") is not None and fund.get("debt_to_equity") > self.cfg.SHORT_MIN_DEBT_TO_EQUITY),
+            "passed_ema_200": tech.get("passed_ema_200", False) if direction == "LONG" else tech.get("passed_ema_200_short", False),
+            "passed_rsi": tech.get("passed_rsi_oversold", False) if direction == "LONG" else tech.get("passed_rsi_overbought", False),
             "passed_piotroski": fund.get("passed_piotroski", False),
             "passed_earnings_blackout": passed_event_risk,
             "passed_all": passed_all,
+
+            # Phase 3 Market Regime Data
+            "direction": direction,
+            "market_regime": market_regime,
+            "regime_confidence": regime_confidence,
 
             # Phase 2 Pattern Data
             "pattern_name": pattern_data.get("pattern_name"),
             "pattern_confidence": pattern_data.get("pattern_confidence"),
             "chart_image_path": pattern_data.get("chart_image_path"),
+
+            # Phase 4 Fibonacci Data
+            "fib_swing_high": tech.get("fib_swing_high"),
+            "fib_swing_low": tech.get("fib_swing_low"),
+            "fib_level_0": tech.get("fib_level_0"),
+            "fib_level_236": tech.get("fib_level_236"),
+            "fib_level_382": tech.get("fib_level_382"),
+            "fib_level_500": tech.get("fib_level_500"),
+            "fib_level_618": tech.get("fib_level_618"),
+            "fib_level_786": tech.get("fib_level_786"),
+            "fib_level_100": tech.get("fib_level_100"),
+            "fib_nearest_level": tech.get("fib_nearest_level"),
+            "fib_nearest_price": tech.get("fib_nearest_price"),
+            "fib_confluence": tech.get("fib_confluence", False),
+            "fib_confluence_score": tech.get("fib_confluence_score", 0.0),
 
             # Score
             "composite_score": composite_score,
@@ -394,6 +449,10 @@ class AlphaScreener:
         if vol_ratio is not None and vol_ratio >= 0.5:
             score += min(10.0, vol_ratio * 5.0)
 
+        # Fibonacci Confluence (0-10 points bonus)
+        fib_score = tech.get("fib_confluence_score", 0.0)
+        score += fib_score
+
         return round(score, 2)
 
     async def _save_signals(
@@ -416,10 +475,12 @@ class AlphaScreener:
     @staticmethod
     def _update_failure_counts(run: ScreenerRun, signal: dict) -> None:
         """Update failure counters based on which filters failed."""
-        if not signal.get("passed_roce") or not signal.get("passed_debt_to_equity"):
-            run.failed_fundamental += 1
-        elif not signal.get("passed_ema_200") or not signal.get("passed_rsi"):
+        if not signal.get("passed_ema_200"):
             run.failed_technical += 1
+        elif signal.get("pattern_name", "no_pattern") == "no_pattern":
+            run.failed_technical += 1
+        elif not signal.get("passed_roce") or not signal.get("passed_debt_to_equity"):
+            run.failed_fundamental += 1
         elif not signal.get("passed_earnings_blackout"):
             run.failed_event_risk += 1
 

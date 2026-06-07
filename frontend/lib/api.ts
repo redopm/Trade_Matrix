@@ -5,17 +5,22 @@
 import axios from "axios";
 
 const isBrowser = typeof window !== "undefined";
-const defaultBaseUrl = isBrowser ? "/api/v1" : "http://backend:8000/api/v1";
+
+// Use BACKEND_URL if provided, else use docker service name in production, or localhost in development
+const serverBaseUrl = process.env.BACKEND_URL || 
+  (process.env.NODE_ENV === "production" ? "http://backend:8000" : "http://127.0.0.1:8000");
+
+const defaultBaseUrl = isBrowser ? "/api/v1" : `${serverBaseUrl}/api/v1`;
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL || defaultBaseUrl;
 
 const defaultWsUrl = isBrowser 
   ? `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${window.location.host}/api/v1` 
-  : "ws://localhost:8000/api/v1";
+  : `${serverBaseUrl.replace("http", "ws").replace("https", "wss")}/api/v1`;
 const WS_URL = process.env.NEXT_PUBLIC_WS_URL || defaultWsUrl;
 
 export const api = axios.create({
   baseURL: BASE_URL,
-  timeout: 30000,
+  timeout: 60000,   // 60s — backend can be slow during model load
   headers: {
     "Content-Type": "application/json",
   },
@@ -30,17 +35,57 @@ api.interceptors.request.use((config) => {
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    const message =
-      error.response?.data?.detail ||
-      error.response?.data?.message ||
-      error.message ||
-      "An error occurred";
-    console.error(`API Error [${error.response?.status}]: ${message}`);
+    const data = error.response?.data;
+    let message: string;
+
+    if (Array.isArray(data?.detail)) {
+      // FastAPI 422 validation errors — format each field error
+      message = data.detail
+        .map((e: any) => {
+          const field = e.loc?.slice(1).join(".") ?? "field";
+          return `${field}: ${e.msg}`;
+        })
+        .join(" | ");
+    } else {
+      message =
+        data?.detail ||
+        data?.message ||
+        error.message ||
+        "An error occurred";
+    }
+
+    const status = error.response?.status ?? "network";
+    console.error(`API Error [${status}]: ${message}`);
     return Promise.reject(new Error(message));
   }
 );
 
 // ── Dashboard ────────────────────────────────────────────────────────────────
+// Updated error handling to prevent UI crashes
+export const fetchOptionChain = async (symbol: string, atm_strike?: number) => {
+  const t = new Date().getTime();
+  let url = `${BASE_URL}/fno/chain/${symbol}?t=${t}`;
+  if (atm_strike) url += `&atm_strike=${atm_strike}`;
+  try {
+    const response = await fetch(url, { cache: 'no-store', headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' } });
+    if (!response.ok) {
+      return { error: `Failed to fetch option chain (HTTP ${response.status})` };
+    }
+    return await response.json();
+  } catch (error: any) {
+    return { error: `Network error: ${error.message}` };
+  }
+};
+
+export const predictKronos = async (symbol: string, pred_len: number = 5) => {
+  try {
+    const response = await api.post("/fno/predict", { symbol, pred_len, range_from: "2024-01-01" });
+    return response.data;
+  } catch (error: any) {
+    return { error: error.message };
+  }
+};
+
 export const dashboardApi = {
   getSummary: () => api.get("/dashboard/summary"),
   getPnlChart: (days: number = 30) => api.get(`/dashboard/pnl-chart?days=${days}`),
@@ -49,19 +94,28 @@ export const dashboardApi = {
     api.get(`/dashboard/recent-signals?limit=${limit}`),
 };
 
-// ── Settings (Phase 3) ────────────────────────────────────────────────────────
+// ── Settings ────────────────────────────────────────────────────────────────────
 export const settingsApi = {
   getTelegram: () => api.get("/settings/telegram"),
   updateTelegram: (data: { enabled: boolean; bot_token: string; chat_id: string }) =>
     api.post("/settings/telegram", data),
   testTelegram: (data: { enabled: boolean; bot_token: string; chat_id: string }) =>
     api.post("/settings/telegram/test", data),
+  getScreener: () => api.get("/settings/screener"),
+  updateScreener: (data: any) => api.post("/settings/screener", data),
+};
+
+// ── Broker ──────────────────────────────────────────────────────────────────────
+export const brokerApi = {
+  getStatus: () => api.get("/broker/status"),
+  getAuthUrl: () => api.get("/broker/auth-url"),
+  setAuthCode: (auth_code: string) => api.post("/broker/auth", { auth_code }),
 };
 
 // ── Screener ──────────────────────────────────────────────────────────────────
 export const screenerApi = {
-  startRun: (symbols?: string[]) =>
-    api.post("/screener/run", { symbols }),
+  startRun: (opts?: { symbols?: string[]; description?: string }) =>
+    api.post("/screener/run", opts ?? {}),
   getRunStatus: (runId: string) => api.get(`/screener/run/${runId}`),
   getAllRuns: () => api.get("/screener/runs"),
   getResults: (params?: {
@@ -71,10 +125,16 @@ export const screenerApi = {
     page?: number;
     page_size?: number;
     sort_by?: string;
+    direction?: string;
+    date_from?: string;
+    date_to?: string;
   }) => api.get("/screener/results", { params }),
   getPassedSignals: (limit?: number) =>
     api.get(`/screener/results/passed${limit ? `?limit=${limit}` : ""}`),
   getSignal: (id: number) => api.get(`/screener/signals/${id}`),
+  getMarketRegime: () => api.get("/screener/market-regime"),
+  getUniverse: () => api.get("/screener/universe", { timeout: 90000 }),
+  getSectorBreakdown: () => api.get("/screener/universe/sectors", { timeout: 90000 }),
 };
 
 // ── Trades ────────────────────────────────────────────────────────────────────
@@ -88,6 +148,8 @@ export const tradesApi = {
   getTrade: (id: number) => api.get(`/trades/${id}`),
   closeTrade: (id: number, exitPrice?: number, notes?: string) =>
     api.put(`/trades/${id}/close`, { exit_price: exitPrice, notes }),
+  deleteTrade: (id: number) => api.delete(`/trades/${id}`),
+  deleteAllClosed: () => api.delete("/trades/closed/all"),
   updateAll: () => api.post("/trades/update-all"),
 };
 
@@ -107,6 +169,7 @@ export const patternsApi = {
   // Model status
   getStatus: () => api.get("/patterns/status"),
   getQuota: () => api.get("/patterns/quota"),
+  getPerformance: () => api.get("/patterns/performance"),
 
   // Training
   startTraining: (useFullNifty200 = true) =>
@@ -169,6 +232,8 @@ export interface ScreenerRunStatus {
   failed_event_risk: number;
   current_symbol: string;
   signals_count: number;
+  market_regime?: string;
+  regime_confidence?: number;
 }
 
 export interface Signal {
@@ -199,10 +264,20 @@ export interface Signal {
   atr_14?: number;
   adx?: number;
   
+  // Phase 3: Market Regime & Direction
+  direction?: string;
+  market_regime?: string;
+  regime_confidence?: number;
+
   // Phase 2: Pattern Recognition
   pattern_name?: string;
   pattern_confidence?: number;
   chart_image_path?: string;
+  
+  // Phase 4: Fibonacci Retracement
+  fib_confluence?: boolean;
+  fib_nearest_level?: string;
+  fib_nearest_price?: number;
   
   is_traded: boolean;
   screener_run_id?: string;

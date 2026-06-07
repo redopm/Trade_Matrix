@@ -294,7 +294,7 @@ class TrainingOrchestrator:
         async with sem:
             await asyncio.sleep(self.cfg.FETCH_DELAY_SECONDS)
             try:
-                return await self.data_fetcher.fetch_ohlcv(
+                return await self.data_fetcher.fetch_price_history(
                     symbol, period=self.cfg.TRAINING_PERIOD
                 )
             except Exception as e:

@@ -201,7 +201,7 @@ async def detect_all_signals(limit: int = Query(50, le=200)) -> dict:
 
     for sym in symbols:
         try:
-            df = await _fetcher.fetch_ohlcv(sym, period="1y")
+            df = await _fetcher.fetch_price_history(sym, period="1y")
             if not df.empty:
                 det = await _detector.detect(sym, df, phase1_passed=True)
                 detections[sym] = det
@@ -250,7 +250,7 @@ async def get_chart_image(
         return Response(content=img_bytes, media_type="image/png")
 
     # Generate fresh chart
-    df = await _fetcher.fetch_ohlcv(sym, period="6mo")
+    df = await _fetcher.fetch_price_history(sym, period="6mo")
     if df.empty:
         raise HTTPException(404, f"No data for {symbol}")
 
@@ -267,6 +267,16 @@ async def get_chart_image(
 async def get_label_stats() -> dict:
     """Get statistics about the labeled training dataset."""
     return _labeler.get_label_stats()
+
+@router.get("/performance")
+async def get_pattern_performance() -> list[dict]:
+    """Get win rates and stats for all patterns based on self-learning outcome tracker."""
+    from app.database import AsyncSessionLocal
+    from app.services.outcome_tracker import OutcomeTracker
+    async with AsyncSessionLocal() as db:
+        tracker = OutcomeTracker()
+        perf = await tracker.get_pattern_performance(db)
+        return perf
 
 
 @router.get("/labels")

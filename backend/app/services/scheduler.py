@@ -43,6 +43,22 @@ async def _update_paper_trades() -> None:
         summary = await engine.update_open_trades(db)
         logger.info(f"[Scheduler] Trade update: {summary}")
 
+async def _run_weekly_self_learning() -> None:
+    """Background job: Run Weekly Self-Learning (Outcomes + Gemini) on Saturday 6 AM IST."""
+    from app.services.outcome_tracker import OutcomeTracker
+    from app.services.gemini_feedback import GeminiFeedbackLoop
+    logger.info(f"[Scheduler] Starting Weekly Self-Learning @ {datetime.now(IST).strftime('%H:%M IST')}")
+    async with AsyncSessionLocal() as db:
+        tracker = OutcomeTracker()
+        stats = await tracker.track_outcomes(db, days_back=45)
+        logger.info(f"[Scheduler] Outcomes processed: {stats}")
+        
+        perf = await tracker.get_pattern_performance(db)
+        if perf:
+            feedback = GeminiFeedbackLoop()
+            new_config = await feedback.run_feedback_loop(perf)
+            logger.info(f"[Scheduler] Feedback generated: {bool(new_config)}")
+
 
 def create_scheduler() -> AsyncIOScheduler:
     """Create and configure the APScheduler instance."""
@@ -75,6 +91,21 @@ def create_scheduler() -> AsyncIOScheduler:
         name="Paper Trade P&L Update",
         replace_existing=True,
         misfire_grace_time=300,
+    )
+
+    # Weekly Self-Learning on Saturday 6:00 AM IST
+    _scheduler.add_job(
+        _run_weekly_self_learning,
+        CronTrigger(
+            day_of_week="sat",
+            hour=6,
+            minute=0,
+            timezone=IST,
+        ),
+        id="weekly_self_learning",
+        name="Weekly Self-Learning Feedback",
+        replace_existing=True,
+        misfire_grace_time=3600,
     )
 
     logger.info("Scheduler configured with 2 jobs")

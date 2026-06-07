@@ -66,9 +66,35 @@ class ScreenerSignal(Base):
     pattern_confidence: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     chart_image_path: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
 
+    # ── Phase 3: Market Regime ────────────────────────────────────────────────
+    direction: Mapped[str] = mapped_column(String(10), default="LONG")           # "LONG" | "SHORT"
+    market_regime: Mapped[str] = mapped_column(String(20), default="BULLISH")    # "BULLISH" | "BEARISH" | "SIDEWAYS"
+    regime_confidence: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+
+    # ── Phase 4: Fibonacci Retracement ─────────────────────────────────────
+    fib_swing_high: Mapped[Optional[float]] = mapped_column(Float, nullable=True)        # Detected pivot high
+    fib_swing_low: Mapped[Optional[float]] = mapped_column(Float, nullable=True)         # Detected pivot low
+    fib_level_0: Mapped[Optional[float]] = mapped_column(Float, nullable=True)           # 0% level (= Swing High)
+    fib_level_236: Mapped[Optional[float]] = mapped_column(Float, nullable=True)         # 23.6% retracement
+    fib_level_382: Mapped[Optional[float]] = mapped_column(Float, nullable=True)         # 38.2% retracement
+    fib_level_500: Mapped[Optional[float]] = mapped_column(Float, nullable=True)         # 50.0% retracement
+    fib_level_618: Mapped[Optional[float]] = mapped_column(Float, nullable=True)         # 61.8% retracement (Golden Ratio)
+    fib_level_786: Mapped[Optional[float]] = mapped_column(Float, nullable=True)         # 78.6% retracement
+    fib_level_100: Mapped[Optional[float]] = mapped_column(Float, nullable=True)         # 100% level (= Swing Low)
+    fib_nearest_level: Mapped[Optional[str]] = mapped_column(String(10), nullable=True)  # e.g. "61.8"
+    fib_nearest_price: Mapped[Optional[float]] = mapped_column(Float, nullable=True)     # Price of nearest level
+    fib_confluence: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)       # True if price near a Fib level
+    fib_confluence_score: Mapped[Optional[float]] = mapped_column(Float, nullable=True)  # 0-10 score contribution
+
     # ── Status ────────────────────────────────────────────────────────────────
     is_traded: Mapped[bool] = mapped_column(Boolean, default=False)
     trade_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+
+    # ── Self-Learning Outcome Tracking ────────────────────────────────────────
+    outcome: Mapped[Optional[str]] = mapped_column(String(20), default="PENDING", index=True) # WINNER / LOSER / NEUTRAL / PENDING
+    outcome_date: Mapped[Optional[str]] = mapped_column(String(10), nullable=True)
+    outcome_price: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    days_to_outcome: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
 
     # Overall screener score (weighted composite)
     composite_score: Mapped[Optional[float]] = mapped_column(Float, nullable=True)

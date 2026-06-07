@@ -130,7 +130,13 @@ async def list_trades(
     result = await db.execute(stmt)
     trades = result.scalars().all()
 
-    return paginate([t.__dict__ for t in trades], page, page_size)
+    trade_list = []
+    for t in trades:
+        t_dict = t.__dict__.copy()
+        t_dict.pop("_sa_instance_state", None)
+        trade_list.append(t_dict)
+
+    return paginate(trade_list, page, page_size)
 
 
 @router.get("/open", response_model=list[TradeOut])
@@ -199,3 +205,58 @@ async def update_all_trades(
 
     background_tasks.add_task(update_bg)
     return {"message": "P&L update started in background"}
+
+
+@router.delete("/{trade_id}", status_code=200)
+async def delete_trade(
+    trade_id: int,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Delete a closed/cancelled trade from the database.
+    Only allowed for non-OPEN trades to prevent accidental deletion.
+    Also resets is_traded on the linked signal if still set.
+    """
+    result = await db.execute(select(PaperTrade).where(PaperTrade.id == trade_id))
+    trade = result.scalar_one_or_none()
+    if not trade:
+        raise HTTPException(status_code=404, detail="Trade not found")
+    if trade.status == TradeStatus.OPEN:
+        raise HTTPException(
+            status_code=409,
+            detail="Cannot delete an open trade. Close it first."
+        )
+
+    # Also reset the linked signal's is_traded flag (safety net)
+    if trade.signal_id:
+        sig_result = await db.execute(
+            select(ScreenerSignal).where(ScreenerSignal.id == trade.signal_id)
+        )
+        sig = sig_result.scalar_one_or_none()
+        if sig and sig.is_traded:
+            sig.is_traded = False
+            sig.trade_id = None
+            db.add(sig)
+
+    await db.delete(trade)
+    await db.commit()
+    logger.info(f"Trade {trade_id} ({trade.symbol}) deleted from database.")
+    return {"deleted": trade_id, "symbol": trade.symbol}
+
+
+@router.delete("/closed/all", status_code=200)
+async def delete_all_closed_trades(db: AsyncSession = Depends(get_db)):
+    """
+    Bulk-delete ALL closed trades (SL hit, Target hit, RSI exit, Manual close).
+    Keeps OPEN trades untouched.
+    """
+    result = await db.execute(
+        select(PaperTrade).where(PaperTrade.status != TradeStatus.OPEN)
+    )
+    closed_trades = result.scalars().all()
+    count = len(closed_trades)
+    for t in closed_trades:
+        await db.delete(t)
+    await db.commit()
+    logger.info(f"Bulk-deleted {count} closed trades.")
+    return {"deleted_count": count}

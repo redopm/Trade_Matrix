@@ -1,0 +1,8 @@
+{
+  "architecture": "efficientnetv2_lstm",
+  "classes": ["HOLD (0)", "BUY (1)", "SELL (2)"],
+  "n_classes": 3,
+  "image_size": [224, 224],
+  "window_size": 60,
+  "val_accuracy": 0.682
+}

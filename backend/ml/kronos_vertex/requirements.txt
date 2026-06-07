@@ -1,0 +1,8 @@
+fastapi
+uvicorn
+pandas
+numpy
+torch
+torchvision
+huggingface_hub
+tqdm

@@ -46,29 +46,73 @@ class PaperTradingEngine:
         signal: ScreenerSignal,
         capital: float = None,
         notes: str = None,
-    ) -> PaperTrade:
+    ) -> Optional[PaperTrade]:
         """
-        Create a new paper trade from a screener signal.
+        Create a new paper trade from a screener signal with Confluence Checks.
         
-        Entry price = signal_price (next day market open simulation)
-        Position size = configured_capital × position_size_pct
+        Entry price = signal_price
+        Position size = Risk exactly 2% of total capital based on 2x ATR stop loss.
         """
         capital = capital or self.cfg.DEFAULT_CAPITAL
-        position_value = capital * self.cfg.DEFAULT_POSITION_SIZE_PCT
-
         entry_price = signal.signal_price
-        quantity = max(1, int(position_value / entry_price))
+
+        # ── Phase 3: Confluence Checks ───────────────────────────────────────
+        df = await self.fetcher.fetch_price_history(signal.symbol, period="3mo")
+        if df is None or df.empty:
+            logger.warning(f"Trade rejected: No data for confluence check on {signal.symbol}")
+            return None
+
+        tech = self.technical.analyze(signal.symbol, df)
+        
+        # 1. Trend Alignment: Price vs 50 EMA
+        ema_50 = tech.get("ema_50")
+        if ema_50:
+            if signal.direction == "LONG" and entry_price <= ema_50:
+                logger.info(f"Trade rejected: {signal.symbol} Price ({entry_price}) below 50 EMA ({ema_50}) for LONG")
+                return None
+            elif signal.direction == "SHORT" and entry_price >= ema_50:
+                logger.info(f"Trade rejected: {signal.symbol} Price ({entry_price}) above 50 EMA ({ema_50}) for SHORT")
+                return None
+            
+        # 2. Volume Confirmation: Current Volume > 20D Avg Volume (Ratio > 1.0)
+        vol_ratio = tech.get("volume_ratio")
+        if vol_ratio and vol_ratio < 1.0:
+            logger.info(f"Trade rejected: {signal.symbol} Volume ratio ({vol_ratio}) < 1.0. Fake breakout suspected.")
+            return None
+
+        # 3. RSI Check: Avoid entering if already overbought/oversold
+        rsi = tech.get("rsi")
+        if rsi:
+            if signal.direction == "LONG" and rsi > 65:
+                logger.info(f"Trade rejected: {signal.symbol} RSI ({rsi}) too high for fresh LONG entry.")
+                return None
+            elif signal.direction == "SHORT" and rsi < 35:
+                logger.info(f"Trade rejected: {signal.symbol} RSI ({rsi}) too low for fresh SHORT entry.")
+                return None
+
+        # ── Phase 3: Advanced Risk Management & Position Sizing ───────────────
+        # Risk exactly 2% of total capital per trade
+        max_risk_amount = capital * 0.02
+        atr = signal.atr_14 or (entry_price * 0.05) # fallback to 5% if ATR missing
+        
+        # Use SL and Target provided by the ScreenerSignal!
+        effective_sl = signal.suggested_sl or (entry_price * 0.95 if signal.direction == "LONG" else entry_price * 1.05)
+        target = signal.suggested_target or (entry_price * 1.12 if signal.direction == "LONG" else entry_price * 0.88)
+        fixed_sl = signal.suggested_sl_fixed or effective_sl
+
+        risk_per_share = abs(entry_price - effective_sl)
+        
+        # Calculate quantity based on risk
+        quantity = max(1, int(max_risk_amount / risk_per_share)) if risk_per_share > 0 else 1
         invested_amount = quantity * entry_price
+        
+        # Check if we exceed available capital
+        if invested_amount > (capital * 0.25): 
+             quantity = max(1, int((capital * 0.25) / entry_price))
+             invested_amount = quantity * entry_price
 
-        # Determine SL — use ATR-based if available, fall back to fixed
-        atr_sl = signal.suggested_sl
-        fixed_sl = entry_price * (1 - self.cfg.FIXED_SL_PCT)
-        effective_sl = max(atr_sl, fixed_sl) if atr_sl else fixed_sl
-
-        target = entry_price * (1 + self.cfg.TARGET_PROFIT_PCT)
-
-        risk = entry_price - effective_sl
-        reward = target - entry_price
+        risk = abs(entry_price - effective_sl)
+        reward = abs(target - entry_price)
         rr_ratio = round(reward / risk, 2) if risk > 0 else None
 
         trade = PaperTrade(
@@ -76,7 +120,7 @@ class PaperTradingEngine:
             symbol=signal.symbol,
             company_name=signal.company_name,
             sector=signal.sector,
-            direction=TradeDirection.LONG,
+            direction=signal.direction,
             entry_date=date.today().strftime("%Y-%m-%d"),
             entry_price=entry_price,
             quantity=quantity,
@@ -165,9 +209,14 @@ class PaperTradingEngine:
         trade.current_price = current_price
         trade.highest_price = max(trade.highest_price or 0, current_price)
 
-        # Calculate P&L
-        pnl = (current_price - trade.entry_price) * trade.quantity
-        pnl_pct = ((current_price / trade.entry_price) - 1) * 100
+        # Calculate P&L based on direction
+        if trade.direction == "LONG":
+            pnl = (current_price - trade.entry_price) * trade.quantity
+            pnl_pct = ((current_price / trade.entry_price) - 1) * 100
+        else: # SHORT
+            pnl = (trade.entry_price - current_price) * trade.quantity
+            pnl_pct = (1 - (current_price / trade.entry_price)) * 100
+
         trade.unrealized_pnl = round(pnl, 2)
         trade.unrealized_pnl_pct = round(pnl_pct, 2)
 
@@ -179,7 +228,11 @@ class PaperTradingEngine:
             pass
 
         # ── Exit Condition 1: Stop Loss Hit ───────────────────────────────────
-        if current_price <= trade.stop_loss:
+        sl_hit = (
+            (trade.direction == "LONG" and current_price <= trade.stop_loss) or
+            (trade.direction == "SHORT" and current_price >= trade.stop_loss)
+        )
+        if sl_hit:
             await self._close_trade(
                 db, trade, current_price, TradeStatus.CLOSED_SL, "Stop loss hit"
             )
@@ -188,15 +241,19 @@ class PaperTradingEngine:
             return
 
         # ── Exit Condition 2: Target Price Hit ────────────────────────────────
-        if current_price >= trade.target_price:
+        target_hit = (
+            (trade.direction == "LONG" and current_price >= trade.target_price) or
+            (trade.direction == "SHORT" and current_price <= trade.target_price)
+        )
+        if target_hit:
             await self._close_trade(
-                db, trade, current_price, TradeStatus.CLOSED_TARGET, "Target reached (12%)"
+                db, trade, current_price, TradeStatus.CLOSED_TARGET, "Target reached"
             )
             summary["target_hits"] += 1
             logger.info(f"TARGET HIT: {symbol} @ ₹{current_price:.2f}")
             return
 
-        # ── Exit Condition 3: RSI > 70 (Overbought) ──────────────────────────
+        # ── Exit Condition 3: RSI Extremes ──────────────────────────
         # Fetch price history to compute RSI
         df = await self.fetcher.fetch_price_history(symbol, period="3mo")
         if df is not None and not df.empty:
@@ -204,14 +261,24 @@ class PaperTradingEngine:
             current_rsi = tech.get("rsi")
             trade.current_rsi = current_rsi
 
-            if current_rsi and current_rsi >= self.cfg.TARGET_RSI_OVERBOUGHT:
-                await self._close_trade(
-                    db, trade, current_price, TradeStatus.CLOSED_RSI,
-                    f"RSI overbought ({current_rsi:.1f} > {self.cfg.TARGET_RSI_OVERBOUGHT})"
-                )
-                summary["rsi_exits"] += 1
-                logger.info(f"RSI EXIT: {symbol} RSI={current_rsi:.1f} @ ₹{current_price:.2f}")
-                return
+            if current_rsi:
+                rsi_exit = False
+                rsi_reason = ""
+                
+                if trade.direction == "LONG" and current_rsi >= self.cfg.TARGET_RSI_OVERBOUGHT:
+                    rsi_exit = True
+                    rsi_reason = f"RSI overbought ({current_rsi:.1f} > {self.cfg.TARGET_RSI_OVERBOUGHT})"
+                elif trade.direction == "SHORT" and current_rsi <= 30: # typically 30 for oversold
+                    rsi_exit = True
+                    rsi_reason = f"RSI oversold ({current_rsi:.1f} < 30)"
+
+                if rsi_exit:
+                    await self._close_trade(
+                        db, trade, current_price, TradeStatus.CLOSED_RSI, rsi_reason
+                    )
+                    summary["rsi_exits"] += 1
+                    logger.info(f"RSI EXIT: {symbol} RSI={current_rsi:.1f} @ ₹{current_price:.2f}")
+                    return
 
         summary["updated"] += 1
 
@@ -229,8 +296,24 @@ class PaperTradingEngine:
         trade.exit_reason = reason
         trade.status = status
 
-        realized_pnl = (exit_price - trade.entry_price) * trade.quantity
-        realized_pnl_pct = ((exit_price / trade.entry_price) - 1) * 100
+        if trade.signal_id:
+            from sqlalchemy import select
+            from app.models.signal import ScreenerSignal
+            
+            stmt = select(ScreenerSignal).where(ScreenerSignal.id == trade.signal_id)
+            result = await db.execute(stmt)
+            signal = result.scalar_one_or_none()
+            if signal:
+                signal.is_traded = False
+                signal.trade_id = None
+                db.add(signal)   # ← CRITICAL: mark dirty so SQLAlchemy flushes the change
+
+        if trade.direction == "LONG":
+            realized_pnl = (exit_price - trade.entry_price) * trade.quantity
+            realized_pnl_pct = ((exit_price / trade.entry_price) - 1) * 100
+        else: # SHORT
+            realized_pnl = (trade.entry_price - exit_price) * trade.quantity
+            realized_pnl_pct = (1 - (exit_price / trade.entry_price)) * 100
 
         trade.realized_pnl = round(realized_pnl, 2)
         trade.realized_pnl_pct = round(realized_pnl_pct, 2)
