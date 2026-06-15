@@ -242,17 +242,34 @@ async def get_option_chain(symbol: str, atm_strike: Optional[int] = None):
         "advanced_hedges": advanced_hedges
     }
 
+import sys
 import os
-import httpx
 import pandas as pd
-from google.auth import default
-from google.auth.transport.requests import Request as GoogleAuthRequest
-from google.cloud import aiplatform
+
+# Global predictor instance
+_predictor = None
+
+async def _get_predictor():
+    global _predictor
+    if _predictor is None:
+        import sys
+        import os
+        # Add backend/ml/kronos_vertex to path so we can import model.kronos
+        ml_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../ml/kronos_vertex"))
+        if ml_path not in sys.path:
+            sys.path.append(ml_path)
+            
+        from model.kronos import Kronos, KronosTokenizer, KronosPredictor
+        
+        tokenizer = KronosTokenizer.from_pretrained("NeoQuasar/Kronos-Tokenizer-base")
+        model = Kronos.from_pretrained("NeoQuasar/Kronos-small")
+        _predictor = KronosPredictor(model, tokenizer, max_context=512)
+    return _predictor
 
 @router.post("/predict")
 async def predict_kronos(payload: dict):
     """
-    Calls Vertex AI Kronos endpoint for prediction.
+    Local RAM execution of Kronos Model.
     Expects payload: {"symbol": "NSE:NIFTY24APR22500CE", "pred_len": 5, "range_from": "2024-01-01"}
     """
     symbol = payload.get("symbol")
@@ -269,7 +286,7 @@ async def predict_kronos(payload: dict):
     if hist_df.empty:
         return {"error": f"Could not fetch historical data for {symbol}"}
         
-    # Format data for Kronos
+    # Format data
     hist_records = hist_df.reset_index().rename(columns={"datetime": "timestamps"}).to_dict(orient="records")
     for r in hist_records:
         r['timestamps'] = str(r['timestamps'])
@@ -280,50 +297,39 @@ async def predict_kronos(payload: dict):
         r['volume'] = r['Volume']
         r['amount'] = r['Volume'] * r['Close']
         
-    # Generate future timestamps (next pred_len business days)
-    last_date = hist_df.index[-1]
-    future_dates = pd.date_range(start=last_date + pd.Timedelta(days=1), periods=pred_len, freq='B')
-    future_timestamps = [str(d) for d in future_dates]
-    
-    # Authenticate via default GCP credentials
+    # Prediction logic (Direct RAM Execution)
     try:
-        credentials, project = default()
-        credentials.refresh(GoogleAuthRequest())
-        token = credentials.token
+        predictor = await _get_predictor()
         
-        region = "asia-south1"
-        aiplatform.init(project=project, location=region)
-        endpoints = aiplatform.Endpoint.list(filter=f'display_name="kronos_endpoint"')
+        # Prepare Dataframe for Kronos
+        df_input = pd.DataFrame(hist_records[-400:])
+        df_input['timestamps'] = pd.to_datetime(df_input['timestamps'])
+        x_df = df_input[['open', 'high', 'low', 'close', 'volume', 'amount']]
+        x_timestamp = df_input['timestamps']
         
-        if not endpoints:
-            return {"error": "Vertex AI Endpoint 'kronos_endpoint' not found. Please deploy the model first."}
-            
-        endpoint_id = endpoints[0].resource_name.split('/')[-1]
+        # Future timestamps
+        last_date = df_input['timestamps'].iloc[-1]
+        future_dates = pd.date_range(start=last_date + pd.Timedelta(days=1), periods=pred_len, freq='B')
+        y_timestamp = pd.to_datetime(future_dates)
         
-        url = f"https://{region}-aiplatform.googleapis.com/v1/projects/{project}/locations/{region}/endpoints/{endpoint_id}:predict"
+        # Predict
+        pred_df = predictor.predict(
+            df=x_df,
+            x_timestamp=x_timestamp,
+            y_timestamp=y_timestamp,
+            pred_len=pred_len,
+            T=1.0,
+            top_p=0.9,
+            sample_count=1,
+            verbose=False
+        )
         
-        headers = {
-            "Authorization": f"Bearer {token}",
-            "Content-Type": "application/json"
-        }
-        data = {
-            "instances": [
-                {
-                    "historical_data": hist_records[-400:],
-                    "pred_len": pred_len,
-                    "future_timestamps": future_timestamps
-                }
-            ]
-        }
-        
-        async with httpx.AsyncClient(timeout=60.0) as client:
-            resp = await client.post(url, headers=headers, json=data)
-            
-        if resp.status_code != 200:
-            return {"error": f"Vertex AI Error: {resp.text}"}
-            
-        result = resp.json()
-        return {"prediction": result.get("predictions", [])[0], "historical": hist_records[-100:]}
+        pred_records = pred_df.reset_index().rename(columns={"index": "timestamps"}).to_dict(orient="records")
+        for r in pred_records:
+            if 'timestamps' in r:
+                r['timestamps'] = str(r['timestamps'])
+                
+        return {"prediction": pred_records, "historical": hist_records[-100:]}
         
     except Exception as e:
-        return {"error": str(e)}
+        return {"error": f"Local Kronos Error: {str(e)}"}

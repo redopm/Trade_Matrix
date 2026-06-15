@@ -23,6 +23,9 @@ import {
 export default function OptionAnalysis() {
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [selectedPredictionSymbol, setSelectedPredictionSymbol] = useState<string>("");
+  const [predictionData, setPredictionData] = useState<any>(null);
+  const [isPredicting, setIsPredicting] = useState(false);
   const symbol = "NIFTY";
 
   useEffect(() => {
@@ -38,6 +41,46 @@ export default function OptionAnalysis() {
       console.error(e);
     }
     setLoading(false);
+  };
+
+  const handlePredict = async () => {
+    if (!selectedPredictionSymbol) return;
+    setIsPredicting(true);
+    setPredictionData(null);
+    try {
+      const res = await fetch("/api/v1/fno/predict", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          symbol: selectedPredictionSymbol,
+          pred_len: 5,
+          range_from: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0] // last 30 days
+        })
+      });
+      const json = await res.json();
+      if (json.prediction && json.historical) {
+        // Format data for recharts
+        const combined = [
+          ...json.historical.map((d: any) => ({
+             date: d.timestamps.split(' ')[0],
+             historical_close: d.close,
+             predicted_close: null
+          })),
+          ...json.prediction.map((d: any) => ({
+             date: d.timestamps.split(' ')[0],
+             historical_close: null,
+             predicted_close: d.close
+          }))
+        ];
+        setPredictionData(combined);
+      } else {
+        alert("Prediction Error: " + JSON.stringify(json.error || json));
+      }
+    } catch (e) {
+      console.error(e);
+      alert("Failed to fetch prediction");
+    }
+    setIsPredicting(false);
   };
 
   if (loading) {
@@ -275,6 +318,62 @@ export default function OptionAnalysis() {
             </div>
           </div>
 
+        </div>
+
+        {/* ROW 3: KRONOS AI PREDICTION */}
+        <div className="bg-gradient-to-r from-slate-900 to-indigo-900 p-6 rounded-2xl border border-indigo-500/30 shadow-2xl mt-8">
+          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
+            <div>
+              <h3 className="text-xl font-bold text-white flex items-center gap-2">
+                <ActivitySquare className="text-indigo-400" /> Kronos AI • Deep Learning Prediction
+              </h3>
+              <p className="text-indigo-200 text-sm mt-1">
+                Powered by Vertex AI (T4 GPU). Forecasts the LTP trajectory for the next 5 days.
+              </p>
+            </div>
+            
+            <div className="flex items-center gap-3">
+              <select 
+                className="bg-slate-800 border border-slate-600 text-white text-sm rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                value={selectedPredictionSymbol}
+                onChange={(e) => setSelectedPredictionSymbol(e.target.value)}
+              >
+                <option value="">-- Select specific Strike to Predict --</option>
+                {quotes?.map((q: any) => (
+                  <option key={q.symbol} value={q.symbol}>
+                    {q.symbol.replace("NSE:", "")} (LTP: ₹{q.ltp})
+                  </option>
+                ))}
+              </select>
+              <button 
+                onClick={handlePredict}
+                disabled={!selectedPredictionSymbol || isPredicting}
+                className="bg-indigo-600 hover:bg-indigo-500 disabled:bg-slate-700 text-white px-6 py-2 rounded-lg font-medium transition-all shadow-lg flex items-center gap-2"
+              >
+                {isPredicting ? <div className="w-4 h-4 rounded-full border-2 border-white border-t-transparent animate-spin" /> : null}
+                {isPredicting ? "Predicting..." : "Predict LTP"}
+              </button>
+            </div>
+          </div>
+
+          {predictionData && (
+            <div className="bg-slate-900/50 p-4 rounded-xl border border-slate-700/50 h-[400px]">
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={predictionData} margin={{ top: 20, right: 30, left: 0, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#334155" vertical={false} />
+                  <XAxis dataKey="date" stroke="#94a3b8" tick={{fontSize: 12}} tickMargin={10} minTickGap={30} />
+                  <YAxis stroke="#94a3b8" tick={{fontSize: 12}} domain={['auto', 'auto']} tickFormatter={(val) => `₹${val}`} />
+                  <Tooltip 
+                    contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', color: '#f8fafc', borderRadius: '8px' }}
+                    itemStyle={{ color: '#f8fafc' }}
+                  />
+                  <Legend />
+                  <Line type="monotone" dataKey="historical_close" name="Historical LTP" stroke="#3b82f6" strokeWidth={2} dot={false} />
+                  <Line type="monotone" dataKey="predicted_close" name="AI Forecast (5 Days)" stroke="#10b981" strokeWidth={3} strokeDasharray="5 5" dot={{ r: 4, fill: '#10b981', strokeWidth: 0 }} />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          )}
         </div>
       </div>
     </div>

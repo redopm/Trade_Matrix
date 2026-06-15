@@ -18,9 +18,9 @@ COPY requirements.txt /app/
 RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt
 
-# Create necessary directories
-RUN mkdir -p /app/database /app/data/charts /app/models /app/logs
-
+# Create necessary directories and symlinks for hardcoded Fyers SDK paths
+RUN mkdir -p /app/database /app/data/charts /app/models /app/logs /backend/logs && \
+    ln -sf /app/logs/fyersApi.log /backend/logs/fyersApi.log
 # Copy application code
 COPY . /app/
 
