@@ -106,9 +106,29 @@ class PaperTradingEngine:
         quantity = max(1, int(max_risk_amount / risk_per_share)) if risk_per_share > 0 else 1
         invested_amount = quantity * entry_price
         
-        # Check if we exceed available capital
-        if invested_amount > (capital * 0.25): 
-             quantity = max(1, int((capital * 0.25) / entry_price))
+        # Calculate available capital
+        stmt = select(PaperTrade).where(PaperTrade.status == TradeStatus.OPEN)
+        result = await db.execute(stmt)
+        open_trades = result.scalars().all()
+        
+        stmt_closed = select(PaperTrade).where(PaperTrade.status != TradeStatus.OPEN)
+        result_closed = await db.execute(stmt_closed)
+        closed_trades = result_closed.scalars().all()
+        
+        realized_pnl = sum(t.realized_pnl or 0 for t in closed_trades)
+        total_invested_currently = sum(t.invested_amount for t in open_trades)
+        available_margin = capital + realized_pnl - total_invested_currently
+        
+        # Reject trade if no margin left
+        if available_margin <= 0 or available_margin < entry_price:
+            logger.warning(f"Trade rejected: {signal.symbol} - Insufficient available margin (₹{available_margin:.2f})")
+            return None
+
+        # Cap the trade size to min of (available margin, 25% of total capital)
+        max_trade_size = min(available_margin, capital * 0.25)
+        
+        if invested_amount > max_trade_size:
+             quantity = max(1, int(max_trade_size / entry_price))
              invested_amount = quantity * entry_price
 
         risk = abs(entry_price - effective_sl)

@@ -74,6 +74,7 @@ class ScreenerConfig(BaseModel):
     short_min_debt_to_equity: float
     rsi_overbought: float
     short_target_pct: float
+    default_capital: float
 
 @router.get("/screener")
 async def get_screener_settings():
@@ -87,6 +88,7 @@ async def get_screener_settings():
         "short_min_debt_to_equity": settings.SHORT_MIN_DEBT_TO_EQUITY,
         "rsi_overbought": settings.RSI_OVERBOUGHT,
         "short_target_pct": settings.SHORT_TARGET_PCT,
+        "default_capital": settings.DEFAULT_CAPITAL,
     }
 
 @router.post("/screener")
@@ -101,6 +103,7 @@ async def update_screener_settings(config: ScreenerConfig):
     settings.SHORT_MIN_DEBT_TO_EQUITY = config.short_min_debt_to_equity
     settings.RSI_OVERBOUGHT = config.rsi_overbought
     settings.SHORT_TARGET_PCT = config.short_target_pct
+    settings.DEFAULT_CAPITAL = config.default_capital
 
     # Update .env file
     env_path = BASE_DIR / ".env"
@@ -118,6 +121,7 @@ async def update_screener_settings(config: ScreenerConfig):
             "SHORT_MIN_DEBT_TO_EQUITY": config.short_min_debt_to_equity,
             "RSI_OVERBOUGHT": config.rsi_overbought,
             "SHORT_TARGET_PCT": config.short_target_pct,
+            "DEFAULT_CAPITAL": config.default_capital,
         }
 
         new_lines = []

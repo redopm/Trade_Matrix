@@ -18,7 +18,8 @@ export default function SettingsPage() {
     short_max_roce: 10.0,
     short_min_debt_to_equity: 1.5,
     rsi_overbought: 65.0,
-    short_target_pct: 0.12
+    short_target_pct: 0.12,
+    default_capital: 100000.0
   });
   
   const [loading, setLoading] = useState(true);
@@ -57,7 +58,8 @@ export default function SettingsPage() {
           short_max_roce: scrRes.data.short_max_roce,
           short_min_debt_to_equity: scrRes.data.short_min_debt_to_equity,
           rsi_overbought: scrRes.data.rsi_overbought,
-          short_target_pct: scrRes.data.short_target_pct
+          short_target_pct: scrRes.data.short_target_pct,
+          default_capital: scrRes.data.default_capital || 100000.0
         });
       } catch (e: any) {
         setMessage({ type: "error", text: "Failed to load settings. Is the backend running?" });
@@ -409,7 +411,15 @@ export default function SettingsPage() {
             <h3 className="font-bold text-blue-600 flex items-center gap-2">
               <span className="w-2 h-2 rounded-full bg-blue-500"></span> Trade Execution Rules
             </h3>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <div>
+                <label className="block text-xs font-bold mb-1 text-[var(--text-secondary)]">Paper Trading Capital (₹)</label>
+                <input type="number" step="1000" 
+                  className="w-full bg-white border border-[var(--border-primary)] rounded-md p-2 text-sm"
+                  value={screenerRules.default_capital}
+                  onChange={(e) => setScreenerRules({...screenerRules, default_capital: parseFloat(e.target.value)})}
+                />
+              </div>
               <div>
                 <label className="block text-xs font-bold mb-1 text-[var(--text-secondary)]">Stop Loss (ATR Multiplier)</label>
                 <input type="number" step="0.1" 
