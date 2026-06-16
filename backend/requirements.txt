@@ -71,3 +71,7 @@ google-cloud-aiplatform>=1.50.0
 
 # Options Greeks
 py_vollib
+
+# Kronos AI
+einops
+transformers
