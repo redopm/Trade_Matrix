@@ -14,7 +14,12 @@ alembic>=1.13.0
 # Data & Analysis
 yfinance>=0.2.40
 pandas>=2.0.0
-numpy>=1.24.0
+# numpy 2.2.6 is the EXACT sweet spot:
+# - torch 2.5.1+cpu: needs numpy 2.x ✅
+# - opencv 4.13: needs numpy>=2.0 ✅
+# - pandas-ta: needs numpy>=2.2.6 ✅
+# - numba 0.61.2: needs numpy<=2.2 ✅
+numpy==2.2.6
 pandas-ta>=0.4.71b0
 
 # Configuration
@@ -58,8 +63,10 @@ google-generativeai>=0.7.0
 pyarrow>=16.0.0
 
 # Expert Model (PyTorch)
-torch==2.4.0+cpu
-torchvision==0.19.0+cpu
+# torch 2.5.1+cpu: supports numpy 2.x AND fixes fbgemm.dll WinError 126 on Windows.
+# Do NOT downgrade to 2.4.0 (fbgemm.dll broken) or 2.3.1 (numpy 1.x only).
+torch==2.5.1+cpu
+torchvision==0.20.1+cpu
 timm>=0.9.0
 
 # Broker API Integration
