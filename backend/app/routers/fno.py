@@ -157,56 +157,118 @@ async def get_option_chain(symbol: str, atm_strike: Optional[int] = None):
     seller_strategy = None
     hedging_strategy = None
 
-    if sentiment in ["BULLISH", "OVERSOLD"]:
-        # Best risk-reward for Buyers: Slightly ITM (Delta ~ 0.60) -> Lower theta decay, high probability
+    # ── PCR Zone-Based Strategy Engine ───────────────────────────────────────────
+    # STRONG_BULLISH / BULLISH  → Buy CE (ITM ~Delta 0.60), Sell OTM PE
+    # SIDEWAYS                  → No directional buy, Sell Straddle (ATM CE+PE)
+    # BEARISH / STRONG_BEARISH  → Buy PE (ITM ~Delta 0.60), Sell OTM CE
+    # ─────────────────────────────────────────────────────────────────────────────
+    pcr_value = analysis.get("pcr", 1.0)
+
+    if sentiment in ["STRONG_BULLISH", "BULLISH"]:
+        # Best risk-reward for Buyers: Slightly ITM CE (Delta ~ 0.60)
         buy_ce = get_quote_by_delta(ce_quotes, 0.60)
-        # Safe premium collection for Sellers: OTM (Delta ~ 0.20) -> High probability of expiring worthless
-        sell_ce = get_quote_by_delta(ce_quotes, 0.20)
+        sell_pe = get_quote_by_delta(pe_quotes, -0.20)
         
+        strength = "Strong" if sentiment == "STRONG_BULLISH" else "Moderate"
         if buy_ce:
             buyer_strategy = {
-                "name": "Directional Momentum Buy (ITM)",
-                "reason": "Market is Bullish. Buying ITM Call (Delta ~0.60) for high probability & lower time decay.",
+                "name": f"{strength} Bullish Momentum (CE Buy)",
+                "reason": (
+                    f"PCR is {pcr_value:.2f} ({sentiment.replace('_', ' ').title()}). "
+                    f"Put writers are dominating — market expects upside. "
+                    f"Buying ITM Call (Delta ~0.60) for high probability & lower theta decay."
+                ),
                 "strike": buy_ce["strike"], "type": "CE", "action": "BUY",
                 "entry": float(buy_ce["ltp"]),
                 "target": round(float(buy_ce["ltp"]) * 1.5, 2),
-                "sl": round(float(buy_ce["ltp"]) * 0.75, 2),
+                "sl": round(float(buy_ce["ltp"]) * 0.70, 2),
                 "reversal": reversals["R1"],
                 "reversal_data": reversals
             }
-            
-        sell_pe = get_quote_by_delta(pe_quotes, -0.20)
         if sell_pe:
             seller_strategy = {
-                "name": "Support Writing (Premium Collection)",
-                "reason": "Market is Bullish. Selling safe OTM Put at support to collect premium.",
+                "name": "Support Writing (OTM PE Sell)",
+                "reason": (
+                    f"PCR {pcr_value:.2f} is Bullish. Selling OTM Put near support "
+                    f"to collect premium. High probability of expiring worthless."
+                ),
                 "strike": sell_pe["strike"], "type": "PE", "action": "SELL",
                 "entry": float(sell_pe["ltp"]),
                 "target": 0.05,
                 "sl": round(float(sell_pe["ltp"]) * 2.0, 2),
                 "margin_required": "~ ₹95,000"
             }
-            
-    else: # BEARISH or NEUTRAL
+
+    elif sentiment == "SIDEWAYS":
+        # ── SIDEWAYS: No directional buy recommended ──────────────────────────
+        # Market writers on both sides are balanced — buying is risky.
+        # Best strategy: Sell ATM Straddle (collect time value from both sides).
+        atm_ce = get_quote_by_delta(ce_quotes, 0.50)   # ATM CE
+        atm_pe = get_quote_by_delta(pe_quotes, -0.50)  # ATM PE
+        combined_premium = 0
+        if atm_ce: combined_premium += float(atm_ce.get("ltp", 0))
+        if atm_pe: combined_premium += float(atm_pe.get("ltp", 0))
+        
+        # For buyer: No high-probability directional play — show a breakout plan
+        buyer_strategy = {
+            "name": "Wait — Market is Sideways",
+            "reason": (
+                f"PCR is {pcr_value:.2f} — market is range-bound (SIDEWAYS zone: 0.95–1.15). "
+                f"Neither bulls nor bears have clear control. "
+                f"Avoid buying options — wait for PCR to break above 1.15 (Bullish) "
+                f"or fall below 0.95 (Bearish) before entering a directional trade."
+            ),
+            "strike": atm_ce["strike"] if atm_ce else (atm_strike or 0),
+            "type": "CE",
+            "action": "WAIT",
+            "entry": 0.0, "target": 0.0, "sl": 0.0,
+            "reversal": reversals.get("R1", 0),
+            "reversal_data": reversals
+        }
+        # For seller: ATM Straddle is ideal in sideways
+        if atm_ce and atm_pe:
+            seller_strategy = {
+                "name": "ATM Straddle Sell (Range-Bound)",
+                "reason": (
+                    f"PCR {pcr_value:.2f} — market is sideways. Selling ATM Straddle "
+                    f"({atm_ce['strike']} CE + {atm_pe['strike']} PE) to collect max time value "
+                    f"(Combined Premium: ₹{combined_premium:.1f}). "
+                    f"Profit if market stays within ±{combined_premium:.0f} points."
+                ),
+                "strike": atm_ce["strike"], "type": "CE+PE", "action": "SELL STRADDLE",
+                "entry": round(combined_premium, 2),
+                "target": 0.05,
+                "sl": round(combined_premium * 2.0, 2),
+                "margin_required": "~ ₹1,50,000"
+            }
+
+    else:  # BEARISH or STRONG_BEARISH
         buy_pe = get_quote_by_delta(pe_quotes, -0.60)
         sell_ce = get_quote_by_delta(ce_quotes, 0.20)
         
+        strength = "Strong" if sentiment == "STRONG_BEARISH" else "Moderate"
         if buy_pe:
             buyer_strategy = {
-                "name": "Directional Momentum Buy (ITM)",
-                "reason": "Market is Bearish. Buying ITM Put (Delta ~0.60) for high probability & lower time decay.",
+                "name": f"{strength} Bearish Momentum (PE Buy)",
+                "reason": (
+                    f"PCR is {pcr_value:.2f} ({sentiment.replace('_', ' ').title()}). "
+                    f"Call writers are dominating — market expects downside. "
+                    f"Buying ITM Put (Delta ~0.60) for high probability & lower theta decay."
+                ),
                 "strike": buy_pe["strike"], "type": "PE", "action": "BUY",
                 "entry": float(buy_pe["ltp"]),
                 "target": round(float(buy_pe["ltp"]) * 1.5, 2),
-                "sl": round(float(buy_pe["ltp"]) * 0.75, 2),
+                "sl": round(float(buy_pe["ltp"]) * 0.70, 2),
                 "reversal": reversals["S1"],
                 "reversal_data": reversals
             }
-            
         if sell_ce:
             seller_strategy = {
-                "name": "Resistance Writing (Premium Collection)",
-                "reason": "Market is Bearish. Selling safe OTM Call at resistance to collect premium.",
+                "name": "Resistance Writing (OTM CE Sell)",
+                "reason": (
+                    f"PCR {pcr_value:.2f} is Bearish. Selling OTM Call near resistance "
+                    f"to collect premium. High probability of expiring worthless."
+                ),
                 "strike": sell_ce["strike"], "type": "CE", "action": "SELL",
                 "entry": float(sell_ce["ltp"]),
                 "target": 0.05,

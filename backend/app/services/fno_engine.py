@@ -54,15 +54,27 @@ class FnoAnalyticsEngine:
         else:
             pcr = round(total_put_oi / total_call_oi, 2) if total_call_oi > 0 else 0
             
-            sentiment = "NEUTRAL"
-            if pcr >= 1.5:
-                sentiment = "OVERBOUGHT"
-            elif pcr <= 0.6:
-                sentiment = "OVERSOLD"
-            elif pcr > 1.0:
+            # ── Stable PCR Sentiment Zones ──────────────────────────────────────
+            # These bands prevent signal flip-flopping around PCR = 1.0.
+            # A wide SIDEWAYS zone (0.95-1.15) means both buyers & sellers are
+            # equally active — no clear directional edge for a buyer.
+            # Only outside these bands do we give a directional trade signal.
+            #
+            #  PCR < 0.80         → STRONG_BEARISH  (Calls dominating heavily)
+            #  0.80 <= PCR < 0.95 → BEARISH         (Slight call-writing dominance)
+            #  0.95 <= PCR < 1.15 → SIDEWAYS        (No clear direction — safe zone)
+            #  1.15 <= PCR < 1.40 → BULLISH         (Slight put-writing dominance)
+            #  PCR >= 1.40        → STRONG_BULLISH  (Puts dominating heavily)
+            if pcr >= 1.40:
+                sentiment = "STRONG_BULLISH"
+            elif pcr >= 1.15:
                 sentiment = "BULLISH"
-            elif pcr < 1.0:
+            elif pcr >= 0.95:
+                sentiment = "SIDEWAYS"
+            elif pcr >= 0.80:
                 sentiment = "BEARISH"
+            else:
+                sentiment = "STRONG_BEARISH"
 
         min_loss = float('inf')
         max_pain_strike = 0
@@ -80,12 +92,17 @@ class FnoAnalyticsEngine:
                 min_loss = total_loss
                 max_pain_strike = assumed_expiry
             
+        # ── Average ATM IV (average of all IV values present in chain) ──────────
+        # This is used by the ReversalEngine for volatility-adjusted levels.
+        # A more accurate approach would be to filter only ATM ±2 strikes,
+        # but since Greeks are computed in the router (after this call), we
+        # return a placeholder here; fno.py router will override it.
         return {
             "pcr": float(pcr),
+            "sentiment": sentiment,
             "max_pain": int(max_pain_strike),
             "highest_call_oi_strike": int(highest_call_strike),  # Resistance
             "highest_put_oi_strike": int(highest_put_strike),    # Support
             "total_call_oi": int(total_call_oi),
             "total_put_oi": int(total_put_oi),
-            "sentiment": sentiment
         }

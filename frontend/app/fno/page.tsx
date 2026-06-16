@@ -314,10 +314,10 @@ export default function FnoDashboard() {
                     const buyerStrategy = data?.buyer_strategy;
                     const sellerStrategy = data?.seller_strategy;
                     
-                    const isCeBuy = buyerStrategy?.strike === strike && buyerStrategy?.type === 'CE';
+                    const isCeBuy = buyerStrategy?.strike === strike && buyerStrategy?.type === 'CE' && buyerStrategy?.action === 'BUY';
                     const isCeSell = sellerStrategy?.strike === strike && sellerStrategy?.type === 'CE';
-                    const isPeBuy = buyerStrategy?.strike === strike && buyerStrategy?.type === 'PE';
-                    const isPeSell = sellerStrategy?.strike === strike && sellerStrategy?.type === 'PE';
+                    const isPeBuy = buyerStrategy?.strike === strike && buyerStrategy?.type === 'PE' && buyerStrategy?.action === 'BUY';
+                    const isPeSell = sellerStrategy?.strike === strike && (sellerStrategy?.type === 'PE' || sellerStrategy?.type === 'CE+PE');
 
                     const showSpotPrice = data?.spot_price > 0 && strike > data.spot_price && (index === 0 || displayStrikes[index - 1] <= data.spot_price);
 
