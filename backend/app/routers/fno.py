@@ -10,8 +10,9 @@ from app.services.reversal_engine import ReversalEngine
 
 router = APIRouter(prefix="/fno", tags=["F&O"])
 
-
-
+# In-memory OI snapshot — tracks previous OI values to calculate Change OI
+# Key: symbol string, Value: oi at last fetch
+_oi_snapshot: dict = {}
 
 @router.get("/chain/{symbol}")
 async def get_option_chain(symbol: str, atm_strike: Optional[int] = None):
@@ -87,10 +88,15 @@ async def get_option_chain(symbol: str, atm_strike: Optional[int] = None):
     
     for sym in symbols:
         depth_data = depth_results.get(sym, {})
+        current_oi = int(depth_data.get("oi") or 0)
+        prev_oi = _oi_snapshot.get(sym, current_oi)  # First call: chng_oi = 0
+        chng_oi = current_oi - prev_oi
+        _oi_snapshot[sym] = current_oi  # Update snapshot
         all_quotes.append({
             "symbol": sym,
             "ltp": float(depth_data.get("ltp") or 0),
-            "oi": int(depth_data.get("oi") or 0),
+            "oi": current_oi,
+            "chng_oi": chng_oi,
             "volume": int(depth_data.get("v") or 0),
             "prev_close": float(depth_data.get("c") or 0),
         })
@@ -274,17 +280,26 @@ async def predict_kronos(payload: dict):
     """
     symbol = payload.get("symbol")
     pred_len = payload.get("pred_len", 5)
-    range_from = payload.get("range_from", "2024-01-01")
     
     if not symbol:
         return {"error": "Symbol is required"}
         
     fetcher = OptionsDataFetcher()
-    # Fyers expects resolution=D for daily, or 60 for hourly. Let's use Daily for 5-day prediction
-    hist_df = fetcher.fyers_client.get_historical_data(symbol=symbol, resolution="D", range_from=range_from)
+    from datetime import datetime, timedelta
+    
+    end_date = datetime.now()
+    # Check if option symbol
+    is_option = len(symbol) > 15 and ("CE" in symbol or "PE" in symbol)
+    
+    start_date = end_date - timedelta(days=20 if is_option else 100)
+    r_from = start_date.strftime("%Y-%m-%d")
+    r_to = end_date.strftime("%Y-%m-%d")
+    resolution = "15" if is_option else "D"
+    
+    hist_df = fetcher.fyers_client.get_historical_data(symbol=symbol, resolution=resolution, range_from=r_from, range_to=r_to)
     
     if hist_df.empty:
-        return {"error": f"Could not fetch historical data for {symbol}"}
+        return {"error": f"Could not fetch historical data for {symbol} (Resolution: {resolution}, Range: {r_from} to {r_to})"}
         
     # Format data
     hist_records = hist_df.reset_index().rename(columns={"datetime": "timestamps"}).to_dict(orient="records")

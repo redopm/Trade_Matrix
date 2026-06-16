@@ -20,8 +20,6 @@ from datetime import date
 
 import numpy as np
 import pandas as pd
-import torch
-from torchvision import transforms
 from PIL import Image
 
 from app.config import settings
@@ -59,14 +57,9 @@ class PatternDetector:
         self.chart_gen = ChartGenerator()
         self._model = None
         self._classes = []
-        self._device = 'cuda' if torch.cuda.is_available() else 'cpu'
+        self._device = 'cpu'
         self._model_loaded = False
-        
-        # Standard ImageNet transform for EfficientNet
-        self._img_transform = transforms.Compose([
-            transforms.ToTensor(),
-            transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),
-        ])
+        self._img_transform = None
 
     def _load_model(self) -> bool:
         """Lazy-load the PyTorch model on first use."""
@@ -82,8 +75,19 @@ class PatternDetector:
             return False
 
         try:
+            import torch
+            from torchvision import transforms
             from app.models.expert_model import ExpertTradeMatrixModel
             
+            # Detect device lazily
+            self._device = 'cuda' if torch.cuda.is_available() else 'cpu'
+            
+            # Setup image transform
+            self._img_transform = transforms.Compose([
+                transforms.ToTensor(),
+                transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),
+            ])
+
             # Read metadata
             with open(meta_path, 'r') as f:
                 meta = json.load(f)
@@ -120,6 +124,10 @@ class PatternDetector:
         
     def _prepare_tensors(self, df: pd.DataFrame, window_size: int = 60):
         """Prepare Dual-Input tensors (Image + Numerical)"""
+        import torch
+        import matplotlib.pyplot as plt
+        import mplfinance as mpf
+
         # 1. Numerical Tensor — CRITICAL: only use exactly 5 OHLCV columns
         #    yfinance df may contain extra columns (Dividends, Stock Splits etc.)
         #    which would break LSTM input_size=5 and cause NaN outputs.
@@ -144,9 +152,6 @@ class PatternDetector:
         num_tensor = torch.tensor(window.values, dtype=torch.float32).unsqueeze(0).to(self._device)
 
         # 2. Image Tensor
-        import matplotlib.pyplot as plt
-        import mplfinance as mpf
-        
         buf = io.BytesIO()
         dark_style = mpf.make_mpf_style(base_mpl_style='dark_background')
         fig, _ = mpf.plot(df.tail(window_size), type='candle', style=dark_style, volume=False, figsize=(4,4), returnfig=True, tight_layout=True)
@@ -194,6 +199,7 @@ class PatternDetector:
         # ── Run AI Inference (Offloaded to thread) ──
         try:
             def _run_inference():
+                import torch
                 img_tensor, num_tensor = self._prepare_tensors(df, window_size=window)
                 with torch.no_grad():
                     out = self._model(img_tensor, num_tensor)
