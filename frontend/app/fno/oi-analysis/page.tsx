@@ -47,7 +47,7 @@ export default function OiAnalysis() {
     );
   }
 
-  const { analysis, quotes, atm_strike } = data;
+  const { analysis, quotes, atm_strike, spot_price } = data;
   
   // Aggregate Data
   const oiByStrike: Record<number, any> = {};
@@ -85,7 +85,8 @@ export default function OiAnalysis() {
   const resistance = analysis?.highest_call_oi_strike || atm_strike + 200;
   const support = analysis?.highest_put_oi_strike || atm_strike - 200;
   const range = resistance - support;
-  const spotPosition = range > 0 ? ((atm_strike - support) / range) * 100 : 50;
+  const actualSpot = spot_price || atm_strike;
+  const spotPosition = range > 0 ? ((actualSpot - support) / range) * 100 : 50;
 
   // Buildup Logic (Proxy without price change)
   const getBuildupStatus = (type: "CE" | "PE", chngOi: number, strike: number, atm: number) => {
@@ -204,7 +205,7 @@ export default function OiAnalysis() {
                   style={{ left: `${Math.max(5, Math.min(95, spotPosition))}%` }}
                 >
                   <div className="bg-slate-800 text-white text-xs font-bold px-2 py-1 rounded shadow-lg mb-1 relative top-[-24px]">
-                    LTP: {atm_strike}
+                    LTP: {actualSpot.toFixed(2)}
                     <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 border-4 border-transparent border-t-slate-800"></div>
                   </div>
                   <div className="w-3 h-3 bg-blue-600 rounded-full border-2 border-white shadow-md absolute top-1/2 -translate-y-1/2"></div>
