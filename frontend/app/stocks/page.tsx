@@ -37,6 +37,7 @@ export default function StocksPage() {
   
   const [predictionData, setPredictionData] = useState<any>(null);
   const [isPredicting, setIsPredicting] = useState(false);
+  const [predictionDays, setPredictionDays] = useState(5);
 
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -60,7 +61,7 @@ export default function StocksPage() {
     setIsPredicting(true);
     setPredictionData(null);
     try {
-      const res = await predictKronos(`NSE:${query.trim().toUpperCase()}-EQ`, 5);
+      const res = await predictKronos(`NSE:${query.trim().toUpperCase()}-EQ`, predictionDays);
       if (res.prediction && res.historical) {
         const combined = [
           ...res.historical.map((d: any) => ({
@@ -355,22 +356,33 @@ export default function StocksPage() {
 
             </div>
 
-            {/* Kronos AI Section */}
             <div className="mt-8 bg-slate-800/50 rounded-xl p-5 border border-slate-700 shadow-inner relative z-10">
               <div className="flex justify-between items-center mb-6 border-b border-slate-700 pb-4">
                 <h3 className="text-sm font-bold text-slate-300 flex items-center gap-2">
-                  <ActivitySquare className="text-indigo-400" size={18} /> Kronos AI • 5-Day Forecast
+                  <ActivitySquare className="text-indigo-400" size={18} /> Kronos AI • Forecast
                 </h3>
-                <button
-                  onClick={handlePredict}
-                  disabled={isPredicting}
-                  className={`px-4 py-2 rounded font-bold text-xs shadow transition-all flex items-center justify-center gap-2 ${
-                    isPredicting ? 'bg-indigo-900/50 text-indigo-400 cursor-wait' : 'bg-indigo-600 hover:bg-indigo-500 text-white'
-                  }`}
-                >
-                  {isPredicting ? <div className="w-3 h-3 rounded-full border-2 border-white border-t-transparent animate-spin" /> : null}
-                  {isPredicting ? 'Forecasting...' : 'Run Forecast'}
-                </button>
+                <div className="flex items-center gap-3">
+                  <select 
+                    value={predictionDays} 
+                    onChange={(e) => setPredictionDays(Number(e.target.value))}
+                    className="bg-slate-900 border border-slate-700 text-slate-300 text-xs rounded px-2 py-2 outline-none"
+                    disabled={isPredicting}
+                  >
+                    <option value={5}>5 Days</option>
+                    <option value={10}>10 Days</option>
+                    <option value={15}>15 Days</option>
+                  </select>
+                  <button
+                    onClick={handlePredict}
+                    disabled={isPredicting}
+                    className={`px-4 py-2 rounded font-bold text-xs shadow transition-all flex items-center justify-center gap-2 ${
+                      isPredicting ? 'bg-indigo-900/50 text-indigo-400 cursor-wait' : 'bg-indigo-600 hover:bg-indigo-500 text-white'
+                    }`}
+                  >
+                    {isPredicting ? <div className="w-3 h-3 rounded-full border-2 border-white border-t-transparent animate-spin" /> : null}
+                    {isPredicting ? 'Forecasting...' : 'Run Forecast'}
+                  </button>
+                </div>
               </div>
 
               {predictionData ? (
@@ -386,14 +398,14 @@ export default function StocksPage() {
                       />
                       <Legend wrapperStyle={{fontSize: '12px'}} />
                       <Line type="monotone" dataKey="historical_close" name="Historical LTP" stroke="#3b82f6" strokeWidth={2} dot={false} />
-                      <Line type="monotone" dataKey="predicted_close" name="AI Forecast (5 Days)" stroke="#10b981" strokeWidth={3} strokeDasharray="5 5" dot={{ r: 4, fill: '#10b981', strokeWidth: 0 }} />
+                      <Line type="monotone" dataKey="predicted_close" name={`AI Forecast (${predictionDays} Days)`} stroke="#10b981" strokeWidth={3} strokeDasharray="5 5" dot={{ r: 4, fill: '#10b981', strokeWidth: 0 }} />
                     </LineChart>
                   </ResponsiveContainer>
                 </div>
               ) : (
                 <div className="flex flex-col items-center justify-center py-10 text-slate-500 bg-slate-900/20 rounded-xl border border-slate-700/30 border-dashed">
                   <ActivitySquare size={32} className="mb-2 opacity-50" />
-                  <p className="text-xs font-medium">Click "Run Forecast" to predict the 5-day trajectory for {query}</p>
+                  <p className="text-xs font-medium">Click "Run Forecast" to predict the {predictionDays}-day trajectory for {query}</p>
                 </div>
               )}
             </div>

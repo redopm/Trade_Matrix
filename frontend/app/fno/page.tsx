@@ -16,6 +16,7 @@ export default function FnoDashboard() {
   const [isTrading, setIsTrading] = useState(false);
   const [kronosPrediction, setKronosPrediction] = useState<any>(null);
   const [isPredicting, setIsPredicting] = useState(false);
+  const [predictionDays, setPredictionDays] = useState(5);
   const [marketStatus, setMarketStatus] = useState<{isOpen: boolean, message: string} | null>(null);
 
   const [debouncedAtmStrike, setDebouncedAtmStrike] = useState<number | string>("");
@@ -520,7 +521,7 @@ export default function FnoDashboard() {
                 <button 
                   onClick={() => handlePlaceTrade(selectedTrade.role, selectedTrade.strategy)}
                   disabled={isTrading}
-                  className={`w-2/3 py-2.5 rounded font-bold text-sm shadow transition-all ${
+                  className={`flex-1 py-2.5 rounded font-bold text-sm shadow transition-all ${
                     isTrading ? 'opacity-50 cursor-not-allowed bg-gray-600' :
                     selectedTrade.role === 'BUYER' 
                       ? 'bg-yellow-500 hover:bg-yellow-400 text-yellow-950' 
@@ -529,6 +530,16 @@ export default function FnoDashboard() {
                 >
                   {isTrading ? 'Executing...' : '⚡ Trade Now (Paper)'}
                 </button>
+                <select 
+                  value={predictionDays} 
+                  onChange={(e) => setPredictionDays(Number(e.target.value))}
+                  className="w-16 bg-slate-800 border border-indigo-600 text-white text-xs rounded px-1 outline-none focus:ring-1 focus:ring-indigo-500"
+                  disabled={isPredicting}
+                >
+                  <option value={5}>5d</option>
+                  <option value={10}>10d</option>
+                  <option value={15}>15d</option>
+                </select>
                 <button 
                   onClick={async () => {
                     setIsPredicting(true);
@@ -536,7 +547,7 @@ export default function FnoDashboard() {
                     // Find symbol of this strike
                     const q = data?.quotes?.find((x:any) => x.strike === selectedTrade.strategy.strike && x.type === selectedTrade.strategy.type);
                     if(q && q.symbol) {
-                        const res = await predictKronos(q.symbol, 5);
+                        const res = await predictKronos(q.symbol, predictionDays);
                         if(res.error) alert(res.error);
                         else setKronosPrediction(res);
                     } else {
@@ -545,7 +556,7 @@ export default function FnoDashboard() {
                     setIsPredicting(false);
                   }}
                   disabled={isPredicting}
-                  className={`w-1/3 py-2.5 rounded font-bold text-sm shadow transition-all flex items-center justify-center gap-1 ${isPredicting ? 'bg-indigo-800 text-indigo-400 cursor-wait' : 'bg-indigo-600 hover:bg-indigo-500 text-white'}`}
+                  className={`px-4 py-2.5 rounded font-bold text-sm shadow transition-all flex items-center justify-center gap-1 ${isPredicting ? 'bg-indigo-800 text-indigo-400 cursor-wait' : 'bg-indigo-600 hover:bg-indigo-500 text-white'}`}
                 >
                   {isPredicting ? '🤖...' : '🤖 Predict'}
                 </button>
@@ -554,7 +565,7 @@ export default function FnoDashboard() {
               {kronosPrediction && kronosPrediction.prediction && (
                 <div className="mt-4 bg-gray-900/60 p-3 rounded-lg border border-indigo-500/50 animate-in fade-in zoom-in-95">
                   <div className="font-bold text-indigo-400 mb-2 flex justify-between">
-                    <span>🤖 Kronos 5-Day Forecast</span>
+                    <span>🤖 Kronos {predictionDays}-Day Forecast</span>
                     <button onClick={() => setKronosPrediction(null)} className="text-gray-500 hover:text-white">✕</button>
                   </div>
                   <div className="space-y-1">

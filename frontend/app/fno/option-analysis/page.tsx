@@ -26,6 +26,7 @@ export default function OptionAnalysis() {
   const [selectedPredictionSymbol, setSelectedPredictionSymbol] = useState<string>("");
   const [predictionData, setPredictionData] = useState<any>(null);
   const [isPredicting, setIsPredicting] = useState(false);
+  const [predictionDays, setPredictionDays] = useState(5);
   const symbol = "NIFTY";
 
   useEffect(() => {
@@ -53,7 +54,7 @@ export default function OptionAnalysis() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           symbol: selectedPredictionSymbol,
-          pred_len: 5,
+          pred_len: predictionDays,
           range_from: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0] // last 30 days
         })
       });
@@ -334,6 +335,16 @@ export default function OptionAnalysis() {
             
             <div className="flex items-center gap-3">
               <select 
+                value={predictionDays} 
+                onChange={(e) => setPredictionDays(Number(e.target.value))}
+                className="bg-slate-800 border border-slate-600 text-white text-sm rounded-lg px-2 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                disabled={isPredicting}
+              >
+                <option value={5}>5 Days</option>
+                <option value={10}>10 Days</option>
+                <option value={15}>15 Days</option>
+              </select>
+              <select 
                 className="bg-slate-800 border border-slate-600 text-white text-sm rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 value={selectedPredictionSymbol}
                 onChange={(e) => setSelectedPredictionSymbol(e.target.value)}
@@ -369,7 +380,7 @@ export default function OptionAnalysis() {
                   />
                   <Legend />
                   <Line type="monotone" dataKey="historical_close" name="Historical LTP" stroke="#3b82f6" strokeWidth={2} dot={false} />
-                  <Line type="monotone" dataKey="predicted_close" name="AI Forecast (5 Days)" stroke="#10b981" strokeWidth={3} strokeDasharray="5 5" dot={{ r: 4, fill: '#10b981', strokeWidth: 0 }} />
+                  <Line type="monotone" dataKey="predicted_close" name={`AI Forecast (${predictionDays} Days)`} stroke="#10b981" strokeWidth={3} strokeDasharray="5 5" dot={{ r: 4, fill: '#10b981', strokeWidth: 0 }} />
                 </LineChart>
               </ResponsiveContainer>
             </div>
