@@ -1,8 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { stocksApi } from "@/lib/api";
-import { Search, TrendingUp, TrendingDown, CheckCircle2, XCircle, AlertCircle, Building2, Target, Crosshair } from "lucide-react";
+import { stocksApi, predictKronos } from "@/lib/api";
+import { Search, TrendingUp, TrendingDown, CheckCircle2, XCircle, AlertCircle, Building2, Target, Crosshair, ActivitySquare } from "lucide-react";
+import { ResponsiveContainer, LineChart, CartesianGrid, XAxis, YAxis, Tooltip, Legend, Line } from "recharts";
 
 function IndicatorRow({ label, value, good, unit = "" }: {
   label: string;
@@ -33,12 +34,16 @@ export default function StocksPage() {
   const [stockData, setStockData] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  
+  const [predictionData, setPredictionData] = useState<any>(null);
+  const [isPredicting, setIsPredicting] = useState(false);
 
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!query.trim()) return;
     setLoading(true);
     setError(null);
+    setPredictionData(null);
     try {
       const res = await stocksApi.getSnapshot(query.trim().toUpperCase());
       setStockData(res.data);
@@ -48,6 +53,42 @@ export default function StocksPage() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handlePredict = async () => {
+    if (!query.trim()) return;
+    setIsPredicting(true);
+    setPredictionData(null);
+    try {
+      const res = await predictKronos(`NSE:${query.trim().toUpperCase()}-EQ`, 5);
+      if (res.prediction && res.historical) {
+        const combined = [
+          ...res.historical.map((d: any) => ({
+             date: d.timestamps.split(' ')[0],
+             historical_close: d.close,
+             predicted_close: null
+          })),
+          ...res.prediction.map((d: any) => ({
+             date: d.timestamps.split(' ')[0],
+             historical_close: null,
+             predicted_close: d.close
+          }))
+        ];
+        
+        // Connect the lines by carrying over the last historical point
+        if (res.historical.length > 0 && res.prediction.length > 0) {
+            combined[res.historical.length].predicted_close = res.historical[res.historical.length - 1].close;
+        }
+
+        setPredictionData(combined);
+      } else {
+        alert("Prediction Error: " + JSON.stringify(res.error || res));
+      }
+    } catch (e) {
+      console.error(e);
+      alert("Failed to fetch prediction");
+    }
+    setIsPredicting(false);
   };
 
   const fund = stockData?.fundamentals || {};
@@ -313,6 +354,50 @@ export default function StocksPage() {
               </div>
 
             </div>
+
+            {/* Kronos AI Section */}
+            <div className="mt-8 bg-slate-800/50 rounded-xl p-5 border border-slate-700 shadow-inner relative z-10">
+              <div className="flex justify-between items-center mb-6 border-b border-slate-700 pb-4">
+                <h3 className="text-sm font-bold text-slate-300 flex items-center gap-2">
+                  <ActivitySquare className="text-indigo-400" size={18} /> Kronos AI • 5-Day Forecast
+                </h3>
+                <button
+                  onClick={handlePredict}
+                  disabled={isPredicting}
+                  className={`px-4 py-2 rounded font-bold text-xs shadow transition-all flex items-center justify-center gap-2 ${
+                    isPredicting ? 'bg-indigo-900/50 text-indigo-400 cursor-wait' : 'bg-indigo-600 hover:bg-indigo-500 text-white'
+                  }`}
+                >
+                  {isPredicting ? <div className="w-3 h-3 rounded-full border-2 border-white border-t-transparent animate-spin" /> : null}
+                  {isPredicting ? 'Forecasting...' : 'Run Forecast'}
+                </button>
+              </div>
+
+              {predictionData ? (
+                <div className="bg-slate-900/50 p-4 rounded-xl border border-slate-700/50">
+                  <ResponsiveContainer width="100%" height={300}>
+                    <LineChart data={predictionData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#334155" vertical={false} />
+                      <XAxis dataKey="date" stroke="#94a3b8" tick={{fontSize: 10}} tickMargin={10} minTickGap={30} />
+                      <YAxis stroke="#94a3b8" tick={{fontSize: 10}} domain={['auto', 'auto']} tickFormatter={(val) => `₹${val}`} />
+                      <Tooltip 
+                        contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', color: '#f8fafc', borderRadius: '8px', fontSize: '12px' }}
+                        itemStyle={{ color: '#f8fafc' }}
+                      />
+                      <Legend wrapperStyle={{fontSize: '12px'}} />
+                      <Line type="monotone" dataKey="historical_close" name="Historical LTP" stroke="#3b82f6" strokeWidth={2} dot={false} />
+                      <Line type="monotone" dataKey="predicted_close" name="AI Forecast (5 Days)" stroke="#10b981" strokeWidth={3} strokeDasharray="5 5" dot={{ r: 4, fill: '#10b981', strokeWidth: 0 }} />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
+              ) : (
+                <div className="flex flex-col items-center justify-center py-10 text-slate-500 bg-slate-900/20 rounded-xl border border-slate-700/30 border-dashed">
+                  <ActivitySquare size={32} className="mb-2 opacity-50" />
+                  <p className="text-xs font-medium">Click "Run Forecast" to predict the 5-day trajectory for {query}</p>
+                </div>
+              )}
+            </div>
+            
           </div>
         </div>
       )}

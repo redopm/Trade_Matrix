@@ -98,7 +98,7 @@ class FyersDataClient:
 
     def get_historical_data(self, symbol: str, resolution: str = "D", range_from: str = "2020-01-01", range_to: str = None) -> pd.DataFrame:
         """
-        Fetch historical data from Fyers.
+        Fetch historical data from Fyers (chunks automatically if >365 days).
         Format symbol: "NSE:RELIANCE-EQ"
         resolution: "1", "5", "15", "60", "D"
         range_from/to format: "yyyy-mm-dd"
@@ -117,30 +117,52 @@ class FyersDataClient:
         else:
             fyers_sym = symbol
 
-        data = {
-            "symbol": fyers_sym,
-            "resolution": resolution,
-            "date_format": "1",
-            "range_from": range_from,
-            "range_to": range_to,
-            "cont_flag": "1"
-        }
+        from datetime import datetime, timedelta
+        start_date = datetime.strptime(range_from, "%Y-%m-%d").date()
+        end_date = datetime.strptime(range_to, "%Y-%m-%d").date()
         
-        res = self.fyers.history(data=data)
+        all_candles = []
+        current_start = start_date
         
-        if res.get("s") != "ok":
-            logger.error(f"Failed to fetch history for {fyers_sym}: {res}")
+        while current_start <= end_date:
+            max_days = 365 if resolution in ("1D", "D") else 90
+            current_end = min(current_start + timedelta(days=max_days - 1), end_date)
+            
+            data = {
+                "symbol": fyers_sym,
+                "resolution": resolution,
+                "date_format": "1",
+                "range_from": current_start.strftime("%Y-%m-%d"),
+                "range_to": current_end.strftime("%Y-%m-%d"),
+                "cont_flag": "1"
+            }
+            
+            res = self.fyers.history(data=data)
+            
+            if res.get("s") != "ok":
+                # Fyers typically returns no data for old intraday without error, but log actual errors
+                if res.get("code") != 429: # ignore rate limit spam if empty
+                    logger.error(f"Failed to fetch history for {fyers_sym} ({current_start} to {current_end}): {res}")
+                break
+                
+            candles = res.get("candles", [])
+            if candles:
+                all_candles.extend(candles)
+                
+            current_start = current_end + timedelta(days=1)
+            time.sleep(0.05) # Rate limit protection
+            
+        if not all_candles:
             return pd.DataFrame()
             
-        candles = res.get("candles", [])
-        if not candles:
-            return pd.DataFrame()
-            
-        df = pd.DataFrame(candles, columns=['epoch', 'Open', 'High', 'Low', 'Close', 'Volume'])
+        df = pd.DataFrame(all_candles, columns=['epoch', 'Open', 'High', 'Low', 'Close', 'Volume'])
         df['datetime'] = pd.to_datetime(df['epoch'], unit='s')
         df['datetime'] = df['datetime'].dt.tz_localize('UTC').dt.tz_convert('Asia/Kolkata')
         df.set_index('datetime', inplace=True)
         df.drop('epoch', axis=1, inplace=True)
+        
+        # Ensure no duplicates from chunk boundaries
+        df = df[~df.index.duplicated(keep='last')]
         return df
 
     def fetch_quotes(self, symbols: list[str]) -> dict:

@@ -219,8 +219,8 @@ export default function OptionAnalysis() {
               </h3>
               <p className="text-xs text-slate-500 mt-1">Identifies major Support (Green) and Resistance (Red) levels.</p>
             </div>
-            <div className="h-[300px] w-full">
-              <ResponsiveContainer width="100%" height="100%">
+            <div className="w-full">
+              <ResponsiveContainer width="100%" height={300}>
                 <BarChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                   <XAxis dataKey="strike" tick={{fontSize: 10}} tickMargin={10} minTickGap={30} />
@@ -243,8 +243,8 @@ export default function OptionAnalysis() {
               </h3>
               <p className="text-xs text-slate-500 mt-1">Tracks real-time institutional positioning. Negative bars indicate unwinding.</p>
             </div>
-            <div className="h-[300px] w-full">
-              <ResponsiveContainer width="100%" height="100%">
+            <div className="w-full">
+              <ResponsiveContainer width="100%" height={300}>
                 <BarChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                   <XAxis dataKey="strike" tick={{fontSize: 10}} tickMargin={10} minTickGap={30} />
@@ -273,8 +273,8 @@ export default function OptionAnalysis() {
               </h3>
               <p className="text-xs text-slate-500 mt-1">If Puts IV is much higher than Calls IV, institutions are hedging against a crash.</p>
             </div>
-            <div className="h-[300px] w-full">
-              <ResponsiveContainer width="100%" height="100%">
+            <div className="w-full">
+              <ResponsiveContainer width="100%" height={300}>
                 <LineChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                   <XAxis dataKey="strike" tick={{fontSize: 10}} tickMargin={10} minTickGap={30} />
@@ -297,8 +297,8 @@ export default function OptionAnalysis() {
               </h3>
               <p className="text-xs text-slate-500 mt-1">Peaks indicate extreme bullishness at that strike. Dips indicate extreme bearishness.</p>
             </div>
-            <div className="h-[300px] w-full">
-              <ResponsiveContainer width="100%" height="100%">
+            <div className="w-full">
+              <ResponsiveContainer width="100%" height={300}>
                 <AreaChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                   <defs>
                     <linearGradient id="colorPcr" x1="0" y1="0" x2="0" y2="1">
@@ -357,8 +357,8 @@ export default function OptionAnalysis() {
           </div>
 
           {predictionData && (
-            <div className="bg-slate-900/50 p-4 rounded-xl border border-slate-700/50 h-[400px]">
-              <ResponsiveContainer width="100%" height="100%">
+          <div className="bg-slate-900/50 p-4 rounded-xl border border-slate-700/50">
+              <ResponsiveContainer width="100%" height={400}>
                 <LineChart data={predictionData} margin={{ top: 20, right: 30, left: 0, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#334155" vertical={false} />
                   <XAxis dataKey="date" stroke="#94a3b8" tick={{fontSize: 12}} tickMargin={10} minTickGap={30} />
