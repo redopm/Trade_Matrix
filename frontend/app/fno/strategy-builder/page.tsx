@@ -174,21 +174,29 @@ export default function StrategyBuilder() {
         {/* AI HEDGING STRATEGY CARD */}
         {current_hedge && (
           <div className="bg-white rounded-xl shadow-xl border border-slate-200 overflow-hidden">
-            <div className={`px-6 py-4 flex justify-between items-center ${
-              activeTab === 'safe' ? 'bg-gradient-to-r from-blue-600 to-indigo-700' :
-              activeTab === 'pro' ? 'bg-gradient-to-r from-purple-600 to-fuchsia-700' :
-              activeTab === 'zero_loss' ? 'bg-gradient-to-r from-emerald-600 to-teal-700' :
-              'bg-gradient-to-r from-orange-500 to-amber-600'
-            }`}>
+            <div className="px-6 py-4 flex justify-between items-center flex-wrap gap-3" style={{
+              background: activeTab === 'safe' ? 'linear-gradient(to right, #2563eb, #4338ca)' :
+              activeTab === 'pro' ? 'linear-gradient(to right, #9333ea, #c026d3)' :
+              activeTab === 'zero_loss' ? 'linear-gradient(to right, #059669, #0d9488)' :
+              activeTab === 'breakout' ? 'linear-gradient(to right, #dc2626, #e11d48)' :
+              'linear-gradient(to right, #f97316, #d97706)'
+            }}>
               <div>
                 <h2 className="text-lg font-bold text-white flex items-center gap-2">
                   <Shield size={20} /> AI Strategy: {current_hedge.name}
                 </h2>
                 <p className="text-white/80 text-sm mt-1">{current_hedge.reason}</p>
               </div>
-              <div className="bg-white/20 px-4 py-2 rounded-lg border border-white/30 backdrop-blur-sm text-white">
-                <div className="text-xs font-semibold opacity-80 uppercase tracking-wider">Margin Req.</div>
-                <div className="text-lg font-bold">{current_hedge.margin_required}</div>
+              <div className="flex items-center gap-3">
+                {current_hedge.expiry && (
+                  <div className="bg-white/20 px-3 py-1.5 rounded-lg border border-white/30 text-white text-xs font-bold">
+                    🗓 {current_hedge.expiry}
+                  </div>
+                )}
+                <div className="bg-white/20 px-4 py-2 rounded-lg border border-white/30 backdrop-blur-sm text-white">
+                  <div className="text-xs font-semibold opacity-80 uppercase tracking-wider">Margin Req.</div>
+                  <div className="text-lg font-bold">{current_hedge.margin_required}</div>
+                </div>
               </div>
             </div>
             
@@ -231,13 +239,23 @@ export default function StrategyBuilder() {
                   <div className="p-4 rounded-xl border border-slate-200 bg-white">
                     <div className="text-xs font-bold text-slate-500 uppercase mb-1">Net Premium</div>
                     <div className="text-lg font-bold text-slate-800">
-                      {current_hedge.net_premium > 0 ? `Pay ₹${current_hedge.net_premium}` : `Receive ₹${Math.abs(current_hedge.net_premium)}`}
+                      {current_hedge.net_premium < 0
+                        ? <span className="text-emerald-600">Receive ₹{Math.abs(current_hedge.net_premium)}</span>
+                        : <span className="text-red-600">Pay ₹{current_hedge.net_premium}</span>
+                      }
                     </div>
                   </div>
                   <div className="p-4 rounded-xl border border-slate-200 bg-white">
                     <div className="text-xs font-bold text-slate-500 uppercase mb-1">Risk : Reward</div>
                     <div className="text-lg font-bold text-slate-800">{current_hedge.risk_reward}</div>
                   </div>
+                  {current_hedge.breakeven_range && (
+                    <div className="col-span-2 p-4 rounded-xl border border-blue-200 bg-blue-50">
+                      <div className="text-xs font-bold text-blue-600 uppercase mb-1">⚡ Breakeven Range</div>
+                      <div className="text-base font-bold text-blue-800">{current_hedge.breakeven_range}</div>
+                      <div className="text-xs text-blue-500 mt-1">Market must stay within this range for max profit</div>
+                    </div>
+                  )}
                 </div>
               </div>
 

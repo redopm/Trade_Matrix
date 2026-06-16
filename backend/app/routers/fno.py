@@ -215,7 +215,7 @@ async def get_option_chain(symbol: str, atm_strike: Optional[int] = None):
                 "margin_required": "~ ₹95,000"
             }
             
-    advanced_hedges = HedgeFinder.get_advanced_hedges(processed, sentiment, analysis)
+    advanced_hedges = HedgeFinder.get_advanced_hedges(processed, sentiment, analysis, dte_days=dte_days)
     hedging_strategy = advanced_hedges["safe"]
     
     # Fallback for naked strategies if nothing found
