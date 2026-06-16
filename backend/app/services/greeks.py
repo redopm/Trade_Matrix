@@ -1,4 +1,5 @@
 import math
+import time
 from typing import Dict, Optional
 import py_vollib.black_scholes.implied_volatility as iv
 import py_vollib.black_scholes.greeks.analytical as greeks
@@ -9,6 +10,15 @@ logger = get_logger(__name__)
 # Indian risk-free rate is around 7%
 RISK_FREE_RATE = 0.07
 
+# ── EMA IV Smoothing Cache ─────────────────────────────────────────────────
+# Key: (symbol, strike, type) → smoothed IV value
+# This prevents IV from jumping wildly when LTP fluctuates by ₹1-2,
+# especially near expiry when DTE is very small.
+# alpha = 0.25 means: new_iv = 0.25 * raw_iv + 0.75 * previous_iv
+# Fyers/Dhan use a similar EMA internally which is why their IV looks stable.
+_iv_ema_cache: Dict[str, float] = {}
+IV_EMA_ALPHA = 0.25  # smoothing factor (0=never update, 1=no smoothing)
+
 class GreeksCalculator:
     @staticmethod
     def calculate_greeks(
@@ -16,16 +26,22 @@ class GreeksCalculator:
         underlying_price: float,
         strike_price: float,
         days_to_expiry: float,
-        option_price: float
+        option_price: float,
+        symbol_key: str = ""  # Optional unique key for EMA caching
     ) -> Dict[str, Optional[float]]:
         """
         Calculates Implied Volatility and Greeks (Delta, Gamma, Theta, Vega) using the Black-Scholes model.
-        Returns a dictionary of greeks.
+        Returns a dictionary of greeks. IV is EMA-smoothed to prevent rapid fluctuations.
         """
         flag = 'c' if option_type.upper() == 'CE' else 'p'
         
-        # Avoid zero or negative DTE
-        t_years = max(days_to_expiry, 0.01) / 365.0
+        # ── DTE Floor ─────────────────────────────────────────────────────────
+        # Very small DTE (< 6 hours) makes IV hyper-sensitive to price changes.
+        # A ₹1 move in LTP can cause IV to jump 50%+ when DTE < 0.01 days.
+        # We use a minimum floor of 6 hours (0.25 days) to dampen this effect,
+        # which is consistent with how Fyers/Dhan report IV near expiry.
+        MIN_DTE_DAYS = 6.0 / 24.0  # 6 hours minimum
+        t_years = max(days_to_expiry, MIN_DTE_DAYS) / 365.0
         
         # Default empty result
         result = {
@@ -59,7 +75,20 @@ class GreeksCalculator:
                 r=RISK_FREE_RATE,
                 flag=flag
             )
-            result["iv"] = round(implied_vol * 100, 2)  # Convert to percentage
+            
+            # ── EMA Smoothing ──────────────────────────────────────────────────
+            # Apply exponential moving average to IV to prevent rapid fluctuations.
+            # new_smoothed = alpha * raw_iv + (1 - alpha) * previous_smoothed
+            raw_iv_pct = implied_vol * 100  # Convert to percentage
+            if symbol_key:
+                if symbol_key in _iv_ema_cache:
+                    smoothed_iv_pct = IV_EMA_ALPHA * raw_iv_pct + (1 - IV_EMA_ALPHA) * _iv_ema_cache[symbol_key]
+                else:
+                    smoothed_iv_pct = raw_iv_pct  # First time: use raw value
+                _iv_ema_cache[symbol_key] = smoothed_iv_pct
+                result["iv"] = round(smoothed_iv_pct, 2)
+            else:
+                result["iv"] = round(raw_iv_pct, 2)
             
             # Calculate Greeks if IV is valid
             if implied_vol > 0:

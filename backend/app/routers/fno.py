@@ -120,6 +120,7 @@ async def get_option_chain(symbol: str, atm_strike: Optional[int] = None):
             strike_price=float(strike),
             days_to_expiry=dte_days,
             option_price=q["ltp"],
+            symbol_key=sym,  # Used for EMA IV smoothing cache
         )
         # Convert numpy types to native Python floats to prevent FastAPI JSON serialization errors
         g_native = {
