@@ -81,11 +81,14 @@ def _fyers_ohlcv(fyers_symbol: str, days: int = 365) -> pd.DataFrame:
 class MarketRegimeDetector:
     _cache: dict | None = None
     _cache_time: datetime | None = None
-    _lock = asyncio.Lock()              # prevents parallel detection storm
+    _lock: asyncio.Lock | None = None              # prevents parallel detection storm
     CACHE_TTL_MINUTES = 60
 
     @classmethod
     async def get_current_regime(cls) -> dict:
+        if cls._lock is None:
+            cls._lock = asyncio.Lock()
+            
         """Get the current market regime, using cache if fresh."""
         # Fast path: return cache without acquiring lock
         if cls._cache and cls._cache_time:

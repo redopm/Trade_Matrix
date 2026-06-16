@@ -141,6 +141,7 @@ export const screenerApi = {
 export const tradesApi = {
   createTrade: (signalId: number, capital?: number, notes?: string) =>
     api.post("/trades/", { signal_id: signalId, capital, notes }),
+  createCustomTrade: (data: any) => api.post("/trades/custom", data),
   listTrades: (params?: { status?: string; symbol?: string; page?: number; page_size?: number }) =>
     api.get("/trades/", { params }),
   getOpenTrades: () => api.get("/trades/open"),

@@ -23,7 +23,7 @@ import {
 export default function OptionAnalysis() {
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const [selectedPredictionSymbol, setSelectedPredictionSymbol] = useState<string>("");
+  const [selectedPredictionSymbol, setSelectedPredictionSymbol] = useState<string>("NSE:NIFTY50-INDEX");
   const [predictionData, setPredictionData] = useState<any>(null);
   const [isPredicting, setIsPredicting] = useState(false);
   const [predictionDays, setPredictionDays] = useState(5);
@@ -349,12 +349,10 @@ export default function OptionAnalysis() {
                 value={selectedPredictionSymbol}
                 onChange={(e) => setSelectedPredictionSymbol(e.target.value)}
               >
-                <option value="">-- Select specific Strike to Predict --</option>
-                {quotes?.map((q: any) => (
-                  <option key={q.symbol} value={q.symbol}>
-                    {q.symbol.replace("NSE:", "")} (LTP: ₹{q.ltp})
-                  </option>
-                ))}
+                <option value="NSE:NIFTY50-INDEX">NIFTY 50</option>
+                <option value="NSE:NIFTYBANK-INDEX">BANK NIFTY</option>
+                <option value="NSE:FINNIFTY-INDEX">FIN NIFTY</option>
+                <option value="NSE:MIDCPNIFTY-INDEX">MIDCAP NIFTY</option>
               </select>
               <button 
                 onClick={handlePredict}

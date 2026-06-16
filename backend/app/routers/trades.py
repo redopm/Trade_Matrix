@@ -74,7 +74,45 @@ class TradeOut(BaseModel):
         from_attributes = True
 
 
+class CustomTradeRequest(BaseModel):
+    symbol: str
+    company_name: str
+    direction: str
+    entry_price: float
+    quantity: int
+    notes: Optional[str] = None
+    stop_loss: Optional[float] = 0.0
+    target_price: Optional[float] = 0.0
+
+
 # ── Endpoints ─────────────────────────────────────────────────────────────────
+
+@router.post("/custom", response_model=dict, status_code=201)
+async def create_custom_trade(
+    request: CustomTradeRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """Create a manual trade without a screener signal (used for F&O Options)."""
+    trade = PaperTrade(
+        symbol=request.symbol,
+        company_name=request.company_name,
+        direction=request.direction,
+        entry_price=request.entry_price,
+        quantity=request.quantity,
+        invested_amount=request.entry_price * request.quantity,
+        stop_loss=request.stop_loss,
+        stop_loss_fixed=request.stop_loss,
+        target_price=request.target_price,
+        status=TradeStatus.OPEN,
+        notes=request.notes,
+    )
+    db.add(trade)
+    await db.commit()
+    await db.refresh(trade)
+    t_dict = trade.__dict__.copy()
+    t_dict.pop("_sa_instance_state", None)
+    return t_dict
+
 
 @router.post("/", response_model=TradeOut, status_code=201)
 async def create_trade(

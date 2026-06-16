@@ -98,9 +98,19 @@ export default function FnoDashboard() {
   const handlePlaceTrade = async (role: 'BUYER' | 'SELLER', strategy: any) => {
     setIsTrading(true);
     try {
-      // Mocking Paper Trade Execution (API endpoint to be built later)
-      await new Promise(resolve => setTimeout(resolve, 800));
-      alert(`[MOCK] Successfully placed Paper Trade for ${strategy.strike} ${strategy.type}!\n(Backend integration pending)`);
+      const q = data?.quotes?.find((x:any) => x.strike === strategy.strike && x.type === strategy.type);
+      if(!q || !q.symbol) throw new Error("Could not find symbol for this strike");
+      
+      const req = {
+         symbol: q.symbol,
+         company_name: `${symbol} ${strategy.strike} ${strategy.type}`,
+         direction: role === 'BUYER' ? "LONG" : "SHORT",
+         entry_price: q.ltp,
+         quantity: 50, // default lot size
+         notes: `Traded from Option Chain as ${role}`
+      };
+      await tradesApi.createCustomTrade(req);
+      alert(`Successfully placed Paper Trade for ${q.symbol}!`);
       setSelectedTrade(null);
     } catch (e: any) {
       alert("Error placing trade: " + (e.message || "Unknown error"));
@@ -530,24 +540,19 @@ export default function FnoDashboard() {
                 >
                   {isTrading ? 'Executing...' : '⚡ Trade Now (Paper)'}
                 </button>
-                <select 
-                  value={predictionDays} 
-                  onChange={(e) => setPredictionDays(Number(e.target.value))}
-                  className="w-16 bg-slate-800 border border-indigo-600 text-white text-xs rounded px-1 outline-none focus:ring-1 focus:ring-indigo-500"
-                  disabled={isPredicting}
-                >
-                  <option value={5}>5d</option>
-                  <option value={10}>10d</option>
-                  <option value={15}>15d</option>
-                </select>
                 <button 
                   onClick={async () => {
                     setIsPredicting(true);
                     setKronosPrediction(null);
+                    
+                    const expiryEpoch = data?.expiry_epoch || (Date.now() / 1000 + 5 * 86400);
+                    const dte = Math.max(1, Math.ceil((expiryEpoch - Date.now() / 1000) / 86400));
+                    setPredictionDays(dte);
+
                     // Find symbol of this strike
                     const q = data?.quotes?.find((x:any) => x.strike === selectedTrade.strategy.strike && x.type === selectedTrade.strategy.type);
                     if(q && q.symbol) {
-                        const res = await predictKronos(q.symbol, predictionDays);
+                        const res = await predictKronos(q.symbol, dte);
                         if(res.error) alert(res.error);
                         else setKronosPrediction(res);
                     } else {
@@ -558,14 +563,14 @@ export default function FnoDashboard() {
                   disabled={isPredicting}
                   className={`px-4 py-2.5 rounded font-bold text-sm shadow transition-all flex items-center justify-center gap-1 ${isPredicting ? 'bg-indigo-800 text-indigo-400 cursor-wait' : 'bg-indigo-600 hover:bg-indigo-500 text-white'}`}
                 >
-                  {isPredicting ? '🤖...' : '🤖 Predict'}
+                  {isPredicting ? '🤖...' : '🤖 Predict (DTE)'}
                 </button>
               </div>
 
               {kronosPrediction && kronosPrediction.prediction && (
                 <div className="mt-4 bg-gray-900/60 p-3 rounded-lg border border-indigo-500/50 animate-in fade-in zoom-in-95">
                   <div className="font-bold text-indigo-400 mb-2 flex justify-between">
-                    <span>🤖 Kronos {predictionDays}-Day Forecast</span>
+                    <span>🤖 Kronos {predictionDays}-Day Forecast (To Expiry)</span>
                     <button onClick={() => setKronosPrediction(null)} className="text-gray-500 hover:text-white">✕</button>
                   </div>
                   <div className="space-y-1">
