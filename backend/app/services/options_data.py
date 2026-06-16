@@ -14,15 +14,17 @@ logger = get_logger(__name__)
 IST = pytz.timezone("Asia/Kolkata")
 FYERS_SYM_URL = "https://public.fyers.in/sym_details/NSE_FO.csv"
 
+_cached_sym_df: Optional[pd.DataFrame] = None
+_last_sym_fetch: Optional[datetime] = None
+
 class OptionsDataFetcher:
     def __init__(self):
         self.fyers_client = FyersDataClient()
-        self.sym_df: Optional[pd.DataFrame] = None
-        self.last_sym_fetch: Optional[datetime] = None
 
     async def _ensure_symbol_master(self):
+        global _cached_sym_df, _last_sym_fetch
         now = datetime.now(IST)
-        if self.sym_df is not None and self.last_sym_fetch and (now - self.last_sym_fetch).days == 0:
+        if _cached_sym_df is not None and _last_sym_fetch and (now - _last_sym_fetch).days == 0:
             return
 
         logger.info("Downloading Fyers NSE F&O Symbol Master...")
@@ -31,23 +33,24 @@ class OptionsDataFetcher:
             # Wrap in a lambda to pass the timeout argument
             resp = await loop.run_in_executor(None, lambda: requests.get(FYERS_SYM_URL, timeout=10))
             if resp.status_code == 200:
-                self.sym_df = pd.read_csv(io.StringIO(resp.text), header=None, low_memory=False)
-                self.last_sym_fetch = now
-                logger.info(f"Loaded {len(self.sym_df)} F&O symbols.")
+                _cached_sym_df = pd.read_csv(io.StringIO(resp.text), header=None, low_memory=False)
+                _last_sym_fetch = now
+                logger.info(f"Loaded {len(_cached_sym_df)} F&O symbols.")
             else:
                 logger.error(f"Failed to fetch Fyers symbols: {resp.status_code}")
         except Exception as e:
             logger.error(f"Error fetching symbol master: {e}")
 
     async def get_nearest_expiry_chain_df(self, underlying: str = "NIFTY") -> Optional[pd.DataFrame]:
+        global _cached_sym_df
         await self._ensure_symbol_master()
-        if self.sym_df is None or self.sym_df.empty:
+        if _cached_sym_df is None or _cached_sym_df.empty:
             return None
 
         # Filter for CE/PE options of the underlying
-        opts = self.sym_df[
-            (self.sym_df[13] == underlying) & 
-            (self.sym_df[16].isin(["CE", "PE"]))
+        opts = _cached_sym_df[
+            (_cached_sym_df[13] == underlying) & 
+            (_cached_sym_df[16].isin(["CE", "PE"]))
         ]
         
         if opts.empty:

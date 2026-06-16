@@ -34,6 +34,12 @@ class FnoTrader:
         if df is None or df.empty:
             return None
             
+        spot_price = 0.0
+        raw = self.fetcher.fyers_client.fetch_quotes([f"NSE:{symbol}-INDEX" if symbol == "NIFTY" else f"NSE:{symbol}BANK-INDEX" if symbol == "BANKNIFTY" else f"NSE:{symbol}-INDEX"])
+        if raw and "d" in raw and len(raw["d"]) > 0:
+            spot_price = float(raw["d"][0]["v"].get("lp") or 0)
+        spot = spot_price if spot_price > 0 else float(atm_strike)
+            
         expiry_epoch = df.iloc[0][8]
         import time
         dte_days = max((expiry_epoch - time.time()) / 86400, 0.01)
@@ -49,7 +55,7 @@ class FnoTrader:
             opt_type = match.group(2)
             
             greeks = GreeksCalculator.calculate_greeks(
-                opt_type, atm_strike, strike, dte_days, q.get("ltp", 0)
+                opt_type, spot, strike, dte_days, q.get("ltp", 0)
             )
             q.update(greeks)
             q["strike"] = strike

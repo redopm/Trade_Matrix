@@ -102,7 +102,6 @@ async def get_option_chain(symbol: str, atm_strike: Optional[int] = None):
         })
 
     # ── Attach strike + type + Greeks to each quote ───────────────────────────
-    underlying_price = float(atm_strike) if atm_strike else 0.0
     processed = []
     for q in all_quotes:
         sym = q.get("symbol", "")
@@ -114,7 +113,7 @@ async def get_option_chain(symbol: str, atm_strike: Optional[int] = None):
         if strike == 0:
             continue
 
-        spot = underlying_price if underlying_price > 0 else float(strike)
+        spot = spot_price if spot_price > 0 else (float(atm_strike) if atm_strike else float(strike))
         g = GreeksCalculator.calculate_greeks(
             option_type=opt_type,
             underlying_price=spot,

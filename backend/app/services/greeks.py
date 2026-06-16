@@ -40,9 +40,19 @@ class GreeksCalculator:
             return result
             
         try:
+            import math
+            # Calculate intrinsic value
+            if flag == 'c':
+                intrinsic = underlying_price - strike_price * math.exp(-RISK_FREE_RATE * t_years)
+            else:
+                intrinsic = strike_price * math.exp(-RISK_FREE_RATE * t_years) - underlying_price
+                
+            # Fyers LTP might be below intrinsic for illiquid ITM options
+            safe_price = max(option_price, intrinsic + 0.05)
+            
             # Calculate Implied Volatility
             implied_vol = iv.implied_volatility(
-                price=option_price,
+                price=safe_price,
                 S=underlying_price,
                 K=strike_price,
                 t=t_years,
@@ -78,6 +88,7 @@ class GreeksCalculator:
         except Exception as e:
             # Deep ITM/OTM options or pricing anomalies can cause IV calculation to fail
             # We silently catch these and return 0
+            logger.error(f"Greeks calculation failed for {option_type} K={strike_price} S={underlying_price} ltp={option_price} t={t_years} | Error: {str(e)}")
             pass
             
         return result

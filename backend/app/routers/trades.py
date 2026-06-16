@@ -93,16 +93,23 @@ async def create_custom_trade(
     db: AsyncSession = Depends(get_db),
 ):
     """Create a manual trade without a screener signal (used for F&O Options)."""
+    from datetime import date
     trade = PaperTrade(
         symbol=request.symbol,
         company_name=request.company_name,
         direction=request.direction,
+        entry_date=date.today().strftime("%Y-%m-%d"),
         entry_price=request.entry_price,
         quantity=request.quantity,
         invested_amount=request.entry_price * request.quantity,
         stop_loss=request.stop_loss,
         stop_loss_fixed=request.stop_loss,
         target_price=request.target_price,
+        current_price=request.entry_price,
+        highest_price=request.entry_price,
+        unrealized_pnl=0.0,
+        unrealized_pnl_pct=0.0,
+        days_in_trade=0,
         status=TradeStatus.OPEN,
         notes=request.notes,
     )
