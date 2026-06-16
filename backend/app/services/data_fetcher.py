@@ -83,7 +83,7 @@ SECTOR_UNIVERSE: dict[str, list[str]] = {
     # ── 2. Information Technology (~60) ──────────────────────────────────────
     "Information Technology": [
         # IT Services — Large
-        "TCS.NS", "INFOSYS.NS", "HCLTECH.NS", "WIPRO.NS", "TECHM.NS",
+        "TCS.NS", "INFY.NS", "HCLTECH.NS", "WIPRO.NS", "TECHM.NS",
         "LTIM.NS", "MPHASIS.NS", "PERSISTENT.NS", "COFORGE.NS", "TATAELXSI.NS",
         # IT Services — Mid
         "OFSS.NS", "KPITTECH.NS", "CYIENT.NS", "BIRLASOFT.NS", "ZENSARTECH.NS",

@@ -415,7 +415,7 @@ export default function StocksPage() {
             View technical indicators, Piostroski score, and trade setup targets.
           </p>
           <div className="flex gap-3 justify-center flex-wrap">
-            {["RELIANCE", "TCS", "HDFCBANK", "INFOSYS", "ICICIBANK"].map((sym) => (
+            {["RELIANCE", "TCS", "HDFCBANK", "INFY", "ICICIBANK"].map((sym) => (
               <button
                 key={sym}
                 className="bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold uppercase tracking-wider px-4 py-2 rounded-lg transition-colors border border-slate-200"

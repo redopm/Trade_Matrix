@@ -35,7 +35,7 @@ logger = get_logger(__name__)
 # Nifty 200 stock symbols for training universe
 NIFTY_200_SYMBOLS = [
     # Nifty 50 (core large caps)
-    "RELIANCE.NS", "TCS.NS", "HDFCBANK.NS", "INFOSYS.NS", "ICICIBANK.NS",
+    "RELIANCE.NS", "TCS.NS", "HDFCBANK.NS", "INFY.NS", "ICICIBANK.NS",
     "HINDUNILVR.NS", "ITC.NS", "SBIN.NS", "BHARTIARTL.NS", "KOTAKBANK.NS",
     "LT.NS", "AXISBANK.NS", "ASIANPAINT.NS", "MARUTI.NS", "SUNPHARMA.NS",
     "BAJFINANCE.NS", "TITAN.NS", "WIPRO.NS", "ONGC.NS", "NTPC.NS",
