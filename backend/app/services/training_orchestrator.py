@@ -73,25 +73,24 @@ def get_training_symbols(max_symbols: int = 500) -> list[str]:
         resp = requests.get(FYERS_SYMBOL_MASTER_URL, timeout=30)
         resp.raise_for_status()
 
-        # Parse CSV (no header row in Fyers symbol master)
-        # Key columns (0-indexed):
-        #   0: fytoken
-        #   1: symbol_details (full name)
-        #   2: exchange
-        #   4: instrument_type (EQ, INDEX, etc.)
-        #  11: symbol_ticker  (e.g., NSE:RELIANCE-EQ)
+        # Parse CSV — Fyers NSE_CM.csv has NO header row.
+        # Verified column structure (from live CSV inspection):
+        #   Col 0:  fytoken (e.g., 101000000016921)
+        #   Col 1:  company name (e.g., "20 MICRONS LTD")
+        #   Col 9:  symbol ticker WITH exchange (e.g., "NSE:20MICRONS-EQ")
+        #   Col 13: symbol ticker ONLY (e.g., "20MICRONS")
         df = pd.read_csv(io.StringIO(resp.text), header=None, low_memory=False)
 
-        # Filter for NSE equity cash market symbols
-        # Column 11 has ticker like "NSE:RELIANCE-EQ"
-        eq_mask = df[11].astype(str).str.endswith("-EQ")
-        eq_symbols = df[eq_mask][11].tolist()
+        # Filter for NSE equity symbols using column 9 ("NSE:RELIANCE-EQ" format)
+        eq_mask = df[9].astype(str).str.endswith("-EQ")
+        ticker_col = df[eq_mask][13].astype(str)  # Col 13 = clean ticker "RELIANCE"
 
-        # Convert "NSE:RELIANCE-EQ" → "RELIANCE.NS"
+        # Convert "RELIANCE" → "RELIANCE.NS"
         ns_symbols = []
-        for sym in eq_symbols:
-            ticker = sym.split(":")[-1].replace("-EQ", "").strip()
-            if ticker and len(ticker) <= 20:  # Sanity check on symbol length
+        for ticker in ticker_col:
+            ticker = ticker.strip()
+            # Skip bad values: 'nan', empty, too long (indices/ETFs have long names)
+            if ticker and ticker != "nan" and len(ticker) <= 20:
                 ns_symbols.append(f"{ticker}.NS")
 
         # Deduplicate and limit count
