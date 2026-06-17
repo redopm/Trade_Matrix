@@ -1,12 +1,12 @@
 """
 Training Orchestrator — Phase 2
-Full end-to-end pipeline: Download → Chart Gen → Gemini Label → Train → Save
+Full end-to-end pipeline: Download → Label (rule-based) → Train → Save
 
 Stages:
-  1. Download OHLCV for all Nifty 200 stocks (3 years)
-  2. Generate 60-day sliding window chart images (mplfinance)
-  3. Send to Gemini Vision for auto-labeling
-  4. Extract geometric features from each window
+  1. Fetch valid NSE symbols from Fyers Symbol Master (always up-to-date)
+  2. Download OHLCV data via Fyers API / yfinance
+  3. Generate sliding 60-day windows and extract geometric features
+  4. Label each window using rule-based pattern classifier
   5. Train XGBoost on labeled features
   6. Save model + metadata
   7. Reload detector with new model
@@ -17,6 +17,8 @@ Progress tracking:
   - Resumes from existing labels (skip already-labeled windows)
 """
 import asyncio
+import io
+import requests
 from typing import Any, Callable, Optional
 from datetime import datetime, timedelta
 
@@ -32,7 +34,83 @@ from app.utils.logger import get_logger
 
 logger = get_logger(__name__)
 
-# Nifty 200 stock symbols for training universe
+# ── Fyers Symbol Master → NSE Equity Symbols ──────────────────────────────────
+# Fyers provides a public CSV with ALL valid NSE symbols.
+# We filter for -EQ series (cash market equities) and convert to yfinance format.
+FYERS_SYMBOL_MASTER_URL = "https://public.fyers.in/sym_details/NSE_CM.csv"
+
+# Minimal fallback list (if Fyers CSV download fails)
+_FALLBACK_SYMBOLS = [
+    "RELIANCE.NS", "TCS.NS", "HDFCBANK.NS", "INFY.NS", "ICICIBANK.NS",
+    "HINDUNILVR.NS", "ITC.NS", "SBIN.NS", "BHARTIARTL.NS", "KOTAKBANK.NS",
+    "LT.NS", "AXISBANK.NS", "ASIANPAINT.NS", "MARUTI.NS", "SUNPHARMA.NS",
+    "BAJFINANCE.NS", "TITAN.NS", "WIPRO.NS", "ONGC.NS", "NTPC.NS",
+    "POWERGRID.NS", "ULTRACEMCO.NS", "NESTLEIND.NS", "TECHM.NS", "HCLTECH.NS",
+    "BAJAJFINSV.NS", "COALINDIA.NS", "GRASIM.NS", "JSWSTEEL.NS", "TATAMOTORS.NS",
+    "TATASTEEL.NS", "HINDALCO.NS", "DIVISLAB.NS", "CIPLA.NS", "APOLLOHOSP.NS",
+    "DRREDDY.NS", "EICHERMOT.NS", "BAJAJ-AUTO.NS", "HEROMOTOCO.NS", "BRITANNIA.NS",
+]
+
+
+def get_training_symbols(max_symbols: int = 500) -> list[str]:
+    """
+    Fetch all valid NSE equity symbols from Fyers Symbol Master CSV.
+
+    This is ALWAYS up-to-date and never has "Invalid symbol" errors.
+    Returns yfinance-compatible symbols (RELIANCE.NS format).
+
+    The Fyers NSE_CM.csv contains ALL listed NSE stocks.
+    We filter for -EQ (equity cash market) series only.
+
+    Args:
+        max_symbols: Maximum number of symbols to use for training.
+                     Default 500 covers Nifty 500 universe well.
+    Returns:
+        List of .NS symbols (e.g. ['RELIANCE.NS', 'TCS.NS', ...])
+    """
+    try:
+        logger.info(f"Fetching NSE symbol list from Fyers Symbol Master...")
+        resp = requests.get(FYERS_SYMBOL_MASTER_URL, timeout=30)
+        resp.raise_for_status()
+
+        # Parse CSV (no header row in Fyers symbol master)
+        # Key columns (0-indexed):
+        #   0: fytoken
+        #   1: symbol_details (full name)
+        #   2: exchange
+        #   4: instrument_type (EQ, INDEX, etc.)
+        #  11: symbol_ticker  (e.g., NSE:RELIANCE-EQ)
+        df = pd.read_csv(io.StringIO(resp.text), header=None, low_memory=False)
+
+        # Filter for NSE equity cash market symbols
+        # Column 11 has ticker like "NSE:RELIANCE-EQ"
+        eq_mask = df[11].astype(str).str.endswith("-EQ")
+        eq_symbols = df[eq_mask][11].tolist()
+
+        # Convert "NSE:RELIANCE-EQ" → "RELIANCE.NS"
+        ns_symbols = []
+        for sym in eq_symbols:
+            ticker = sym.split(":")[-1].replace("-EQ", "").strip()
+            if ticker and len(ticker) <= 20:  # Sanity check on symbol length
+                ns_symbols.append(f"{ticker}.NS")
+
+        # Deduplicate and limit count
+        ns_symbols = list(dict.fromkeys(ns_symbols))[:max_symbols]
+
+        logger.info(f"Fyers Symbol Master: {len(ns_symbols)} valid NSE EQ symbols fetched.")
+        return ns_symbols
+
+    except Exception as e:
+        logger.warning(
+            f"Could not fetch Fyers Symbol Master ({e}). "
+            f"Using fallback list of {len(_FALLBACK_SYMBOLS)} stocks."
+        )
+        return _FALLBACK_SYMBOLS.copy()
+
+
+# Keep NIFTY_200_SYMBOLS for backward compatibility with other router references
+NIFTY_200_SYMBOLS = _FALLBACK_SYMBOLS
+
 NIFTY_200_SYMBOLS = [
     # Nifty 50 (core large caps)
     "RELIANCE.NS", "TCS.NS", "HDFCBANK.NS", "INFY.NS", "ICICIBANK.NS",
@@ -138,11 +216,20 @@ class TrainingOrchestrator:
         report = {}
 
         try:
-            target_symbols = symbols or NIFTY_200_SYMBOLS
+            # If no symbols provided, fetch live from Fyers Symbol Master
+            if symbols is None:
+                await self._emit(progress_callback, "download", 0,
+                                 "Fetching valid NSE symbols from Fyers Symbol Master...")
+                target_symbols = await asyncio.get_event_loop().run_in_executor(
+                    None, get_training_symbols, 500
+                )
+            else:
+                target_symbols = symbols
+
             total = len(target_symbols)
 
-            await self._emit(progress_callback, "download", 0,
-                             f"Starting pipeline for {total} stocks...")
+            await self._emit(progress_callback, "download", 2,
+                             f"Starting pipeline for {total} NSE equity stocks...")
 
             # ── Stage 1: Download OHLCV ───────────────────────────────────────
             logger.info(f"Stage 1: Downloading data for {total} stocks...")

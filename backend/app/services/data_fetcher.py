@@ -470,14 +470,14 @@ class DataFetcher:
     def _fetch_history_sync(
         symbol: str, period: str, interval: str
     ) -> Optional[pd.DataFrame]:
-        """Synchronous yfinance history fetch with explicit date ranges.
+        """Synchronous yfinance history fetch.
         
-        Uses start/end dates instead of period string for reliability
-        with yfinance 1.4.1+ where period='3y' is broken for some symbols.
+        Uses yf.download() instead of ticker.history() to correctly handle
+        timezone-aware data in yfinance 1.4.x (fixes 'no timezone found' error).
         """
         from datetime import date, timedelta as td
         
-        # Convert period string to explicit date range (more reliable in yfinance 1.4.1)
+        # Convert period string to explicit date range
         period_days = {
             "1mo": 30, "3mo": 90, "6mo": 180,
             "1y": 365, "2y": 730, "3y": 1095, "5y": 1825
@@ -487,17 +487,26 @@ class DataFetcher:
         start_dt = end_dt - td(days=days)
         
         try:
-            ticker = yf.Ticker(symbol)
-            df = ticker.history(
+            # yf.download() handles timezone correctly in yfinance 1.4.x
+            df = yf.download(
+                tickers=symbol,
                 start=start_dt.strftime("%Y-%m-%d"),
                 end=end_dt.strftime("%Y-%m-%d"),
                 interval=interval,
-                auto_adjust=True
+                auto_adjust=True,
+                progress=False,
+                threads=False,
             )
-            if not df.empty:
+            if df is not None and not df.empty:
+                # yf.download returns MultiIndex columns for single ticker, flatten
+                if isinstance(df.columns, pd.MultiIndex):
+                    df.columns = df.columns.get_level_values(0)
                 df.columns = [c.title() for c in df.columns]
-                df.index = pd.to_datetime(df.index)
+                df.index = pd.to_datetime(df.index, utc=True).tz_localize(None)
                 df = df.sort_index()
+                for col in ["Open", "High", "Low", "Close", "Volume"]:
+                    if col not in df.columns:
+                        return None
                 return df[["Open", "High", "Low", "Close", "Volume"]]
         except Exception as e:
             logger.debug(f"yfinance failed for {symbol}: {e}")

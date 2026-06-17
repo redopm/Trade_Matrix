@@ -120,6 +120,17 @@ class FyersDataClient:
         from datetime import datetime, timedelta
         start_date = datetime.strptime(range_from, "%Y-%m-%d").date()
         end_date = datetime.strptime(range_to, "%Y-%m-%d").date()
+
+        # Fyers daily data limit: max 2 years (730 days) back.
+        # Requesting older data returns -300 'Invalid symbol' error.
+        if resolution in ("1D", "D"):
+            fyers_limit = date.today() - timedelta(days=729)
+            if start_date < fyers_limit:
+                logger.debug(
+                    f"Clamping {fyers_sym} start {start_date} → {fyers_limit} "
+                    f"(Fyers 2-year daily limit)"
+                )
+                start_date = fyers_limit
         
         all_candles = []
         current_start = start_date
