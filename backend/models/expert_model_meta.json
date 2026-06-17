@@ -1,142 +1,184 @@
 {
-  "trained_at": "2026-06-17T09:46:37.301057",
-  "n_samples": 59100,
-  "n_features": 23,
-  "n_classes": 7,
+  "trained_at": "2026-06-17T11:09:00.522249",
+  "n_samples": 25425,
+  "n_features": 30,
+  "n_classes": 12,
   "classes": [
-    "ascending_triangle",
-    "cup_handle",
-    "descending_triangle",
+    "bearish_engulfing",
+    "bullish_engulfing",
     "double_bottom",
     "double_top",
+    "hammer",
     "hs_bottom",
-    "no_pattern"
+    "hs_top",
+    "no_pattern",
+    "rising_wedge",
+    "shooting_star",
+    "triple_bottom",
+    "triple_top"
   ],
-  "cv_accuracy": 0.9207,
-  "cv_std": 0.0015,
-  "train_accuracy": 0.9273,
+  "cv_accuracy": 0.9955,
+  "cv_std": 0.0003,
+  "train_accuracy": 1.0,
   "classification_report": {
-    "ascending_triangle": {
-      "precision": 1.0,
-      "recall": 0.9523809523809523,
-      "f1-score": 0.975609756097561,
-      "support": 21.0
-    },
-    "cup_handle": {
-      "precision": 1.0,
-      "recall": 0.991304347826087,
-      "f1-score": 0.9956331877729258,
-      "support": 115.0
-    },
-    "descending_triangle": {
+    "bearish_engulfing": {
       "precision": 1.0,
       "recall": 1.0,
       "f1-score": 1.0,
-      "support": 210.0
+      "support": 1103.0
+    },
+    "bullish_engulfing": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1-score": 1.0,
+      "support": 875.0
     },
     "double_bottom": {
-      "precision": 0.9161631419939577,
-      "recall": 0.9982169798381566,
-      "f1-score": 0.9554315720380703,
-      "support": 21873.0
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1-score": 1.0,
+      "support": 53.0
     },
     "double_top": {
-      "precision": 0.929082710560338,
-      "recall": 0.9992877734441241,
-      "f1-score": 0.9629072845517828,
-      "support": 29485.0
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1-score": 1.0,
+      "support": 117.0
+    },
+    "hammer": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1-score": 1.0,
+      "support": 130.0
     },
     "hs_bottom": {
-      "precision": 0.9919484702093397,
-      "recall": 0.9871794871794872,
-      "f1-score": 0.989558232931727,
-      "support": 624.0
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1-score": 1.0,
+      "support": 131.0
+    },
+    "hs_top": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1-score": 1.0,
+      "support": 20.0
     },
     "no_pattern": {
-      "precision": 0.983011583011583,
-      "recall": 0.37595983461311283,
-      "f1-score": 0.5439008758812219,
-      "support": 6772.0
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1-score": 1.0,
+      "support": 190.0
     },
-    "accuracy": 0.9273096446700507,
+    "rising_wedge": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1-score": 1.0,
+      "support": 5.0
+    },
+    "shooting_star": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1-score": 1.0,
+      "support": 183.0
+    },
+    "triple_bottom": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1-score": 1.0,
+      "support": 13102.0
+    },
+    "triple_top": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1-score": 1.0,
+      "support": 9516.0
+    },
+    "accuracy": 1.0,
     "macro avg": {
-      "precision": 0.9743151293964598,
-      "recall": 0.9006184821831315,
-      "f1-score": 0.9175772727533269,
-      "support": 59100.0
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1-score": 1.0,
+      "support": 25425.0
     },
     "weighted avg": {
-      "precision": 0.931559567026573,
-      "recall": 0.9273096446700507,
-      "f1-score": 0.9126098604143317,
-      "support": 59100.0
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1-score": 1.0,
+      "support": 25425.0
     }
   },
   "feature_importance": {
-    "n_peaks": 0.06477449089288712,
-    "n_troughs": 0.009527942165732384,
-    "peak_height_mean": 0.005823775660246611,
-    "peak_height_std": 0.008202461525797844,
-    "trough_depth_mean": 0.019665632396936417,
-    "trough_depth_std": 0.0061465417966246605,
-    "peak_symmetry_score": 0.029910193756222725,
-    "trough_symmetry_score": 0.06043010950088501,
-    "upper_trendline_slope": 0.05773526057600975,
-    "lower_trendline_slope": 0.08782734721899033,
-    "trendline_convergence": 0.005384848918765783,
-    "neckline_level_pct": 0.009865316562354565,
-    "neckline_slope": 0.02341623231768608,
-    "volume_at_breakout_ratio": 0.012829447165131569,
-    "volume_trend_slope": 0.009796952828764915,
-    "volume_peak_alignment": 0.027132652699947357,
-    "obv_slope": 0.1103137657046318,
-    "rsi_at_window_end": 0.03398209810256958,
-    "rsi_trend_slope": 0.008483856916427612,
-    "macd_crossovers_count": 0.005921457428485155,
-    "price_range_pct": 0.018347354605793953,
-    "recovery_from_low_pct": 0.32742178440093994,
-    "pattern_compactness": 0.057060401886701584
+    "n_peaks": 0.05206316336989403,
+    "n_troughs": 0.040295202285051346,
+    "peak_height_mean": 0.0014415016630664468,
+    "peak_height_std": 0.003868676023557782,
+    "trough_depth_mean": 0.0017684940248727798,
+    "trough_depth_std": 0.0036790287122130394,
+    "peak_symmetry_score": 0.04294247925281525,
+    "trough_symmetry_score": 0.029744241386651993,
+    "upper_trendline_slope": 0.04233723133802414,
+    "lower_trendline_slope": 0.033355049788951874,
+    "trendline_convergence": 0.00253746984526515,
+    "neckline_level_pct": 0.003361097304150462,
+    "neckline_slope": 0.027741165831685066,
+    "volume_at_breakout_ratio": 0.0010891830315813422,
+    "volume_trend_slope": 0.000967932865023613,
+    "volume_peak_alignment": 0.0009959532180801034,
+    "obv_slope": 0.004508746322244406,
+    "rsi_at_window_end": 0.07384834438562393,
+    "rsi_trend_slope": 0.007146831136196852,
+    "macd_crossovers_count": 0.0010557776549831033,
+    "price_range_pct": 0.004699661862105131,
+    "recovery_from_low_pct": 0.3008265793323517,
+    "pattern_compactness": 0.02112342044711113,
+    "last_candle_body_pct": 0.009974400512874126,
+    "last_candle_upper_wick_pct": 0.025131069123744965,
+    "last_candle_lower_wick_pct": 0.02184937708079815,
+    "last_candle_is_bullish": 0.04564392566680908,
+    "prev_candle_body_pct": 0.005767752882093191,
+    "prev_candle_is_bullish": 0.06182808801531792,
+    "engulfing_score": 0.12840816378593445
   },
   "top_features": [
     [
       "recovery_from_low_pct",
-      0.32742178440093994
+      0.3008265793323517
     ],
     [
-      "obv_slope",
-      0.1103137657046318
-    ],
-    [
-      "lower_trendline_slope",
-      0.08782734721899033
-    ],
-    [
-      "n_peaks",
-      0.06477449089288712
-    ],
-    [
-      "trough_symmetry_score",
-      0.06043010950088501
-    ],
-    [
-      "upper_trendline_slope",
-      0.05773526057600975
-    ],
-    [
-      "pattern_compactness",
-      0.057060401886701584
+      "engulfing_score",
+      0.12840816378593445
     ],
     [
       "rsi_at_window_end",
-      0.03398209810256958
+      0.07384834438562393
+    ],
+    [
+      "prev_candle_is_bullish",
+      0.06182808801531792
+    ],
+    [
+      "n_peaks",
+      0.05206316336989403
+    ],
+    [
+      "last_candle_is_bullish",
+      0.04564392566680908
     ],
     [
       "peak_symmetry_score",
-      0.029910193756222725
+      0.04294247925281525
     ],
     [
-      "volume_peak_alignment",
-      0.027132652699947357
+      "upper_trendline_slope",
+      0.04233723133802414
+    ],
+    [
+      "n_troughs",
+      0.040295202285051346
+    ],
+    [
+      "lower_trendline_slope",
+      0.033355049788951874
     ]
   ],
   "model_path": "C:\\Users\\Omprakash Maury\\Documents\\project\\Trade_matrix\\backend\\models\\expert_model_weights.pth"

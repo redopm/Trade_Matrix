@@ -62,53 +62,32 @@ class PatternDetector:
         self._img_transform = None
 
     def _load_model(self) -> bool:
-        """Lazy-load the PyTorch model on first use."""
+        """Lazy-load the XGBoost model bundle on first use."""
         if self._model_loaded:
             return self._model is not None
 
         model_path = Path(settings.MODEL_PATH)
-        meta_path = Path(settings.MODEL_METADATA_PATH)
         
-        if not model_path.exists() or not meta_path.exists():
-            logger.warning(f"Pattern model or metadata not found at {model_path}.")
+        if not model_path.exists():
+            logger.warning(f"Pattern model not found at {model_path}.")
             self._model_loaded = True
             return False
 
         try:
-            import torch
-            from torchvision import transforms
-            from app.models.expert_model import ExpertTradeMatrixModel
+            import joblib
             
-            # Detect device lazily
-            self._device = 'cuda' if torch.cuda.is_available() else 'cpu'
+            # Load XGBoost model bundle
+            bundle = joblib.load(str(model_path))
             
-            # Setup image transform
-            self._img_transform = transforms.Compose([
-                transforms.ToTensor(),
-                transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),
-            ])
-
-            # Read metadata
-            with open(meta_path, 'r') as f:
-                meta = json.load(f)
-            
-            self._classes = meta.get("classes", [])
-            n_classes = meta.get("n_classes", len(self._classes))
-            
-            # Load PyTorch model
-            self._model = ExpertTradeMatrixModel(n_classes=n_classes)
-            # Load state dict — weights_only=False needed for compatibility
-            self._model.load_state_dict(
-                torch.load(str(model_path), map_location=self._device, weights_only=False),
-                strict=True
-            )
-            self._model.to(self._device)
-            self._model.eval()
+            self._model = bundle["model"]
+            self._classes = bundle["classes"]
+            self._feature_names = bundle["feature_names"]
+            n_classes = bundle["n_classes"]
             
             self._model_loaded = True
             logger.info(
-                f"Expert Pattern model loaded: type=efficientnetv2_lstm, "
-                f"n_classes={n_classes}, device={self._device}"
+                f"Expert XGBoost Pattern model loaded: "
+                f"n_classes={n_classes}, features={len(self._feature_names)}"
             )
             return True
         except Exception as e:
@@ -183,7 +162,7 @@ class PatternDetector:
             "is_confluence": False,
             "chart_path": None,
             "model_used": "none",
-            "features": {}, # Empty since we don't rely on rule-based anymore
+            "features": {},
         }
 
         if df is None or df.empty or len(df) < window:
@@ -196,17 +175,17 @@ class PatternDetector:
             base_result["error"] = "AI Model not loaded"
             return _clean_numpy(base_result)
 
-        # ── Run AI Inference (Offloaded to thread) ──
+        # ── Run AI Inference (XGBoost) ──
         try:
-            def _run_inference():
-                import torch
-                img_tensor, num_tensor = self._prepare_tensors(df, window_size=window)
-                with torch.no_grad():
-                    out = self._model(img_tensor, num_tensor)
-                    proba = torch.nn.functional.softmax(out, dim=1)[0].cpu().numpy()
-                return proba
-
-            proba = await asyncio.to_thread(_run_inference)
+            features = self.extractor.extract(df, window_days=window)
+            if not features:
+                base_result["pattern_name"] = "no_pattern"
+                return _clean_numpy(base_result)
+            
+            base_result["features"] = features
+            
+            X_arr = np.array([[features.get(name, 0.0) for name in self._feature_names]], dtype=np.float32)
+            proba = self._model.predict_proba(X_arr)[0]
             
             all_scores = {cls: round(float(p), 4) for cls, p in zip(self._classes, proba)}
             top_idx = int(np.argmax(proba))
@@ -228,7 +207,7 @@ class PatternDetector:
                 "confidence": top_confidence,
                 "is_bullish": is_bullish,
                 "all_scores": all_scores,
-                "model_used": "expert_vision"
+                "model_used": "expert_xgboost"
             })
             
         except Exception as e:
