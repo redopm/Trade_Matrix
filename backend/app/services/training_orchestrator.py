@@ -46,7 +46,7 @@ _FALLBACK_SYMBOLS = [
     "LT.NS", "AXISBANK.NS", "ASIANPAINT.NS", "MARUTI.NS", "SUNPHARMA.NS",
     "BAJFINANCE.NS", "TITAN.NS", "WIPRO.NS", "ONGC.NS", "NTPC.NS",
     "POWERGRID.NS", "ULTRACEMCO.NS", "NESTLEIND.NS", "TECHM.NS", "HCLTECH.NS",
-    "BAJAJFINSV.NS", "COALINDIA.NS", "GRASIM.NS", "JSWSTEEL.NS", "TATAMOTORS.NS",
+    "BAJAJFINSV.NS", "COALINDIA.NS", "GRASIM.NS", "JSWSTEEL.NS",
     "TATASTEEL.NS", "HINDALCO.NS", "DIVISLAB.NS", "CIPLA.NS", "APOLLOHOSP.NS",
     "DRREDDY.NS", "EICHERMOT.NS", "BAJAJ-AUTO.NS", "HEROMOTOCO.NS", "BRITANNIA.NS",
 ]
@@ -92,9 +92,9 @@ def get_training_symbols(max_symbols: int = 500) -> list[str]:
 
         # 2. Extract our curated Large-cap & Mid-cap universe
         # This prevents training on manipulated micro-caps/penny stocks
-        from app.services.data_fetcher import DataFetcher
+        from app.services.data_fetcher import SECTOR_UNIVERSE
         curated_symbols = []
-        for sector, symbols in DataFetcher.SECTOR_UNIVERSE.items():
+        for sector, symbols in SECTOR_UNIVERSE.items():
             for sym in symbols:
                 # Remove .NS and .BO suffix for comparison
                 ticker = sym.split(".")[0]

@@ -122,7 +122,7 @@ SECTOR_UNIVERSE: dict[str, list[str]] = {
     # ── 5. Automobile & Auto Components (~45) ────────────────────────────────
     "Automobile & Auto Components": [
         # OEMs
-        "MARUTI.NS", "TATAMOTORS.NS", "M&M.NS", "HEROMOTOCO.NS", "BAJAJ-AUTO.NS",
+        "MARUTI.NS", "M&M.NS", "HEROMOTOCO.NS", "BAJAJ-AUTO.NS",
         "EICHERMOT.NS", "TVSMOTORS.NS", "ASHOKLEY.NS", "ESCORTS.NS", "FORCEMOT.NS",
         "OLECTRA.NS",
         # Tyres

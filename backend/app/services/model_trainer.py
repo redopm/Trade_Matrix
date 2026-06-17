@@ -62,7 +62,6 @@ class PatternModelTrainer:
         "reg_lambda": 1.0,
         "objective": "multi:softprob",
         "eval_metric": "mlogloss",
-        "use_label_encoder": False,
         "random_state": 42,
         "n_jobs": -1,         # Use all CPU cores
         "tree_method": "hist",  # Fast histogram method

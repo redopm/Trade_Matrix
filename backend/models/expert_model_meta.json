@@ -1,6 +1,6 @@
 {
-  "trained_at": "2026-06-17T09:16:32.262148",
-  "n_samples": 27261,
+  "trained_at": "2026-06-17T09:37:19.975199",
+  "n_samples": 43301,
   "n_features": 23,
   "n_classes": 7,
   "classes": [
@@ -12,131 +12,131 @@
     "hs_bottom",
     "no_pattern"
   ],
-  "cv_accuracy": 0.8367,
-  "cv_std": 0.0042,
-  "train_accuracy": 0.8693,
+  "cv_accuracy": 0.893,
+  "cv_std": 0.0013,
+  "train_accuracy": 0.9056,
   "classification_report": {
     "ascending_triangle": {
-      "precision": 1.0,
-      "recall": 0.625,
-      "f1-score": 0.7692307692307693,
-      "support": 8.0
-    },
-    "cup_handle": {
       "precision": 1.0,
       "recall": 0.9375,
       "f1-score": 0.967741935483871,
       "support": 16.0
     },
+    "cup_handle": {
+      "precision": 1.0,
+      "recall": 0.9879518072289156,
+      "f1-score": 0.9939393939393939,
+      "support": 83.0
+    },
     "descending_triangle": {
       "precision": 1.0,
       "recall": 1.0,
       "f1-score": 1.0,
-      "support": 96.0
+      "support": 166.0
     },
     "double_bottom": {
-      "precision": 0.8577101816645543,
-      "recall": 0.9933457285448674,
-      "f1-score": 0.9205586288201687,
-      "support": 10219.0
+      "precision": 0.8888125107406771,
+      "recall": 0.9980060461825433,
+      "f1-score": 0.9402496667070658,
+      "support": 15547.0
     },
     "double_top": {
-      "precision": 0.8691140024783147,
-      "recall": 0.9891582194799471,
-      "f1-score": 0.9252586882137115,
-      "support": 11345.0
+      "precision": 0.9091069149170298,
+      "recall": 0.9965261024799769,
+      "f1-score": 0.9508113706985845,
+      "support": 20726.0
     },
     "hs_bottom": {
-      "precision": 0.9953703703703703,
-      "recall": 0.9641255605381166,
-      "f1-score": 0.979498861047836,
-      "support": 223.0
+      "precision": 0.9904534606205251,
+      "recall": 0.9810874704491725,
+      "f1-score": 0.9857482185273159,
+      "support": 423.0
     },
     "no_pattern": {
-      "precision": 0.9142988084326306,
-      "recall": 0.37261860291370935,
-      "f1-score": 0.5294585987261147,
-      "support": 5354.0
+      "precision": 0.9680720425706099,
+      "recall": 0.37302839116719244,
+      "f1-score": 0.5385403620630764,
+      "support": 6340.0
     },
-    "accuracy": 0.8693371483071054,
+    "accuracy": 0.9055910948938823,
     "macro avg": {
-      "precision": 0.9480704804208386,
-      "recall": 0.8402497302109486,
-      "f1-score": 0.870249640217496,
-      "support": 27261.0
+      "precision": 0.9652064184069774,
+      "recall": 0.8962999739296859,
+      "f1-score": 0.9110044210599011,
+      "support": 43301.0
     },
     "weighted avg": {
-      "precision": 0.8753223329110251,
-      "recall": 0.8693371483071054,
-      "f1-score": 0.846448616940418,
-      "support": 27261.0
+      "precision": 0.9118047293779777,
+      "recall": 0.9055910948938823,
+      "f1-score": 0.8872745726420933,
+      "support": 43301.0
     }
   },
   "feature_importance": {
-    "n_peaks": 0.013811497949063778,
-    "n_troughs": 0.011880957521498203,
-    "peak_height_mean": 0.010512511245906353,
-    "peak_height_std": 0.012400730513036251,
-    "trough_depth_mean": 0.023060597479343414,
-    "trough_depth_std": 0.011680317111313343,
-    "peak_symmetry_score": 0.010786258615553379,
-    "trough_symmetry_score": 0.05365659296512604,
-    "upper_trendline_slope": 0.044369082897901535,
-    "lower_trendline_slope": 0.05665234103798866,
-    "trendline_convergence": 0.010320005938410759,
-    "neckline_level_pct": 0.01296744029968977,
-    "neckline_slope": 0.0323941670358181,
-    "volume_at_breakout_ratio": 0.02095870114862919,
-    "volume_trend_slope": 0.01629825495183468,
-    "volume_peak_alignment": 0.03267652541399002,
-    "obv_slope": 0.13400153815746307,
-    "rsi_at_window_end": 0.02470402792096138,
-    "rsi_trend_slope": 0.013131987303495407,
-    "macd_crossovers_count": 0.012203924357891083,
-    "price_range_pct": 0.0398273840546608,
-    "recovery_from_low_pct": 0.3300687372684479,
-    "pattern_compactness": 0.07163646072149277
+    "n_peaks": 0.06711990386247635,
+    "n_troughs": 0.01168489083647728,
+    "peak_height_mean": 0.007550552487373352,
+    "peak_height_std": 0.009610895998775959,
+    "trough_depth_mean": 0.023873627185821533,
+    "trough_depth_std": 0.007842796854674816,
+    "peak_symmetry_score": 0.028341535478830338,
+    "trough_symmetry_score": 0.057696178555488586,
+    "upper_trendline_slope": 0.056824058294296265,
+    "lower_trendline_slope": 0.07262695580720901,
+    "trendline_convergence": 0.00688148895278573,
+    "neckline_level_pct": 0.01137094758450985,
+    "neckline_slope": 0.027808355167508125,
+    "volume_at_breakout_ratio": 0.016370834782719612,
+    "volume_trend_slope": 0.012048165313899517,
+    "volume_peak_alignment": 0.030448203906416893,
+    "obv_slope": 0.11615761369466782,
+    "rsi_at_window_end": 0.03249894082546234,
+    "rsi_trend_slope": 0.010168636217713356,
+    "macd_crossovers_count": 0.007232923060655594,
+    "price_range_pct": 0.0298745259642601,
+    "recovery_from_low_pct": 0.31328877806663513,
+    "pattern_compactness": 0.04267922043800354
   },
   "top_features": [
     [
       "recovery_from_low_pct",
-      0.3300687372684479
+      0.31328877806663513
     ],
     [
       "obv_slope",
-      0.13400153815746307
-    ],
-    [
-      "pattern_compactness",
-      0.07163646072149277
+      0.11615761369466782
     ],
     [
       "lower_trendline_slope",
-      0.05665234103798866
+      0.07262695580720901
+    ],
+    [
+      "n_peaks",
+      0.06711990386247635
     ],
     [
       "trough_symmetry_score",
-      0.05365659296512604
+      0.057696178555488586
     ],
     [
       "upper_trendline_slope",
-      0.044369082897901535
+      0.056824058294296265
     ],
     [
-      "price_range_pct",
-      0.0398273840546608
-    ],
-    [
-      "volume_peak_alignment",
-      0.03267652541399002
-    ],
-    [
-      "neckline_slope",
-      0.0323941670358181
+      "pattern_compactness",
+      0.04267922043800354
     ],
     [
       "rsi_at_window_end",
-      0.02470402792096138
+      0.03249894082546234
+    ],
+    [
+      "volume_peak_alignment",
+      0.030448203906416893
+    ],
+    [
+      "price_range_pct",
+      0.0298745259642601
     ]
   ],
   "model_path": "C:\\Users\\Omprakash Maury\\Documents\\project\\Trade_matrix\\backend\\models\\expert_model_weights.pth"
