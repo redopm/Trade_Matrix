@@ -52,42 +52,42 @@ NIFTY_200_SYMBOLS = [
     "BAJAJHLDNG.NS", "3MINDIA.NS", "AMBUJACEM.NS", "ACC.NS", "RAMCOCEM.NS",
     "SAIL.NS", "NMDC.NS", "VEDL.NS", "HINDZINC.NS", "NATIONALUM.NS",
     "ZOMATO.NS", "NYKAA.NS", "PAYTM.NS", "POLICYBZR.NS", "DELHIVERY.NS",
-    "IRCTC.NS", "INDIAMART.NS", "NAUKRI.NS", "JUSTDIAL.NS", "MCLEODRUSEL.NS",
-    "MPHASIS.NS", "HEXAWARE.NS", "LTIM.NS", "PERSISTENT.NS", "COFORGE.NS",
-    "OFSS.NS", "KPIT.NS", "TATAELXSI.NS", "ZENSARTECH.NS", "NIITTECH.NS",
+    "IRCTC.NS", "INDIAMART.NS", "NAUKRI.NS", "JUSTDIAL.NS",
+    "MPHASIS.NS", "LTIM.NS", "PERSISTENT.NS", "COFORGE.NS",
+    "OFSS.NS", "KPITTECH.NS", "TATAELXSI.NS", "ZENSARTECH.NS",
     # Mid Cap quality
     "CROMPTON.NS", "POLYCAB.NS", "APLAPOLLO.NS", "KALYANKJIL.NS", "ABCAPITAL.NS",
-    "CHOLAFIN.NS", "BAJAJCON.NS", "PIRAMALENT.NS", "TORNTPHARM.NS", "ALKEM.NS",
-    "LUPIN.NS", "BIOCON.NS", "AUROPHARMA.NS", "GLENMARK.NS", "IPCA.NS",
+    "CHOLAFIN.NS", "BAJAJCON.NS", "PIRAMAL.NS", "TORNTPHARM.NS", "ALKEM.NS",
+    "LUPIN.NS", "BIOCON.NS", "AUROPHARMA.NS", "GLENMARK.NS", "IPCALAB.NS",
     "PFIZER.NS", "ABBOTINDIA.NS", "METROPOLIS.NS", "LALPATHLAB.NS", "THYROCARE.NS",
-    "ASTRAL.NS", "FINOLEX.NS", "GSFC.NS", "CHAMBLFERT.NS", "COROMANDEL.NS",
-    "UPL.NS", "PI.NS", "RALLIS.NS", "BAYER.NS", "SHREECEM.NS",
-    "INDIGO.NS", "INTERGLOBE.NS", "SPICEJET.NS", "GMRINFRA.NS", "IRB.NS",
+    "ASTRAL.NS", "FINOLEXCAB.NS", "GSFC.NS", "CHAMBLFERT.NS", "COROMANDEL.NS",
+    "UPL.NS", "PIIND.NS", "RALLIS.NS", "BAYERCROP.NS", "SHREECEM.NS",
+    "INDIGO.NS", "GMRINFRA.NS",
     "ASHOKLEY.NS", "ESCORTS.NS", "BALKRISIND.NS", "APOLLOTYRE.NS", "MRF.NS",
-    "CEAT.NS", "JKTYRE.NS", "GODFRYPHLP.NS", "MCDOWELL-N.NS", "RADICO.NS",
-    "VBL.NS", "VAIBHAVGBL.NS", "TITAN.NS", "PCJEWELLER.NS", "SENCO.NS",
+    "CEATLTD.NS", "JKTYRE.NS", "GODFRYPHLP.NS", "UNITDSPR.NS", "RADICO.NS",
+    "VBL.NS", "TITAN.NS", "SENCO.NS",
     # Banking & NBFC
     "FEDERALBNK.NS", "IDFCFIRSTB.NS", "BANDHANBNK.NS", "RBLBANK.NS", "KTKBANK.NS",
-    "KARURVYSYA.NS", "DCBBANK.NS", "UJJIVANSFB.NS", "EQUITAS.NS", "SURYODAY.NS",
-    "MANAPPURAM.NS", "AAVAS.NS", "HOMEFIRST.NS", "REPCO.NS", "APTUS.NS",
+    "KARURVYSYA.NS", "DCBBANK.NS", "UJJIVANSFB.NS", "EQUITASBNK.NS", "SURYODAY.NS",
+    "MANAPPURAM.NS", "AAVAS.NS", "HOMEFIRST.NS", "REPCOHOME.NS", "APTUS.NS",
     # IT / Tech
-    "MINDTREE.NS", "CYIENT.NS", "MPHASIS.NS", "BIRLASOFT.NS", "MASTEK.NS",
-    "HAPPSTMNDS.NS", "TANLA.NS", "INTELLECT.NS", "NEWGEN.NS", "ZENSAR.NS",
+    "CYIENT.NS", "BSOFT.NS", "MASTEK.NS",
+    "HAPPSTMNDS.NS", "TANLA.NS", "INTELLECT.NS", "NEWGEN.NS",
     # Consumer
     "PAGEIND.NS", "VMART.NS", "DMART.NS", "TRENT.NS", "SHOPERSTOP.NS",
-    "BATAINDIA.NS", "RELAXO.NS", "CAMPUS.NS", "LIBERTY.NS", "KHADIM.NS",
+    "BATAINDIA.NS", "RELAXO.NS",
     # Infrastructure
-    "KEC.NS", "KALPATPOWR.NS", "ENGINERSIN.NS", "NBCC.NS", "HCC.NS",
-    "PNCINFRA.NS", "SADBHAV.NS", "BRIGADE.NS", "PRESTIGE.NS", "SOBHA.NS",
+    "KEC.NS", "KPIL.NS", "ENGINERSIN.NS", "NBCC.NS",
+    "PNCINFRA.NS", "BRIGADE.NS", "PRESTIGE.NS", "SOBHA.NS",
     # Energy
-    "TATAPOWER.NS", "CESC.NS", "TORNTPOWER.NS", "JSPL.NS", "MOIL.NS",
+    "TATAPOWER.NS", "CESC.NS", "TORNTPOWER.NS", "JINDALSTEL.NS", "MOIL.NS",
     "RECLTD.NS", "PFC.NS", "IRFC.NS", "HUDCO.NS", "NHPC.NS",
     # Healthcare
-    "FORTIS.NS", "NARAYANA.NS", "ASTER.NS", "RAINBOW.NS", "MAXHEALTH.NS",
-    "HCG.NS", "SOLARINDS.NS", "GRANULES.NS", "LAURUS.NS", "DIVI.NS",
+    "FORTIS.NS", "NH.NS", "ASTERDM.NS", "RAINBOW.NS", "MAXHEALTH.NS",
+    "SOLARINDS.NS", "GRANULES.NS", "LAURUSLABS.NS", "DIVISLAB.NS",
     # Auto ancillaries
-    "MOTHERSON.NS", "BOSCHLTD.NS", "EXIDEIND.NS", "AMARAJABAT.NS", "SUNDRMFAST.NS",
-    "SUPRAJIT.NS", "GABRIEL.NS", "SANDHAR.NS", "LUMAX.NS", "ENDURANCE.NS",
+    "MOTHERSON.NS", "BOSCHLTD.NS", "EXIDEIND.NS", "SUNDRMFAST.NS",
+    "SUPRAJIT.NS", "GABRIEL.NS", "SANDHAR.NS", "LUMAXIND.NS", "ENDURANCE.NS",
 ]
 
 
@@ -113,6 +113,7 @@ class TrainingOrchestrator:
         self,
         symbols: Optional[list[str]] = None,
         progress_callback: Optional[Callable] = None,
+        use_rules_only: bool = True,
     ) -> dict[str, Any]:
         """
         Run the complete training pipeline.
@@ -120,6 +121,10 @@ class TrainingOrchestrator:
         Args:
             symbols: Override stock list (default: Nifty 200)
             progress_callback: async fn(stage, pct, message) for progress
+            use_rules_only: If True (default), use fast geometric rule-based labeling.
+                            No Gemini API calls, no rate limits, completes in minutes.
+                            If False, use Gemini Vision API for higher-accuracy labels
+                            (slow: 15 req/min free tier, ~93 min for 1400 charts).
 
         Returns:
             Pipeline report
@@ -184,26 +189,36 @@ class TrainingOrchestrator:
                         labeled_count += 1
                         continue
 
-                    # Generate chart
-                    _, img_bytes = self.chart_gen.generate_chart(
-                        symbol=sym,
-                        df=df,
-                        window_start=w_start,
-                        window_end=w_end,
-                        save=True,
-                    )
-
-                    # Label with Gemini
-                    label = await self.labeler.label_chart(
-                        symbol=sym,
-                        image_bytes=img_bytes,
-                        chart_path="",
-                        window_start=w_start,
-                        window_end=w_end,
-                        df_window=df_window,
-                    )
-                    if label:
-                        labeled_count += 1
+                    if use_rules_only:
+                        # ── Fast path: geometric rule-based labeling (no API) ──────
+                        # Uses the same 23 geometric features to classify patterns.
+                        # Completes in milliseconds per chart, no rate limits.
+                        label = self.labeler._label_with_rules(sym, df_window, w_start, w_end)
+                        if label:
+                            label["symbol"] = sym
+                            label["chart_path"] = ""
+                            label["window_start"] = w_start
+                            label["window_end"] = w_end
+                            label["label_source"] = "rule_based"
+                            label["created_at"] = datetime.now().isoformat()
+                            features = self.extractor.extract(df_window)
+                            if features:
+                                label["features"] = features
+                            self.labeler._save_label(label)
+                            labeled_count += 1
+                    else:
+                        # ── Slow path: Gemini Vision API (optional, high accuracy) ──
+                        # 15 req/min on free tier. ~93 min for 1400 charts.
+                        _, img_bytes = self.chart_gen.generate_chart(
+                            symbol=sym, df=df,
+                            window_start=w_start, window_end=w_end, save=True,
+                        )
+                        label = await self.labeler.label_chart(
+                            symbol=sym, image_bytes=img_bytes, chart_path="",
+                            window_start=w_start, window_end=w_end, df_window=df_window,
+                        )
+                        if label:
+                            labeled_count += 1
 
                     existing_labels[cache_key] = True
 
