@@ -151,13 +151,15 @@ class FyersDataClient:
             res = self.fyers.history(data=data)
             
             if res.get("s") != "ok":
-                # 'no_data' (code=200) means this date range has no candles yet
-                # (e.g., today's date before market closes). Skip and continue.
-                if res.get("code") == 200 and res.get("s") == "no_data":
+                # 'no_data' means this date range has no candles.
+                # Can happen for: today's date, illiquid micro-caps, recently listed stocks.
+                # Silently skip this chunk — don't log as error, just move on.
+                if res.get("s") == "no_data":
                     current_start = current_end + timedelta(days=1)
                     continue
+                # Actual error (invalid symbol, auth failure, etc.) — log and stop
                 if res.get("code") != 429:
-                    logger.error(f"Failed to fetch history for {fyers_sym} ({current_start} to {current_end}): {res}")
+                    logger.debug(f"Fyers history unavailable for {fyers_sym} ({current_start} to {current_end}): {res.get('message', res.get('s'))}")
                 break
                 
             candles = res.get("candles", [])

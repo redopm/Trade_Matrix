@@ -78,25 +78,35 @@ def get_training_symbols(max_symbols: int = 500) -> list[str]:
         #   Col 0:  fytoken (e.g., 101000000016921)
         #   Col 1:  company name (e.g., "20 MICRONS LTD")
         #   Col 9:  symbol ticker WITH exchange (e.g., "NSE:20MICRONS-EQ")
+        #   Col 12: exchange_token (numeric — lower = more established/liquid stock)
         #   Col 13: symbol ticker ONLY (e.g., "20MICRONS")
         df = pd.read_csv(io.StringIO(resp.text), header=None, low_memory=False)
 
         # Filter for NSE equity symbols using column 9 ("NSE:RELIANCE-EQ" format)
         eq_mask = df[9].astype(str).str.endswith("-EQ")
-        ticker_col = df[eq_mask][13].astype(str)  # Col 13 = clean ticker "RELIANCE"
+        eq_df = df[eq_mask].copy()
+
+        # Sort by exchange_token (col 12, ascending).
+        # Lower exchange_token = older listing = more established company = better liquidity.
+        # This ensures we pick Nifty 500 quality stocks first, not illiquid micro-caps.
+        eq_df[12] = pd.to_numeric(eq_df[12], errors="coerce")
+        eq_df = eq_df.sort_values(12, ascending=True)
 
         # Convert "RELIANCE" → "RELIANCE.NS"
         ns_symbols = []
-        for ticker in ticker_col:
+        for ticker in eq_df[13].astype(str):
             ticker = ticker.strip()
-            # Skip bad values: 'nan', empty, too long (indices/ETFs have long names)
+            # Skip bad values: 'nan', empty, too long
             if ticker and ticker != "nan" and len(ticker) <= 20:
                 ns_symbols.append(f"{ticker}.NS")
 
         # Deduplicate and limit count
         ns_symbols = list(dict.fromkeys(ns_symbols))[:max_symbols]
 
-        logger.info(f"Fyers Symbol Master: {len(ns_symbols)} valid NSE EQ symbols fetched.")
+        logger.info(
+            f"Fyers Symbol Master: {len(ns_symbols)} valid NSE EQ symbols fetched "
+            f"(sorted by liquidity/exchange_token)."
+        )
         return ns_symbols
 
     except Exception as e:
