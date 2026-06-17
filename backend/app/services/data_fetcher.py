@@ -61,9 +61,9 @@ SECTOR_UNIVERSE: dict[str, list[str]] = {
         # PSU banks
         "SBIN.NS", "PNB.NS", "BANKBARODA.NS", "CANBK.NS", "UNIONBANK.NS",
         "IOB.NS", "INDIANB.NS", "CENTRALBK.NS", "BANKINDIA.NS", "MAHABANK.NS",
-        "UCOBANK.NS", "JKBANK.NS", "KTKBANK.NS", "CSBBANK.NS", "DCBBANK.NS",
+        "UCOBANK.NS", "KTKBANK.NS", "CSBBANK.NS", "DCBBANK.NS",
         # Small finance banks
-        "EQUITASBNK.NS", "SURYODAY.NS", "UJJIVAN.NS", "UTKARSHBNK.NS", "ESAFSFB.NS",
+        "EQUITASBNK.NS", "SURYODAY.NS", "UJJIVANSFB.NS", "UTKARSHBNK.NS", "ESAFSFB.NS",
         # Insurance
         "LICI.NS", "HDFCLIFE.NS", "SBILIFE.NS", "ICICIPRULI.NS", "ICICIGI.NS",
         "STARHEALTH.NS", "NIACL.NS", "GODIGIT.NS", "MAXHEALTH.NS", "MFSL.NS",
@@ -470,53 +470,38 @@ class DataFetcher:
     def _fetch_history_sync(
         symbol: str, period: str, interval: str
     ) -> Optional[pd.DataFrame]:
-        """Synchronous yfinance history fetch with fallback to jugaad-data."""
+        """Synchronous yfinance history fetch with explicit date ranges.
+        
+        Uses start/end dates instead of period string for reliability
+        with yfinance 1.4.1+ where period='3y' is broken for some symbols.
+        """
+        from datetime import date, timedelta as td
+        
+        # Convert period string to explicit date range (more reliable in yfinance 1.4.1)
+        period_days = {
+            "1mo": 30, "3mo": 90, "6mo": 180,
+            "1y": 365, "2y": 730, "3y": 1095, "5y": 1825
+        }
+        days = period_days.get(period, 730)
+        end_dt = date.today()
+        start_dt = end_dt - td(days=days)
+        
         try:
             ticker = yf.Ticker(symbol)
-            df = ticker.history(period=period, interval=interval, auto_adjust=True)
+            df = ticker.history(
+                start=start_dt.strftime("%Y-%m-%d"),
+                end=end_dt.strftime("%Y-%m-%d"),
+                interval=interval,
+                auto_adjust=True
+            )
             if not df.empty:
-                # Standardize column names
                 df.columns = [c.title() for c in df.columns]
                 df.index = pd.to_datetime(df.index)
                 df = df.sort_index()
                 return df[["Open", "High", "Low", "Close", "Volume"]]
         except Exception as e:
-            logger.warning(f"yfinance failed for {symbol}: {e}. Trying fallback...")
-
-        # Fallback to jugaad-data if yfinance fails or returns empty
-        try:
-            from jugaad_data.nse import stock_df
-            from datetime import date, timedelta
-            
-            # Map period to days roughly
-            days = 365
-            if period == '1mo': days = 30
-            elif period == '3mo': days = 90
-            elif period == '6mo': days = 180
-            elif period == '1y': days = 365
-            elif period == '2y': days = 730
-            elif period == '5y': days = 1825
-                
-            end_date = date.today()
-            start_date = end_date - timedelta(days=days)
-            
-            clean_symbol = symbol.replace('.NS', '').replace('.BO', '')
-            logger.info(f"Using jugaad-data fallback for {clean_symbol}")
-            df = stock_df(symbol=clean_symbol, from_date=start_date, to_date=end_date, series="EQ")
-            
-            if df is not None and not df.empty:
-                df = df.set_index(pd.to_datetime(df['DATE']))
-                df = df.sort_index()
-                df = df.rename(columns={
-                    "OPEN": "Open", "HIGH": "High", "LOW": "Low", 
-                    "CLOSE": "Close", "VOLUME": "Volume"
-                })
-                return df[["Open", "High", "Low", "Close", "Volume"]]
-        except ImportError:
-            logger.error("jugaad-data is not installed. Fallback failed.")
-        except Exception as e:
-            logger.error(f"jugaad-data fallback failed for {symbol}: {e}")
-            
+            logger.debug(f"yfinance failed for {symbol}: {e}")
+        
         return None
 
     async def fetch_batch_info(
