@@ -55,6 +55,11 @@ class FeatureExtractor:
         # Pattern metrics
         "price_range_pct", "recovery_from_low_pct",
         "pattern_compactness",
+        # Candlestick specific (last 2 candles)
+        "last_candle_body_pct", "last_candle_upper_wick_pct",
+        "last_candle_lower_wick_pct", "last_candle_is_bullish",
+        "prev_candle_body_pct", "prev_candle_is_bullish",
+        "engulfing_score",
     ]
 
     def __init__(self) -> None:
@@ -82,6 +87,7 @@ class FeatureExtractor:
                 return None
 
             close = window["Close"].values
+            open_prices = window["Open"].values
             high = window["High"].values
             low = window["Low"].values
             volume = window["Volume"].values
@@ -190,6 +196,47 @@ class FeatureExtractor:
             # Pattern compactness: width-to-height ratio
             pattern_width = n
             features["pattern_compactness"] = float(pattern_width / (price_range / price_min * 100 + 1e-8))
+
+            # ── 6. Candlestick Specifics (Last 2 Candles) ─────────────────────
+            # Normalize to current candle's total length (High - Low)
+            def candle_features(idx):
+                c_o, c_c, c_h, c_l = open_prices[idx], close[idx], high[idx], low[idx]
+                c_length = max(c_h - c_l, 1e-8)
+                is_bull = 1.0 if c_c > c_o else 0.0
+                body = abs(c_c - c_o)
+                upper_wick = c_h - max(c_o, c_c)
+                lower_wick = min(c_o, c_c) - c_l
+                return (
+                    float(body / c_length),
+                    float(upper_wick / c_length),
+                    float(lower_wick / c_length),
+                    is_bull,
+                    body
+                )
+
+            l_body_pct, l_up_wick, l_dn_wick, l_is_bull, l_body_abs = candle_features(-1)
+            features["last_candle_body_pct"] = l_body_pct
+            features["last_candle_upper_wick_pct"] = l_up_wick
+            features["last_candle_lower_wick_pct"] = l_dn_wick
+            features["last_candle_is_bullish"] = l_is_bull
+
+            if len(close) >= 2:
+                p_body_pct, _, _, p_is_bull, p_body_abs = candle_features(-2)
+                features["prev_candle_body_pct"] = p_body_pct
+                features["prev_candle_is_bullish"] = p_is_bull
+                
+                # Engulfing score
+                # +1.0 for perfect bullish engulfing, -1.0 for perfect bearish engulfing
+                if l_is_bull and not p_is_bull and l_body_abs > p_body_abs:
+                    features["engulfing_score"] = float(min(l_body_abs / (p_body_abs + 1e-8), 3.0) / 3.0)
+                elif not l_is_bull and p_is_bull and l_body_abs > p_body_abs:
+                    features["engulfing_score"] = float(-min(l_body_abs / (p_body_abs + 1e-8), 3.0) / 3.0)
+                else:
+                    features["engulfing_score"] = 0.0
+            else:
+                features["prev_candle_body_pct"] = 0.0
+                features["prev_candle_is_bullish"] = 0.5
+                features["engulfing_score"] = 0.0
 
             return features
 

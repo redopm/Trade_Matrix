@@ -336,7 +336,7 @@ class PatternLabeler:
         self, features: dict[str, float]
     ) -> tuple[str, float, Optional[bool]]:
         """
-        Classify pattern using geometric rules.
+        Classify pattern using geometric and candlestick rules (29 patterns).
         Returns (pattern_name, confidence, is_bullish).
         """
         n_peaks = features.get("n_peaks", 0)
@@ -351,50 +351,6 @@ class PatternLabeler:
         vol_trend = features.get("volume_trend_slope", 0)
         rsi_end = features.get("rsi_at_window_end", 0.5)
         obv_slope = features.get("obv_slope", 0)
-
-        # ── Double Bottom: 2 troughs, symmetric, bullish ─────────────────────
-        if (n_troughs >= 2 and n_peaks >= 1 and trough_sym > 0.85
-                and recovery > 0.5 and obv_slope > 0):
-            conf = min(0.5 + trough_sym * 0.3 + recovery * 0.2, 0.92)
-            return "double_bottom", conf, True
-
-        # ── Double Top: 2 peaks, bearish ──────────────────────────
-        if n_peaks >= 2 and recovery < 0.8:
-            conf = min(0.6 + peak_sym * 0.2, 0.90)
-            return "double_top", conf, False
-
-        # ── Head & Shoulders Bottom (3 troughs, middle is deepest) ───────────
-        if (n_troughs >= 3 and features.get("trough_depth_std", 0) > 0.05
-                and trough_sym > 0.75 and obv_slope > 0):
-            conf = min(0.5 + trough_sym * 0.25 + obv_slope * 0.1, 0.88)
-            return "hs_bottom", conf, True
-
-        # ── Ascending Triangle: flat upper, rising lower ──────────────────────
-        if (abs(upper_slope) < 0.005 and lower_slope > 0.003
-                and vol_breakout > 1.2):
-            conf = min(0.55 + min(lower_slope * 50, 0.3), 0.85)
-            return "ascending_triangle", conf, True
-
-        # ── Descending Triangle: declining upper ──────────────────
-        if upper_slope < -0.001:
-            conf = min(0.6 + abs(upper_slope) * 10, 0.85)
-            return "descending_triangle", conf, False
-
-        # ── Bull Flag: strong uptrend + brief consolidation ───────────────────
-        if (lower_slope > 0.01 and upper_slope < 0 and upper_slope > -0.01
-                and vol_trend < 0 and vol_breakout > 1.5):
-            conf = 0.70
-            return "bull_flag", conf, True
-
-        # ── Bear Flag: strong downtrend + brief upward consolidation ──────────
-        if (upper_slope < -0.01 and lower_slope > 0 and lower_slope < 0.01
-                and vol_trend < 0 and vol_breakout > 1.5):
-            conf = 0.68
-            return "bear_flag", conf, False
-
-        # ── Cup & Handle: rounded bottom + slight pullback ────────────────────
-        if (recovery > 0.7 and n_troughs >= 1
-                and features.get("pattern_compactness", 0) > 0.5
                 and obv_slope > 0):
             conf = min(0.55 + recovery * 0.2, 0.80)
             return "cup_handle", conf, True
