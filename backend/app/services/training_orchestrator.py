@@ -82,30 +82,32 @@ def get_training_symbols(max_symbols: int = 500) -> list[str]:
         #   Col 13: symbol ticker ONLY (e.g., "20MICRONS")
         df = pd.read_csv(io.StringIO(resp.text), header=None, low_memory=False)
 
-        # Filter for NSE equity symbols using column 9 ("NSE:RELIANCE-EQ" format)
+        # 1. Fetch live NSE equity tickers from Fyers
+        df = pd.read_csv(io.StringIO(resp.text), header=None, low_memory=False)
         eq_mask = df[9].astype(str).str.endswith("-EQ")
-        eq_df = df[eq_mask].copy()
+        live_fyers_tickers = set([
+            str(t).strip() for t in df[eq_mask][13] 
+            if str(t).strip() and str(t).strip() != "nan"
+        ])
 
-        # Sort by exchange_token (col 12, ascending).
-        # Lower exchange_token = older listing = more established company = better liquidity.
-        # This ensures we pick Nifty 500 quality stocks first, not illiquid micro-caps.
-        eq_df[12] = pd.to_numeric(eq_df[12], errors="coerce")
-        eq_df = eq_df.sort_values(12, ascending=True)
-
-        # Convert "RELIANCE" → "RELIANCE.NS"
-        ns_symbols = []
-        for ticker in eq_df[13].astype(str):
-            ticker = ticker.strip()
-            # Skip bad values: 'nan', empty, too long
-            if ticker and ticker != "nan" and len(ticker) <= 20:
-                ns_symbols.append(f"{ticker}.NS")
+        # 2. Extract our curated Large-cap & Mid-cap universe
+        # This prevents training on manipulated micro-caps/penny stocks
+        from app.services.data_fetcher import DataFetcher
+        curated_symbols = []
+        for sector, symbols in DataFetcher.SECTOR_UNIVERSE.items():
+            for sym in symbols:
+                # Remove .NS and .BO suffix for comparison
+                ticker = sym.split(".")[0]
+                # Only include if it is a live, valid NSE equity symbol
+                if ticker in live_fyers_tickers:
+                    curated_symbols.append(f"{ticker}.NS")
 
         # Deduplicate and limit count
-        ns_symbols = list(dict.fromkeys(ns_symbols))[:max_symbols]
+        ns_symbols = list(dict.fromkeys(curated_symbols))[:max_symbols]
 
         logger.info(
-            f"Fyers Symbol Master: {len(ns_symbols)} valid NSE EQ symbols fetched "
-            f"(sorted by liquidity/exchange_token)."
+            f"Fyers Symbol Master: Validated {len(ns_symbols)} curated Large/Mid-cap "
+            f"NSE EQ symbols for training (filtered out micro-caps)."
         )
         return ns_symbols
 
