@@ -58,3 +58,4 @@ Kronos/
 *.pkl 
 data/charts/ 
 backend/database/ 
+scratch/
