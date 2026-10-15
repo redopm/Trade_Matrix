@@ -203,10 +203,11 @@ def simulate_unified_portfolio(
                         t1_exit = c_open * (1.0 - slippage_pct / 100.0)
                     else:
                         t1_exit = pos["target_1"] * (1.0 - slippage_pct / 100.0)
-                    gross_t1 = (t1_exit - pos["entry_price"]) * book_qty
-                    cash += book_qty * t1_exit
+                    t1_proceeds = book_qty * t1_exit
+                    cash += t1_proceeds
                     pos["shares"] -= book_qty
-                    pos["realized_pnl"] += gross_t1
+                    pos["t1_proceeds"] = t1_proceeds
+                    pos["t1_exit_price"] = t1_exit
                 pos["current_sl"] = pos["entry_price"] # Risk-free trail
                 remaining_positions.append(pos)
                 continue
@@ -218,13 +219,20 @@ def simulate_unified_portfolio(
 
             if exit_price is not None and exit_reason is not None:
                 rem_shares = pos["shares"]
-                proceeds = rem_shares * exit_price
-                cash += proceeds
-                gross_pnl = (exit_price - pos["entry_price"]) * rem_shares + pos["realized_pnl"]
-                buy_val = pos["cost"]
-                sell_val = proceeds + (pos["realized_pnl"] if pos["t1_hit"] else 0.0)
-                frictions = calculate_indian_frictions(buy_val, sell_val)
+                final_proceeds = rem_shares * exit_price
+                cash += final_proceeds
+
+                t1_proceeds = pos.get("t1_proceeds", 0.0) if pos["t1_hit"] else 0.0
+                total_sell_val = final_proceeds + t1_proceeds
+                total_buy_val = pos["cost"]
+                gross_pnl = total_sell_val - total_buy_val
+
+                # Exact statutory frictions calculated on full turnover (Buy + All Sells)
+                frictions = calculate_indian_frictions(total_buy_val, total_sell_val)
                 net_pnl = round(gross_pnl - frictions, 2)
+
+                # Deduct frictions directly from cash balance
+                cash -= frictions
 
                 completed_trades.append({
                     "symbol": sym,
