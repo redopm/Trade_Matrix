@@ -55,11 +55,16 @@ class FeatureExtractor:
         # Pattern metrics
         "price_range_pct", "recovery_from_low_pct",
         "pattern_compactness",
-        # Candlestick specific (last 2 candles)
+        # Candlestick specific (last 3 candles)
         "last_candle_body_pct", "last_candle_upper_wick_pct",
         "last_candle_lower_wick_pct", "last_candle_is_bullish",
-        "prev_candle_body_pct", "prev_candle_is_bullish",
-        "engulfing_score",
+        "prev_candle_body_pct", "prev_candle_upper_wick_pct",
+        "prev_candle_lower_wick_pct", "prev_candle_is_bullish",
+        "prev2_candle_body_pct", "prev2_candle_upper_wick_pct",
+        "prev2_candle_lower_wick_pct", "prev2_candle_is_bullish",
+        # Multi-candle metrics & Gaps
+        "engulfing_score", "gap_from_prev_close_pct",
+        "body_overlap_pct", "wick_overlap_pct"
     ]
 
     def __init__(self) -> None:
@@ -197,7 +202,7 @@ class FeatureExtractor:
             pattern_width = n
             features["pattern_compactness"] = float(pattern_width / (price_range / price_min * 100 + 1e-8))
 
-            # ── 6. Candlestick Specifics (Last 2 Candles) ─────────────────────
+            # ── 6. Candlestick Specifics (Last 3 Candles) ─────────────────────
             # Normalize to current candle's total length (High - Low)
             def candle_features(idx):
                 c_o, c_c, c_h, c_l = open_prices[idx], close[idx], high[idx], low[idx]
@@ -211,32 +216,60 @@ class FeatureExtractor:
                     float(upper_wick / c_length),
                     float(lower_wick / c_length),
                     is_bull,
-                    body
+                    body, c_o, c_c, c_h, c_l
                 )
 
-            l_body_pct, l_up_wick, l_dn_wick, l_is_bull, l_body_abs = candle_features(-1)
+            l_body_pct, l_up_wick, l_dn_wick, l_is_bull, l_body_abs, l_o, l_c, l_h, l_l = candle_features(-1)
             features["last_candle_body_pct"] = l_body_pct
             features["last_candle_upper_wick_pct"] = l_up_wick
             features["last_candle_lower_wick_pct"] = l_dn_wick
             features["last_candle_is_bullish"] = l_is_bull
 
-            if len(close) >= 2:
-                p_body_pct, _, _, p_is_bull, p_body_abs = candle_features(-2)
+            if len(close) >= 3:
+                p_body_pct, p_up_wick, p_dn_wick, p_is_bull, p_body_abs, p_o, p_c, p_h, p_l = candle_features(-2)
                 features["prev_candle_body_pct"] = p_body_pct
+                features["prev_candle_upper_wick_pct"] = p_up_wick
+                features["prev_candle_lower_wick_pct"] = p_dn_wick
                 features["prev_candle_is_bullish"] = p_is_bull
                 
+                p2_body_pct, p2_up_wick, p2_dn_wick, p2_is_bull, p2_body_abs, p2_o, p2_c, p2_h, p2_l = candle_features(-3)
+                features["prev2_candle_body_pct"] = p2_body_pct
+                features["prev2_candle_upper_wick_pct"] = p2_up_wick
+                features["prev2_candle_lower_wick_pct"] = p2_dn_wick
+                features["prev2_candle_is_bullish"] = p2_is_bull
+                
                 # Engulfing score
-                # +1.0 for perfect bullish engulfing, -1.0 for perfect bearish engulfing
                 if l_is_bull and not p_is_bull and l_body_abs > p_body_abs:
                     features["engulfing_score"] = float(min(l_body_abs / (p_body_abs + 1e-8), 3.0) / 3.0)
                 elif not l_is_bull and p_is_bull and l_body_abs > p_body_abs:
                     features["engulfing_score"] = float(-min(l_body_abs / (p_body_abs + 1e-8), 3.0) / 3.0)
                 else:
                     features["engulfing_score"] = 0.0
+                    
+                # Gap from previous close
+                features["gap_from_prev_close_pct"] = float((l_o - p_c) / (p_c + 1e-8) * 100)
+                
+                # Overlaps
+                overlap_h = min(l_h, p_h)
+                overlap_l = max(l_l, p_l)
+                features["wick_overlap_pct"] = float(max(0, overlap_h - overlap_l) / (max(l_h - l_l, 1e-8)))
+                
+                b_overlap_h = min(max(l_o, l_c), max(p_o, p_c))
+                b_overlap_l = max(min(l_o, l_c), min(p_o, p_c))
+                features["body_overlap_pct"] = float(max(0, b_overlap_h - b_overlap_l) / (l_body_abs + 1e-8))
             else:
                 features["prev_candle_body_pct"] = 0.0
+                features["prev_candle_upper_wick_pct"] = 0.0
+                features["prev_candle_lower_wick_pct"] = 0.0
                 features["prev_candle_is_bullish"] = 0.5
+                features["prev2_candle_body_pct"] = 0.0
+                features["prev2_candle_upper_wick_pct"] = 0.0
+                features["prev2_candle_lower_wick_pct"] = 0.0
+                features["prev2_candle_is_bullish"] = 0.5
                 features["engulfing_score"] = 0.0
+                features["gap_from_prev_close_pct"] = 0.0
+                features["body_overlap_pct"] = 0.0
+                features["wick_overlap_pct"] = 0.0
 
             return features
 

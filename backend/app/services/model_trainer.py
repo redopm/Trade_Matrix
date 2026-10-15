@@ -143,8 +143,12 @@ class PatternModelTrainer:
         logger.info(f"Cross-validation accuracy: {cv_accuracy:.2%} ± {cv_std:.2%}")
 
         # ── Step 5: Final training on full dataset ────────────────────────────
+        from sklearn.utils.class_weight import compute_sample_weight
+        sample_weights = compute_sample_weight(class_weight='balanced', y=y_encoded)
+        
         model.fit(
             X, y_encoded,
+            sample_weight=sample_weights,
             eval_set=[(X, y_encoded)],
             verbose=False,
         )

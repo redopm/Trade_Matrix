@@ -8,6 +8,7 @@ import {
   type ScreenerRunStatus,
   type Signal,
 } from "@/lib/api";
+import Link from "next/link";
 import { ChartModal } from "@/components/ChartModal";
 import {
   CheckCircle2,
@@ -26,6 +27,7 @@ import {
   Globe,
   Layers,
   RefreshCw,
+  BrainCircuit,
 } from "lucide-react";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -65,26 +67,27 @@ function FilterBadge({ passed }: { passed: boolean }) {
 
 // ─── Static sector fallback (renders even if backend is down) ────────────────
 const STATIC_SECTORS: Record<string, number> = {
-  "Financial Services": 62,
-  "Information Technology": 44,
-  "Healthcare": 49,
-  "Capital Goods": 47,
-  "Automobile & Auto Components": 36,
-  "Chemicals": 34,
-  "Construction & Real Estate": 32,
+  "Financial Services": 74,
+  "Information Technology": 42,
+  "Automobile & Auto Components": 41,
+  "Healthcare": 50,
+  "Capital Goods": 45,
+  "Chemicals": 37,
   "Fast Moving Consumer Goods": 32,
-  "Consumer Discretionary": 26,
-  "Metals & Mining": 25,
+  "Construction & Real Estate": 31,
+  "Metals & Mining": 24,
+  "Consumer Discretionary": 22,
   "Power": 18,
   "Oil Gas & Consumable Fuels": 16,
   "Textiles & Apparel": 16,
-  "Transportation & Logistics": 14,
   "Cement & Construction Materials": 14,
-  "Agriculture & Food Processing": 14,
-  "Telecommunication": 11,
+  "Transportation & Logistics": 14,
+  "Agriculture & Food Processing": 11,
+  "Telecommunication": 10,
   "Media & Entertainment": 9,
-  "Diversified": 4,
+  "Diversified": 3,
 };
+
 
 
 function SectorDropdown({
@@ -340,6 +343,7 @@ export default function ScreenerPage() {
   const [passedOnly, setPassedOnly] = useState(true);
   const [directionFilter, setDirectionFilter] = useState<string | null>(null);
   const [sortBy, setSortBy] = useState<"composite_score" | "rsi_14" | "roce">("composite_score");
+  const [minScore75, setMinScore75] = useState(false);
   const [selectedSignal, setSelectedSignal] = useState<Signal | null>(null);
   const [viewChartSymbol, setViewChartSymbol] = useState<string | null>(null);
   const [tradeSuccess, setTradeSuccess] = useState<string | null>(null);
@@ -459,7 +463,14 @@ export default function ScreenerPage() {
     }
   };
 
-  const sortedSignals = [...signals].sort((a, b) => {
+  const filteredSignals = signals.filter((sig) => {
+    if (minScore75 && (sig.composite_score ?? 0) < 75) {
+      return false;
+    }
+    return true;
+  });
+
+  const sortedSignals = [...filteredSignals].sort((a, b) => {
     if (sortBy === "composite_score") return (b.composite_score ?? 0) - (a.composite_score ?? 0);
     if (sortBy === "rsi_14") return (a.rsi_14 ?? 99) - (b.rsi_14 ?? 99);
     if (sortBy === "roce") return (b.roce ?? 0) - (a.roce ?? 0);
@@ -626,6 +637,29 @@ export default function ScreenerPage() {
 
         <div className="w-px h-5 bg-slate-200" />
 
+        <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Conviction:</div>
+        <div className="flex gap-1">
+          <button
+            onClick={() => setMinScore75(!minScore75)}
+            className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center gap-1.5 ${
+              minScore75
+                ? "bg-amber-500 text-white shadow-sm ring-2 ring-amber-300"
+                : "bg-white text-slate-600 hover:bg-slate-100 border border-slate-200"
+            }`}
+            title="Filter stocks with Composite AI Score >= 75"
+          >
+            <span>⭐</span>
+            <span>75+ High Conviction</span>
+            {minScore75 && (
+              <span className="bg-amber-600 px-1.5 py-0.2 text-[9px] font-black rounded-full uppercase tracking-wider">
+                ACTIVE
+              </span>
+            )}
+          </button>
+        </div>
+
+        <div className="w-px h-5 bg-slate-200" />
+
         <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Direction:</div>
         <div className="flex gap-1">
           <FilterChip label="All" active={directionFilter === null} onClick={() => setDirectionFilter(null)} />
@@ -771,7 +805,13 @@ export default function ScreenerPage() {
                       )}
                     </td>
                     <td className="py-3 px-4">
-                      <span className="font-mono text-sm font-bold text-amber-600">{sig.composite_score?.toFixed(1) ?? "—"}</span>
+                      {(sig.composite_score ?? 0) >= 75 ? (
+                        <span className="inline-flex items-center gap-1 font-mono text-xs font-black text-emerald-800 bg-emerald-100 border border-emerald-300 px-2 py-0.5 rounded shadow-xs">
+                          <span>⭐</span> {sig.composite_score?.toFixed(1)}
+                        </span>
+                      ) : (
+                        <span className="font-mono text-sm font-bold text-amber-600">{sig.composite_score?.toFixed(1) ?? "—"}</span>
+                      )}
                     </td>
                     <td className="py-3 px-4" onClick={(e) => e.stopPropagation()}>
                       <div className="flex gap-1">
@@ -784,18 +824,28 @@ export default function ScreenerPage() {
                       </div>
                     </td>
                     <td className="py-3 px-4" onClick={(e) => e.stopPropagation()}>
-                      {sig.passed_all && !sig.is_traded ? (
-                        <button
-                          className="flex items-center gap-1 bg-indigo-600 hover:bg-indigo-700 text-white text-[11px] font-bold py-1.5 px-2.5 rounded-lg transition-colors"
-                          onClick={() => handleTrade(sig.id)}
+                      <div className="flex items-center gap-1.5">
+                        <Link
+                          href={`/aladdin?symbol=${sig.symbol?.replace(".NS", "")}`}
+                          className="flex items-center gap-1 bg-amber-500/10 hover:bg-amber-500/20 text-amber-700 border border-amber-300 text-[11px] font-bold py-1 px-2 rounded-lg transition-all"
+                          title="Run 5-Pillar Aladdin AI Diagnosis"
                         >
-                          <Plus size={11} /> Trade
-                        </button>
-                      ) : sig.is_traded ? (
-                        <span className="text-[11px] font-bold text-slate-400 bg-slate-50 border border-slate-100 px-2 py-1 rounded">Traded</span>
-                      ) : (
-                        <span className="text-[11px] font-bold text-red-500 bg-red-50 border border-red-100 px-2 py-1 rounded">Failed</span>
-                      )}
+                          <BrainCircuit size={12} className="text-amber-600" />
+                          <span>Aladdin</span>
+                        </Link>
+                        {sig.passed_all && !sig.is_traded ? (
+                          <button
+                            className="flex items-center gap-1 bg-indigo-600 hover:bg-indigo-700 text-white text-[11px] font-bold py-1 px-2.5 rounded-lg transition-colors"
+                            onClick={() => handleTrade(sig.id)}
+                          >
+                            <Plus size={11} /> Trade
+                          </button>
+                        ) : sig.is_traded ? (
+                          <span className="text-[11px] font-bold text-slate-400 bg-slate-50 border border-slate-100 px-2 py-0.5 rounded">Traded</span>
+                        ) : (
+                          <span className="text-[11px] font-bold text-red-500 bg-red-50 border border-red-100 px-2 py-0.5 rounded">Failed</span>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))}

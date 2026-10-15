@@ -336,7 +336,7 @@ class PatternLabeler:
         self, features: dict[str, float]
     ) -> tuple[str, float, Optional[bool]]:
         """
-        Classify pattern using geometric and candlestick rules (29 patterns).
+        Classify pattern using geometric and candlestick rules (56 patterns).
         Returns (pattern_name, confidence, is_bullish).
         """
         n_peaks = features.get("n_peaks", 0)
@@ -357,136 +357,201 @@ class PatternLabeler:
         l_up_wick = features.get("last_candle_upper_wick_pct", 0)
         l_dn_wick = features.get("last_candle_lower_wick_pct", 0)
         l_bull = features.get("last_candle_is_bullish", 0) == 1.0
+        
+        p_body = features.get("prev_candle_body_pct", 0)
+        p_up_wick = features.get("prev_candle_upper_wick_pct", 0)
+        p_dn_wick = features.get("prev_candle_lower_wick_pct", 0)
         p_bull = features.get("prev_candle_is_bullish", 0) == 1.0
+        
+        p2_body = features.get("prev2_candle_body_pct", 0)
+        p2_up_wick = features.get("prev2_candle_upper_wick_pct", 0)
+        p2_dn_wick = features.get("prev2_candle_lower_wick_pct", 0)
+        p2_bull = features.get("prev2_candle_is_bullish", 0) == 1.0
+        
         engulfing = features.get("engulfing_score", 0)
+        gap_pct = features.get("gap_from_prev_close_pct", 0)
+        body_overlap = features.get("body_overlap_pct", 0)
+        wick_overlap = features.get("wick_overlap_pct", 0)
 
-        # ── 1-4. Candlestick Patterns ──────────────────────────────────────────
-        # Hammer (Bullish): Small body, long lower wick, small/no upper wick
-        if l_dn_wick > 0.6 and l_body < 0.3 and l_up_wick < 0.1 and rsi_end < 0.4:
-            return "hammer", 0.85, True
-            
-        # Shooting Star (Bearish): Small body, long upper wick, small/no lower wick
-        if l_up_wick > 0.6 and l_body < 0.3 and l_dn_wick < 0.1 and rsi_end > 0.6:
-            return "shooting_star", 0.85, False
-            
-        # Bullish Engulfing
+        # ── 1. Single-Candle Patterns (10) ──────────────────────────────────
+        # Doji variants
+        if l_body <= 0.05:
+            if l_dn_wick > 0.4 and l_up_wick > 0.4:
+                return "doji", 0.85, None
+            if l_dn_wick > 0.6 and l_up_wick <= 0.1:
+                return "dragonfly_doji", 0.85, True
+            if l_up_wick > 0.6 and l_dn_wick <= 0.1:
+                return "gravestone_doji", 0.85, False
+                
+        # Marubozu (Very large body, almost no wicks)
+        if l_body > 0.90:
+            if l_bull:
+                return "bullish_marubozu", 0.90, True
+            else:
+                return "bearish_marubozu", 0.90, False
+                
+        # Hammer & Hanging Man
+        if l_dn_wick > 0.6 and l_body < 0.3 and l_up_wick < 0.1:
+            if rsi_end < 0.4:
+                return "hammer", 0.85, True
+            elif rsi_end > 0.6:
+                return "hanging_man", 0.80, False
+                
+        # Shooting Star & Inverted Hammer
+        if l_up_wick > 0.6 and l_body < 0.3 and l_dn_wick < 0.1:
+            if rsi_end > 0.6:
+                return "shooting_star", 0.85, False
+            elif rsi_end < 0.4:
+                return "inverted_hammer", 0.80, True
+
+        # Spinning Top
+        if 0.1 < l_body < 0.3 and l_up_wick > 0.2 and l_dn_wick > 0.2:
+            return "spinning_top", 0.75, None
+
+        # ── 2. Multi-Candle Patterns (14) ───────────────────────────────────
+        # Morning / Evening Star (3 candles)
+        if p2_body > 0.5 and p_body < 0.2 and l_body > 0.5:
+            if not p2_bull and l_bull and rsi_end < 0.4:
+                return "morning_star", 0.90, True
+            if p2_bull and not l_bull and rsi_end > 0.6:
+                return "evening_star", 0.90, False
+                
+        # Three White Soldiers / Black Crows (3 candles)
+        if l_body > 0.5 and p_body > 0.5 and p2_body > 0.5:
+            if l_bull and p_bull and p2_bull:
+                return "three_white_soldiers", 0.88, True
+            if not l_bull and not p_bull and not p2_bull:
+                return "three_black_crows", 0.88, False
+                
+        # Engulfing (2 candles)
         if engulfing > 0.5 and rsi_end < 0.5:
             return "bullish_engulfing", min(0.6 + engulfing * 0.3, 0.95), True
-            
-        # Bearish Engulfing
         if engulfing < -0.5 and rsi_end > 0.5:
             return "bearish_engulfing", min(0.6 + abs(engulfing) * 0.3, 0.95), False
+            
+        # Harami (Inside Bar)
+        if body_overlap > 0.8 and l_body < p_body * 0.5:
+            if not p_bull and l_bull:
+                return "bullish_harami", 0.80, True
+            if p_bull and not l_bull:
+                return "bearish_harami", 0.80, False
+                
+        # Piercing Line / Dark Cloud Cover
+        if p_body > 0.5 and l_body > 0.5:
+            if not p_bull and l_bull and gap_pct < -0.5 and body_overlap > 0.5:
+                return "piercing_line", 0.85, True
+            if p_bull and not l_bull and gap_pct > 0.5 and body_overlap > 0.5:
+                return "dark_cloud_cover", 0.85, False
+                
+        # Tweezer Top/Bottom
+        if wick_overlap > 0.9 and l_body < 0.4 and p_body < 0.4:
+            if l_dn_wick > 0.5 and p_dn_wick > 0.5:
+                return "tweezer_bottom", 0.80, True
+            if l_up_wick > 0.5 and p_up_wick > 0.5:
+                return "tweezer_top", 0.80, False
+                
+        # Gaps
+        if gap_pct > 2.0:
+            return "gap_up", 0.85, True
+        if gap_pct < -2.0:
+            return "gap_down", 0.85, False
 
-        # ── 5-16. Reversal Patterns ───────────────────────────────────────────
-        # Double Bottom
+        # ── 3. Geometric Reversal Patterns (16) ─────────────────────────────
+        # Double / Triple Bottom
+        if n_troughs >= 3 and trough_sym > 0.80 and recovery > 0.4:
+            return "triple_bottom", 0.88, True
         if n_troughs == 2 and trough_sym > 0.85 and recovery > 0.5:
             return "double_bottom", min(0.5 + trough_sym * 0.3 + recovery * 0.2, 0.92), True
             
-        # Double Top
+        # Double / Triple Top
+        if n_peaks >= 3 and peak_sym > 0.80 and recovery < 0.7:
+            return "triple_top", 0.88, False
         if n_peaks == 2 and peak_sym > 0.85 and recovery < 0.8:
             return "double_top", min(0.5 + peak_sym * 0.3, 0.90), False
             
-        # Triple Bottom
-        if n_troughs >= 3 and trough_sym > 0.80 and recovery > 0.4:
-            return "triple_bottom", 0.88, True
-            
-        # Triple Top
-        if n_peaks >= 3 and peak_sym > 0.80 and recovery < 0.7:
-            return "triple_top", 0.88, False
-            
-        # Head & Shoulders Bottom (Inverse H&S)
+        # Head & Shoulders
         if n_troughs >= 3 and features.get("trough_depth_std", 0) > 0.05 and trough_sym > 0.7:
             return "hs_bottom", min(0.6 + trough_sym * 0.25, 0.9), True
-            
-        # Head & Shoulders Top
         if n_peaks >= 3 and features.get("peak_height_std", 0) > 0.05 and peak_sym > 0.7:
             return "hs_top", min(0.6 + peak_sym * 0.25, 0.9), False
             
-        # Rounding Bottom (Saucer)
+        # Rounding Bottom/Top
         if n_troughs >= 4 and abs(convergence) < 0.002 and recovery > 0.6:
             return "rounding_bottom", 0.80, True
-            
-        # Rounding Top
         if n_peaks >= 4 and abs(convergence) < 0.002 and recovery < 0.4:
             return "rounding_top", 0.80, False
             
-        # Diamond Top
+        # V-Bottom / V-Top (Sharp Reversal)
+        if n_troughs == 1 and lower_slope > 0.03 and upper_slope < -0.03 and recovery > 0.8:
+            return "v_bottom", 0.75, True
+        if n_peaks == 1 and lower_slope > 0.03 and upper_slope < -0.03 and recovery < 0.2:
+            return "v_top", 0.75, False
+            
+        # Diamond Top/Bottom
         if n_peaks >= 3 and convergence < -0.01 and recovery < 0.5:
             return "diamond_top", 0.75, False
-            
-        # Diamond Bottom
         if n_troughs >= 3 and convergence < -0.01 and recovery > 0.5:
             return "diamond_bottom", 0.75, True
             
-        # Falling Wedge (Bullish Reversal)
+        # Falling / Rising Wedge (Reversal)
         if upper_slope < -0.005 and lower_slope < -0.002 and convergence < -0.001:
             return "falling_wedge", 0.82, True
-            
-        # Rising Wedge (Bearish Reversal)
         if upper_slope > 0.002 and lower_slope > 0.005 and convergence < -0.001:
             return "rising_wedge", 0.82, False
 
-        # Bump and Run (Reversal approximation based on extreme slopes)
+        # Bump and Run
         if upper_slope > 0.02 and n_peaks >= 2 and rsi_end < 0.4:
             return "bump_and_run_top", 0.70, False
         if lower_slope < -0.02 and n_troughs >= 2 and rsi_end > 0.6:
             return "bump_and_run_bottom", 0.70, True
 
-        # ── 17-26. Continuation Patterns ──────────────────────────────────────
-        # Bull Flag (Sharp up, tight channel down)
+        # ── 4. Geometric Continuation & Range Patterns (16) ──────────────────
+        # Bull/Bear Flag
         if lower_slope > 0.01 and upper_slope < 0 and upper_slope > -0.01 and vol_breakout > 1.2:
             return "bull_flag", 0.85, True
-            
-        # Bear Flag (Sharp down, tight channel up)
         if upper_slope < -0.01 and lower_slope > 0 and lower_slope < 0.01 and vol_breakout > 1.2:
             return "bear_flag", 0.85, False
             
-        # Bullish Pennant (Sharp up, symmetrical triangle consolidation)
+        # Bull/Bear Pennant
         if lower_slope > 0.01 and upper_slope < -0.002 and lower_slope > 0.002 and convergence < -0.002:
             return "bullish_pennant", 0.80, True
-            
-        # Bearish Pennant
         if upper_slope < -0.01 and upper_slope < -0.002 and lower_slope > 0.002 and convergence < -0.002:
             return "bearish_pennant", 0.80, False
             
-        # Ascending Triangle
+        # Triangles
         if abs(upper_slope) < 0.003 and lower_slope > 0.003:
             return "ascending_triangle", 0.85, True
-            
-        # Descending Triangle
         if upper_slope < -0.003 and abs(lower_slope) < 0.003:
             return "descending_triangle", 0.85, False
-            
-        # Symmetrical Triangle
         if upper_slope < -0.002 and lower_slope > 0.002 and abs(convergence) > 0.004:
             return "symmetrical_triangle", 0.75, None
             
         # Cup & Handle
         if recovery > 0.7 and n_troughs >= 2 and features.get("pattern_compactness", 0) > 0.5:
             return "cup_handle", 0.80, True
-            
-        # Inverted Cup & Handle
         if recovery < 0.3 and n_peaks >= 2 and features.get("pattern_compactness", 0) > 0.5:
             return "inverted_cup_handle", 0.80, False
             
-        # Measured Move Up
+        # Measured Move
         if lower_slope > 0.005 and n_troughs >= 2 and n_peaks >= 2 and rsi_end > 0.6:
             return "measured_move_up", 0.70, True
-            
-        # Measured Move Down
         if upper_slope < -0.005 and n_troughs >= 2 and n_peaks >= 2 and rsi_end < 0.4:
             return "measured_move_down", 0.70, False
 
-        # ── 27-29. Channels / Range Patterns ──────────────────────────────────
-        # Bullish Rectangle / Channel Up
+        # Channels & Rectangles
         if upper_slope > 0.003 and lower_slope > 0.003 and abs(convergence) < 0.002:
             return "channel_up", 0.78, True
-            
-        # Bearish Rectangle / Channel Down
         if upper_slope < -0.003 and lower_slope < -0.003 and abs(convergence) < 0.002:
             return "channel_down", 0.78, False
             
-        # Broadening Formation (Megaphone)
+        # Consolidating Rectangles
+        if abs(upper_slope) < 0.002 and abs(lower_slope) < 0.002:
+            if rsi_end > 0.55:
+                return "bullish_rectangle", 0.78, True
+            elif rsi_end < 0.45:
+                return "bearish_rectangle", 0.78, False
+
+        # Broadening Formation
         if upper_slope > 0.002 and lower_slope < -0.002 and convergence > 0.004:
             return "broadening_formation", 0.75, None
 

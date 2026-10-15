@@ -199,7 +199,12 @@ async def get_screener_results(
     if passed_only:
         conditions.append(ScreenerSignal.passed_all == True)
     if sector:
-        conditions.append(ScreenerSignal.sector.ilike(f"%{sector}%"))
+        from app.services.data_fetcher import SECTOR_UNIVERSE
+        matched_symbols = SECTOR_UNIVERSE.get(sector)
+        if matched_symbols:
+            conditions.append(ScreenerSignal.symbol.in_(matched_symbols))
+        else:
+            conditions.append(ScreenerSignal.sector.ilike(f"%{sector}%"))
     if direction:
         conditions.append(ScreenerSignal.direction == direction.upper())
     if min_score is not None:

@@ -247,6 +247,34 @@ class PaperTradingEngine:
         except Exception:
             pass
 
+        # ── Dynamic Trailing Stop Loss Logic ──────────────────────────────────
+        # Protects accumulated gains as price moves in our favor:
+        # Milestone 1: At +3.5% gain, shift SL to Breakeven (entry_price) -> Risk-Free Trade!
+        # Milestone 2: At +6.0% or higher, trail SL to lock in 50% of peak gains
+        if trade.direction == "LONG":
+            if pnl_pct >= 3.5 and trade.stop_loss < trade.entry_price:
+                old_sl = trade.stop_loss
+                trade.stop_loss = round(trade.entry_price, 2)
+                logger.info(f"TRAILING SL: {symbol} reached +{pnl_pct:.2f}%! Moved SL from ₹{old_sl:.2f} to Breakeven ₹{trade.entry_price:.2f}")
+            elif pnl_pct >= 6.0:
+                peak_price = trade.highest_price or current_price
+                locked_sl = round(trade.entry_price + ((peak_price - trade.entry_price) * 0.5), 2)
+                if locked_sl > trade.stop_loss:
+                    old_sl = trade.stop_loss
+                    trade.stop_loss = locked_sl
+                    logger.info(f"TRAILING SL: {symbol} reached +{pnl_pct:.2f}%! Trailed SL from ₹{old_sl:.2f} to ₹{locked_sl:.2f}")
+        elif trade.direction == "SHORT":
+            if pnl_pct >= 3.5 and trade.stop_loss > trade.entry_price:
+                old_sl = trade.stop_loss
+                trade.stop_loss = round(trade.entry_price, 2)
+                logger.info(f"TRAILING SL (SHORT): {symbol} reached +{pnl_pct:.2f}%! Moved SL from ₹{old_sl:.2f} to Breakeven ₹{trade.entry_price:.2f}")
+            elif pnl_pct >= 6.0:
+                locked_sl = round(trade.entry_price - ((trade.entry_price - current_price) * 0.5), 2)
+                if locked_sl < trade.stop_loss:
+                    old_sl = trade.stop_loss
+                    trade.stop_loss = locked_sl
+                    logger.info(f"TRAILING SL (SHORT): {symbol} reached +{pnl_pct:.2f}%! Trailed SL from ₹{old_sl:.2f} to ₹{locked_sl:.2f}")
+
         # ── Exit Condition 1: Stop Loss Hit ───────────────────────────────────
         sl_hit = (
             (trade.direction == "LONG" and current_price <= trade.stop_loss) or
@@ -274,31 +302,34 @@ class PaperTradingEngine:
             return
 
         # ── Exit Condition 3: RSI Extremes ──────────────────────────
-        # Fetch price history to compute RSI
-        df = await self.fetcher.fetch_price_history(symbol, period="3mo")
-        if df is not None and not df.empty:
-            tech = self.technical.analyze(symbol, df)
-            current_rsi = tech.get("rsi")
-            trade.current_rsi = current_rsi
+        # Only fetch 3-month OHLCV if current_rsi is missing, avoiding heavy network latency on every 10s tick
+        if trade.current_rsi is None:
+            try:
+                df = await self.fetcher.fetch_price_history(symbol, period="3mo")
+                if df is not None and not df.empty:
+                    tech = self.technical.analyze(symbol, df)
+                    trade.current_rsi = tech.get("rsi")
+            except Exception:
+                pass
 
-            if current_rsi:
-                rsi_exit = False
-                rsi_reason = ""
-                
-                if trade.direction == "LONG" and current_rsi >= self.cfg.TARGET_RSI_OVERBOUGHT:
-                    rsi_exit = True
-                    rsi_reason = f"RSI overbought ({current_rsi:.1f} > {self.cfg.TARGET_RSI_OVERBOUGHT})"
-                elif trade.direction == "SHORT" and current_rsi <= 30: # typically 30 for oversold
-                    rsi_exit = True
-                    rsi_reason = f"RSI oversold ({current_rsi:.1f} < 30)"
+        if trade.current_rsi:
+            rsi_exit = False
+            rsi_reason = ""
+            
+            if trade.direction == "LONG" and trade.current_rsi >= self.cfg.TARGET_RSI_OVERBOUGHT:
+                rsi_exit = True
+                rsi_reason = f"RSI overbought ({trade.current_rsi:.1f} > {self.cfg.TARGET_RSI_OVERBOUGHT})"
+            elif trade.direction == "SHORT" and trade.current_rsi <= 30:
+                rsi_exit = True
+                rsi_reason = f"RSI oversold ({trade.current_rsi:.1f} < 30)"
 
-                if rsi_exit:
-                    await self._close_trade(
-                        db, trade, current_price, TradeStatus.CLOSED_RSI, rsi_reason
-                    )
-                    summary["rsi_exits"] += 1
-                    logger.info(f"RSI EXIT: {symbol} RSI={current_rsi:.1f} @ ₹{current_price:.2f}")
-                    return
+            if rsi_exit:
+                await self._close_trade(
+                    db, trade, current_price, TradeStatus.CLOSED_RSI, rsi_reason
+                )
+                summary["rsi_exits"] += 1
+                logger.info(f"RSI EXIT: {symbol} RSI={trade.current_rsi:.1f} @ ₹{current_price:.2f}")
+                return
 
         summary["updated"] += 1
 

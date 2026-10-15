@@ -57,40 +57,57 @@ class Settings(BaseSettings):
 
     # Training Universe
     PATTERN_UNIVERSE: str = "NIFTY200"            # NIFTY50 | NIFTY200 | NIFTY500
-    TRAINING_PERIOD: str = "3y"                   # 3 years historical data
+    TRAINING_PERIOD: str = "10y"                  # 10 years historical data
 
     # Patterns to detect — 28 total (19 Macro + 9 Candlestick)
+    # Patterns to detect — All 46 Expert Model Classes + Classical + Candlestick
     BULLISH_PATTERNS: list[str] = [
         "BUY (1)", # Expert Model
-        # Macro — Reversal
+        # Macro & Geometric Reversals
         "double_bottom", "triple_bottom",
-        "head_and_shoulders_bottom",
-        "rounded_bottom",
-        "cup_and_handle",
-        # Macro — Continuation
+        "head_and_shoulders_bottom", "hs_bottom",
+        "rounded_bottom", "rounding_bottom",
+        "cup_and_handle", "cup_handle",
+        "bump_and_run_bottom", "diamond_bottom",
+        # Macro & Geometric Continuations
         "ascending_triangle",
         "falling_wedge",
-        "bull_flag", "bull_pennant",
-        "bullish_rectangle",
-        # Candlestick
-        "cdl_hammer", "cdl_bullish_engulfing", "cdl_morning_star", "cdl_marubozu",
+        "bull_flag", "bull_pennant", "bullish_pennant",
+        "bullish_rectangle", "measured_move_up",
+        # Candlestick Reversals & Momentum
+        "cdl_hammer", "hammer",
+        "inverted_hammer",
+        "cdl_bullish_engulfing", "bullish_engulfing",
+        "cdl_morning_star", "morning_star",
+        "cdl_marubozu", "bullish_marubozu",
+        "bullish_harami", "piercing_line",
+        "tweezer_bottom", "three_white_soldiers",
+        "dragonfly_doji", "gap_up",
     ]
     BEARISH_PATTERNS: list[str] = [
         "SELL (2)", # Expert Model
-        # Macro — Reversal
+        # Macro & Geometric Reversals
         "double_top", "triple_top",
-        "head_and_shoulders_top",
-        "rounded_top",
-        # Macro — Continuation
+        "head_and_shoulders_top", "hs_top",
+        "rounded_top", "rounding_top",
+        "diamond_top", "inverted_cup_handle",
+        # Macro & Geometric Continuations
         "descending_triangle",
         "rising_wedge",
-        "bear_flag", "bear_pennant",
-        "bearish_rectangle",
-        # Candlestick
-        "cdl_shooting_star", "cdl_bearish_engulfing", "cdl_evening_star",
+        "bear_flag", "bear_pennant", "bearish_pennant",
+        "bearish_rectangle", "measured_move_down",
+        # Candlestick Reversals & Momentum
+        "cdl_shooting_star", "shooting_star",
+        "hanging_man",
+        "cdl_bearish_engulfing", "bearish_engulfing",
+        "cdl_evening_star", "evening_star",
+        "bearish_marubozu", "bearish_harami",
+        "dark_cloud_cover", "tweezer_top",
+        "three_black_crows", "gravestone_doji", "gap_down",
     ]
     NEUTRAL_PATTERNS: list[str] = [
-        "symmetrical_triangle", "cdl_doji", "cdl_spinning_top",
+        "symmetrical_triangle", "cdl_doji", "doji",
+        "cdl_spinning_top", "spinning_top", "no_pattern",
     ]
 
     # Feature Extraction
@@ -117,8 +134,8 @@ class Settings(BaseSettings):
     DATA_INTERVAL: str = "1d"                    # Candle interval
 
     # Paper Trading Defaults
-    DEFAULT_CAPITAL: float = 100_000.0           # ₹1 Lakh default capital
-    DEFAULT_POSITION_SIZE_PCT: float = 0.10      # 10% per trade
+    DEFAULT_CAPITAL: float = 500_000.0           # ₹5 Lakhs capital
+    DEFAULT_POSITION_SIZE_PCT: float = 0.20      # 20% per trade (₹1 Lakh per position)
     FIXED_SL_PCT: float = 0.05                   # 5% hard stop loss
     ATR_SL_MULTIPLIER: float = 2.0               # 2×ATR for dynamic SL
     TARGET_RSI_OVERBOUGHT: float = 70.0          # RSI exit threshold

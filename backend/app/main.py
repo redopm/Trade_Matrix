@@ -17,8 +17,8 @@ from fastapi.responses import JSONResponse
 
 from app.config import settings
 from app.database import init_db
-from app.routers import screener, trades, stocks, dashboard, patterns, settings as settings_router, broker, fno
 from app.services.scheduler import create_scheduler
+from app.routers import screener, trades, stocks, dashboard, patterns, settings as settings_router, broker, fno, research, backtest, oracle, aladdin
 from app.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -109,7 +109,7 @@ async def add_request_timing(request: Request, call_next):
     response = await call_next(request)
     duration = (time.perf_counter() - start) * 1000
     response.headers["X-Process-Time"] = f"{duration:.2f}ms"
-    if duration > 2000:
+    if duration > 15000:
         logger.warning(f"Slow request: {request.method} {request.url.path} → {duration:.0f}ms")
     return response
 
@@ -165,5 +165,9 @@ app.include_router(patterns.router, prefix=API_PREFIX)  # Phase 2
 app.include_router(settings_router.router, prefix=API_PREFIX)  # Phase 3 Settings
 app.include_router(broker.router, prefix=API_PREFIX)       # Phase 3 Fyers API
 app.include_router(fno.router, prefix=API_PREFIX)
+app.include_router(research.router, prefix=API_PREFIX)  # Phase 1 Research Engine (rebuilt)
+app.include_router(backtest.router, prefix=API_PREFIX)  # Quantitative Backtesting Engine
+app.include_router(aladdin.router, prefix=API_PREFIX)   # The Aladdin Brain: Universal Stock Intelligence
+app.include_router(oracle.router, prefix=API_PREFIX)    # Legacy route compatibility alias
 
 logger.info(f"API routes registered at prefix: {API_PREFIX}")

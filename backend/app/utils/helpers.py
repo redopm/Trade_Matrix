@@ -59,3 +59,32 @@ def pct_change(old: Optional[float], new: Optional[float]) -> Optional[float]:
     if old is None or new is None or old == 0:
         return None
     return round(((new - old) / abs(old)) * 100, 2)
+
+
+def sanitize_nans(val: Any) -> Any:
+    """
+    Recursively replaces NaN and Inf float values with None.
+    Essential for JSON compliance since RFC 7159 does not allow NaN/Inf.
+    """
+    import math
+    try:
+        import numpy as np
+    except ImportError:
+        np = None
+
+    if val is None:
+        return None
+    if isinstance(val, float):
+        if math.isnan(val) or math.isinf(val):
+            return None
+        return val
+    if np is not None and isinstance(val, (np.floating, np.integer)):
+        fval = float(val)
+        if math.isnan(fval) or math.isinf(fval):
+            return None
+        return fval
+    if isinstance(val, dict):
+        return {k: sanitize_nans(v) for k, v in val.items()}
+    if isinstance(val, (list, tuple, set)):
+        return [sanitize_nans(v) for v in val]
+    return val

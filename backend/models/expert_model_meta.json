@@ -1,184 +1,431 @@
 {
-  "trained_at": "2026-06-17T11:09:00.522249",
-  "n_samples": 25425,
-  "n_features": 30,
-  "n_classes": 12,
+  "trained_at": "2026-06-17T18:30:35.159579",
+  "n_samples": 164852,
+  "n_features": 39,
+  "n_classes": 46,
   "classes": [
+    "ascending_triangle",
     "bearish_engulfing",
+    "bearish_harami",
+    "bearish_marubozu",
+    "bearish_rectangle",
     "bullish_engulfing",
+    "bullish_harami",
+    "bullish_marubozu",
+    "bullish_rectangle",
+    "bump_and_run_bottom",
+    "cup_handle",
+    "dark_cloud_cover",
+    "descending_triangle",
+    "diamond_bottom",
+    "diamond_top",
+    "doji",
     "double_bottom",
     "double_top",
+    "dragonfly_doji",
+    "evening_star",
+    "falling_wedge",
+    "gap_down",
+    "gap_up",
+    "gravestone_doji",
     "hammer",
+    "hanging_man",
     "hs_bottom",
     "hs_top",
+    "inverted_cup_handle",
+    "inverted_hammer",
+    "measured_move_down",
+    "measured_move_up",
+    "morning_star",
     "no_pattern",
+    "piercing_line",
     "rising_wedge",
+    "rounding_bottom",
+    "rounding_top",
     "shooting_star",
+    "spinning_top",
+    "three_black_crows",
+    "three_white_soldiers",
     "triple_bottom",
-    "triple_top"
+    "triple_top",
+    "tweezer_bottom",
+    "tweezer_top"
   ],
-  "cv_accuracy": 0.9955,
-  "cv_std": 0.0003,
-  "train_accuracy": 1.0,
+  "cv_accuracy": 0.9947,
+  "cv_std": 0.0005,
+  "train_accuracy": 0.9916,
   "classification_report": {
-    "bearish_engulfing": {
+    "ascending_triangle": {
       "precision": 1.0,
       "recall": 1.0,
       "f1-score": 1.0,
-      "support": 1103.0
+      "support": 44.0
+    },
+    "bearish_engulfing": {
+      "precision": 0.997642250864508,
+      "recall": 1.0,
+      "f1-score": 0.9988197340467385,
+      "support": 6347.0
+    },
+    "bearish_harami": {
+      "precision": 0.8365041617122473,
+      "recall": 1.0,
+      "f1-score": 0.910974425380382,
+      "support": 1407.0
+    },
+    "bearish_marubozu": {
+      "precision": 0.9792556436851739,
+      "recall": 1.0,
+      "f1-score": 0.9895191122071517,
+      "support": 1605.0
+    },
+    "bearish_rectangle": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1-score": 1.0,
+      "support": 632.0
     },
     "bullish_engulfing": {
+      "precision": 0.9952708512467756,
+      "recall": 1.0,
+      "f1-score": 0.9976298211592329,
+      "support": 4630.0
+    },
+    "bullish_harami": {
+      "precision": 0.8942383583267561,
+      "recall": 0.9997058823529412,
+      "f1-score": 0.9440355506179697,
+      "support": 3400.0
+    },
+    "bullish_marubozu": {
+      "precision": 0.9647887323943662,
+      "recall": 1.0,
+      "f1-score": 0.982078853046595,
+      "support": 822.0
+    },
+    "bullish_rectangle": {
+      "precision": 0.9982547993019197,
+      "recall": 1.0,
+      "f1-score": 0.9991266375545852,
+      "support": 572.0
+    },
+    "bump_and_run_bottom": {
       "precision": 1.0,
       "recall": 1.0,
       "f1-score": 1.0,
-      "support": 875.0
+      "support": 10.0
+    },
+    "cup_handle": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1-score": 1.0,
+      "support": 28.0
+    },
+    "dark_cloud_cover": {
+      "precision": 0.969140950792327,
+      "recall": 1.0,
+      "f1-score": 0.9843286742905548,
+      "support": 1162.0
+    },
+    "descending_triangle": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1-score": 1.0,
+      "support": 26.0
+    },
+    "diamond_bottom": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1-score": 1.0,
+      "support": 6.0
+    },
+    "diamond_top": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1-score": 1.0,
+      "support": 12.0
+    },
+    "doji": {
+      "precision": 0.9750227066303361,
+      "recall": 1.0,
+      "f1-score": 0.9873534145780639,
+      "support": 2147.0
     },
     "double_bottom": {
-      "precision": 1.0,
+      "precision": 0.9943074003795066,
       "recall": 1.0,
-      "f1-score": 1.0,
-      "support": 53.0
+      "f1-score": 0.9971455756422455,
+      "support": 524.0
     },
     "double_top": {
+      "precision": 0.9729032258064516,
+      "recall": 1.0,
+      "f1-score": 0.9862655330281229,
+      "support": 754.0
+    },
+    "dragonfly_doji": {
       "precision": 1.0,
       "recall": 1.0,
       "f1-score": 1.0,
-      "support": 117.0
+      "support": 255.0
+    },
+    "evening_star": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1-score": 1.0,
+      "support": 372.0
+    },
+    "falling_wedge": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1-score": 1.0,
+      "support": 26.0
+    },
+    "gap_down": {
+      "precision": 0.9458505002942907,
+      "recall": 1.0,
+      "f1-score": 0.9721718088324259,
+      "support": 1607.0
+    },
+    "gap_up": {
+      "precision": 0.9623893805309734,
+      "recall": 0.9996717005909389,
+      "f1-score": 0.9806763285024155,
+      "support": 3046.0
+    },
+    "gravestone_doji": {
+      "precision": 0.9701492537313433,
+      "recall": 1.0,
+      "f1-score": 0.9848484848484849,
+      "support": 260.0
     },
     "hammer": {
-      "precision": 1.0,
+      "precision": 0.9863945578231292,
       "recall": 1.0,
-      "f1-score": 1.0,
-      "support": 130.0
+      "f1-score": 0.9931506849315068,
+      "support": 580.0
+    },
+    "hanging_man": {
+      "precision": 0.9966832504145937,
+      "recall": 1.0,
+      "f1-score": 0.9983388704318937,
+      "support": 601.0
     },
     "hs_bottom": {
-      "precision": 1.0,
+      "precision": 0.9647812166488794,
       "recall": 1.0,
-      "f1-score": 1.0,
-      "support": 131.0
+      "f1-score": 0.9820749592612711,
+      "support": 904.0
     },
     "hs_top": {
+      "precision": 0.9139072847682119,
+      "recall": 1.0,
+      "f1-score": 0.9550173010380623,
+      "support": 138.0
+    },
+    "inverted_cup_handle": {
       "precision": 1.0,
       "recall": 1.0,
       "f1-score": 1.0,
-      "support": 20.0
+      "support": 15.0
+    },
+    "inverted_hammer": {
+      "precision": 0.9908616187989556,
+      "recall": 1.0,
+      "f1-score": 0.9954098360655738,
+      "support": 759.0
+    },
+    "measured_move_down": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1-score": 1.0,
+      "support": 12.0
+    },
+    "measured_move_up": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1-score": 1.0,
+      "support": 10.0
+    },
+    "morning_star": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1-score": 1.0,
+      "support": 229.0
     },
     "no_pattern": {
-      "precision": 1.0,
+      "precision": 0.9966499162479062,
       "recall": 1.0,
-      "f1-score": 1.0,
-      "support": 190.0
+      "f1-score": 0.9983221476510067,
+      "support": 595.0
+    },
+    "piercing_line": {
+      "precision": 0.9856115107913669,
+      "recall": 1.0,
+      "f1-score": 0.9927536231884058,
+      "support": 411.0
     },
     "rising_wedge": {
+      "precision": 0.9459459459459459,
+      "recall": 1.0,
+      "f1-score": 0.9722222222222222,
+      "support": 35.0
+    },
+    "rounding_bottom": {
       "precision": 1.0,
       "recall": 1.0,
       "f1-score": 1.0,
-      "support": 5.0
+      "support": 11.0
+    },
+    "rounding_top": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1-score": 1.0,
+      "support": 17.0
     },
     "shooting_star": {
-      "precision": 1.0,
+      "precision": 0.9827089337175793,
       "recall": 1.0,
-      "f1-score": 1.0,
-      "support": 183.0
+      "f1-score": 0.9912790697674418,
+      "support": 1023.0
+    },
+    "spinning_top": {
+      "precision": 0.9935987197439488,
+      "recall": 0.9973394909894082,
+      "f1-score": 0.9954655911015357,
+      "support": 19921.0
+    },
+    "three_black_crows": {
+      "precision": 0.9879692011549567,
+      "recall": 1.0,
+      "f1-score": 0.9939481965625756,
+      "support": 2053.0
+    },
+    "three_white_soldiers": {
+      "precision": 0.993993993993994,
+      "recall": 1.0,
+      "f1-score": 0.9969879518072289,
+      "support": 662.0
     },
     "triple_bottom": {
-      "precision": 1.0,
-      "recall": 1.0,
-      "f1-score": 1.0,
-      "support": 13102.0
+      "precision": 0.9999378244785028,
+      "recall": 0.9863387559221723,
+      "f1-score": 0.9930917371000734,
+      "support": 65221.0
     },
     "triple_top": {
-      "precision": 1.0,
-      "recall": 1.0,
-      "f1-score": 1.0,
-      "support": 9516.0
+      "precision": 0.999975105180612,
+      "recall": 0.9890672707574116,
+      "f1-score": 0.9944912788898379,
+      "support": 40612.0
     },
-    "accuracy": 1.0,
-    "macro avg": {
-      "precision": 1.0,
+    "tweezer_bottom": {
+      "precision": 0.9786780383795309,
       "recall": 1.0,
-      "f1-score": 1.0,
-      "support": 25425.0
+      "f1-score": 0.9892241379310345,
+      "support": 459.0
+    },
+    "tweezer_top": {
+      "precision": 0.9856035437430787,
+      "recall": 1.0,
+      "f1-score": 0.992749581706637,
+      "support": 890.0
+    },
+    "accuracy": 0.9915681945017348,
+    "macro avg": {
+      "precision": 0.9817178016853948,
+      "recall": 0.9993939804481059,
+      "f1-score": 0.9902065465954625,
+      "support": 164852.0
     },
     "weighted avg": {
-      "precision": 1.0,
-      "recall": 1.0,
-      "f1-score": 1.0,
-      "support": 25425.0
+      "precision": 0.9922120882153297,
+      "recall": 0.9915681945017348,
+      "f1-score": 0.9917140399611795,
+      "support": 164852.0
     }
   },
   "feature_importance": {
-    "n_peaks": 0.05206316336989403,
-    "n_troughs": 0.040295202285051346,
-    "peak_height_mean": 0.0014415016630664468,
-    "peak_height_std": 0.003868676023557782,
-    "trough_depth_mean": 0.0017684940248727798,
-    "trough_depth_std": 0.0036790287122130394,
-    "peak_symmetry_score": 0.04294247925281525,
-    "trough_symmetry_score": 0.029744241386651993,
-    "upper_trendline_slope": 0.04233723133802414,
-    "lower_trendline_slope": 0.033355049788951874,
-    "trendline_convergence": 0.00253746984526515,
-    "neckline_level_pct": 0.003361097304150462,
-    "neckline_slope": 0.027741165831685066,
-    "volume_at_breakout_ratio": 0.0010891830315813422,
-    "volume_trend_slope": 0.000967932865023613,
-    "volume_peak_alignment": 0.0009959532180801034,
-    "obv_slope": 0.004508746322244406,
-    "rsi_at_window_end": 0.07384834438562393,
-    "rsi_trend_slope": 0.007146831136196852,
-    "macd_crossovers_count": 0.0010557776549831033,
-    "price_range_pct": 0.004699661862105131,
-    "recovery_from_low_pct": 0.3008265793323517,
-    "pattern_compactness": 0.02112342044711113,
-    "last_candle_body_pct": 0.009974400512874126,
-    "last_candle_upper_wick_pct": 0.025131069123744965,
-    "last_candle_lower_wick_pct": 0.02184937708079815,
-    "last_candle_is_bullish": 0.04564392566680908,
-    "prev_candle_body_pct": 0.005767752882093191,
-    "prev_candle_is_bullish": 0.06182808801531792,
-    "engulfing_score": 0.12840816378593445
+    "n_peaks": 0.04769387096166611,
+    "n_troughs": 0.03596900776028633,
+    "peak_height_mean": 0.013457521796226501,
+    "peak_height_std": 0.03280467912554741,
+    "trough_depth_mean": 0.03837144374847412,
+    "trough_depth_std": 0.02528572455048561,
+    "peak_symmetry_score": 0.02828332968056202,
+    "trough_symmetry_score": 0.027077576145529747,
+    "upper_trendline_slope": 0.06289030611515045,
+    "lower_trendline_slope": 0.08511103689670563,
+    "trendline_convergence": 0.06113589555025101,
+    "neckline_level_pct": 0.0051821027882397175,
+    "neckline_slope": 0.008959689177572727,
+    "volume_at_breakout_ratio": 0.0067018261179327965,
+    "volume_trend_slope": 0.004432838875800371,
+    "volume_peak_alignment": 0.006032275501638651,
+    "obv_slope": 0.020321764051914215,
+    "rsi_at_window_end": 0.03673354163765907,
+    "rsi_trend_slope": 0.0059364172630012035,
+    "macd_crossovers_count": 0.003248102031648159,
+    "price_range_pct": 0.011483415961265564,
+    "recovery_from_low_pct": 0.028015775606036186,
+    "pattern_compactness": 0.022137638181447983,
+    "last_candle_body_pct": 0.023157421499490738,
+    "last_candle_upper_wick_pct": 0.043508607894182205,
+    "last_candle_lower_wick_pct": 0.034707870334386826,
+    "last_candle_is_bullish": 0.04317203164100647,
+    "prev_candle_body_pct": 0.016779927536845207,
+    "prev_candle_upper_wick_pct": 0.013149028643965721,
+    "prev_candle_lower_wick_pct": 0.011585523374378681,
+    "prev_candle_is_bullish": 0.0399119034409523,
+    "prev2_candle_body_pct": 0.015804274007678032,
+    "prev2_candle_upper_wick_pct": 0.0023113531060516834,
+    "prev2_candle_lower_wick_pct": 0.002948679029941559,
+    "prev2_candle_is_bullish": 0.02307336963713169,
+    "engulfing_score": 0.03672536090016365,
+    "gap_from_prev_close_pct": 0.030610302463173866,
+    "body_overlap_pct": 0.029703183099627495,
+    "wick_overlap_pct": 0.015585390850901604
   },
   "top_features": [
     [
-      "recovery_from_low_pct",
-      0.3008265793323517
-    ],
-    [
-      "engulfing_score",
-      0.12840816378593445
-    ],
-    [
-      "rsi_at_window_end",
-      0.07384834438562393
-    ],
-    [
-      "prev_candle_is_bullish",
-      0.06182808801531792
-    ],
-    [
-      "n_peaks",
-      0.05206316336989403
-    ],
-    [
-      "last_candle_is_bullish",
-      0.04564392566680908
-    ],
-    [
-      "peak_symmetry_score",
-      0.04294247925281525
+      "lower_trendline_slope",
+      0.08511103689670563
     ],
     [
       "upper_trendline_slope",
-      0.04233723133802414
+      0.06289030611515045
     ],
     [
-      "n_troughs",
-      0.040295202285051346
+      "trendline_convergence",
+      0.06113589555025101
     ],
     [
-      "lower_trendline_slope",
-      0.033355049788951874
+      "n_peaks",
+      0.04769387096166611
+    ],
+    [
+      "last_candle_upper_wick_pct",
+      0.043508607894182205
+    ],
+    [
+      "last_candle_is_bullish",
+      0.04317203164100647
+    ],
+    [
+      "prev_candle_is_bullish",
+      0.0399119034409523
+    ],
+    [
+      "trough_depth_mean",
+      0.03837144374847412
+    ],
+    [
+      "rsi_at_window_end",
+      0.03673354163765907
+    ],
+    [
+      "engulfing_score",
+      0.03672536090016365
     ]
   ],
   "model_path": "C:\\Users\\Omprakash Maury\\Documents\\project\\Trade_matrix\\backend\\models\\expert_model_weights.pth"

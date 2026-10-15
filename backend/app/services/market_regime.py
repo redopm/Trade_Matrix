@@ -348,13 +348,13 @@ class MarketRegimeDetector:
     @staticmethod
     def _fetch_ad_ratio() -> float:
         try:
-            top_50 = NIFTY500_SYMBOLS[:50]
-            data   = yf.download(top_50, period="5d", group_by="ticker", progress=False)
+            sample_symbols = NIFTY500_SYMBOLS[:15]
+            data   = yf.download(sample_symbols, period="2d", group_by="ticker", progress=False)
 
             advances = 0
             declines = 0
 
-            for sym in top_50:
+            for sym in sample_symbols:
                 try:
                     if sym in data.columns.levels[0]:
                         close = data[sym]["Close"].dropna()

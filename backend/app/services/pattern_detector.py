@@ -82,7 +82,7 @@ class PatternDetector:
             self._model = bundle["model"]
             self._classes = bundle["classes"]
             self._feature_names = bundle["feature_names"]
-            n_classes = bundle["n_classes"]
+            n_classes = len(self._classes)
             
             self._model_loaded = True
             logger.info(

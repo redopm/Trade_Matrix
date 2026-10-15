@@ -266,7 +266,7 @@ class AlphaScreener:
                 symbol=symbol,
                 df=df,
                 phase1_passed=passed_pre_filters,
-                generate_chart=True,
+                generate_chart=False,
             )
             pattern_name = pattern_result.get("pattern_name", "no_pattern")
             confidence = pattern_result.get("confidence", 0.0)

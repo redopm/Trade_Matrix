@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { dashboardApi, tradesApi, type PortfolioStats } from "@/lib/api";
+import { dashboardApi, tradesApi, aladdinApi, type PortfolioStats } from "@/lib/api";
 import { 
   TrendingUp, 
   Target, 
@@ -9,7 +9,15 @@ import {
   Activity, 
   AlertTriangle,
   ChevronRight,
-  SearchX
+  SearchX,
+  BrainCircuit,
+  Sparkles,
+  Zap,
+  ArrowUpRight,
+  ShieldCheck,
+  RefreshCw,
+  CheckCircle2,
+  TrendingDown
 } from "lucide-react";
 import Link from "next/link";
 
@@ -71,12 +79,13 @@ function StatCard({
 
 // --- Signal Row ---
 function SignalRow({ signal }: { signal: any }) {
+  const sym = signal.symbol?.replace(".NS", "");
   return (
     <tr className="border-b border-slate-100 hover:bg-slate-50 transition-colors group">
       <td className="py-3 px-4">
         <div>
           <div className="font-bold text-sm text-slate-900">
-            {signal.symbol?.replace(".NS", "")}
+            {sym}
           </div>
           <div className="text-xs text-slate-500 truncate max-w-[140px]">
             {signal.company_name}
@@ -119,6 +128,15 @@ function SignalRow({ signal }: { signal: any }) {
           {signal.risk_reward_ratio?.toFixed(2) ?? "-"}
         </span>
       </td>
+      <td className="py-3 px-4 text-right">
+        <Link
+          href={`/aladdin?symbol=${sym}`}
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-bold transition-all shadow-sm border border-indigo-200"
+        >
+          <BrainCircuit size={13} />
+          Aladdin
+        </Link>
+      </td>
     </tr>
   );
 }
@@ -128,30 +146,66 @@ export default function DashboardPage() {
   const [stats, setStats] = useState<PortfolioStats | null>(null);
   const [summary, setSummary] = useState<any>(null);
   const [recentSignals, setRecentSignals] = useState<any[]>([]);
+  const [aiPicks, setAiPicks] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshingPicks, setRefreshingPicks] = useState(false);
+  const [deployingSymbol, setDeployingSymbol] = useState<string | null>(null);
+  const [deploySuccess, setDeploySuccess] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  const loadData = async (isManualRefresh: boolean = false) => {
+    try {
+      const [summaryRes, statsRes, signalsRes, aiPicksRes] = await Promise.all([
+        dashboardApi.getSummary(),
+        tradesApi.getStats(),
+        dashboardApi.getRecentSignals(8),
+        dashboardApi.getAiPicks(isManualRefresh),
+      ]);
+      setSummary(summaryRes.data);
+      setStats(statsRes.data);
+      setRecentSignals(signalsRes.data);
+      setAiPicks(aiPicksRes.data || summaryRes.data?.ai_picks || []);
+    } catch (e: any) {
+      setError(e.message || "Failed to load dashboard");
+    } finally {
+      setLoading(false);
+      setRefreshingPicks(false);
+    }
+  };
+
   useEffect(() => {
-    const load = async () => {
-      try {
-        const [summaryRes, statsRes, signalsRes] = await Promise.all([
-          dashboardApi.getSummary(),
-          tradesApi.getStats(),
-          dashboardApi.getRecentSignals(8),
-        ]);
-        setSummary(summaryRes.data);
-        setStats(statsRes.data);
-        setRecentSignals(signalsRes.data);
-      } catch (e: any) {
-        setError(e.message || "Failed to load dashboard");
-      } finally {
-        setLoading(false);
-      }
-    };
-    load();
-    const interval = setInterval(load, 60000); // refresh every minute
+    loadData();
+    const interval = setInterval(() => loadData(false), 60000);
     return () => clearInterval(interval);
   }, []);
+
+  const handleRefreshAiPicks = async () => {
+    setRefreshingPicks(true);
+    await loadData(true);
+  };
+
+  const handleDeployTrade = async (pick: any) => {
+    setDeployingSymbol(pick.symbol);
+    try {
+      const qty = Math.max(1, Math.floor(10000 / pick.current_price));
+      await aladdinApi.deploy({
+        symbol: pick.symbol,
+        company_name: pick.company_name,
+        sector: pick.sector || "General",
+        entry_price: pick.current_price,
+        stop_loss: pick.stop_loss,
+        target_price: pick.target_1,
+        quantity: qty,
+        notes: `Aladdin Top Pick: Conviction ${pick.composite_score}% | Target ₹${pick.target_1}`
+      });
+      setDeploySuccess(`Successfully opened trade for ${pick.symbol} (${qty} shares)! View in Trading Desk.`);
+      setTimeout(() => setDeploySuccess(null), 5000);
+    } catch (err: any) {
+      alert("Deploy failed: " + (err.message || "Unknown error"));
+    } finally {
+      setDeployingSymbol(null);
+    }
+  };
 
   if (loading) {
     return (
@@ -269,6 +323,187 @@ export default function DashboardPage() {
             }
             icon={<Activity size={24} />}
           />
+        </div>
+      </div>
+
+      {/* --- Aladdin AI High-Conviction Future Setups --- */}
+      <div className="bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 border border-indigo-900/60 rounded-2xl p-6 sm:p-7 shadow-xl text-white relative overflow-hidden">
+        {/* Ambient Glow */}
+        <div className="absolute top-0 right-0 w-96 h-96 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none -mr-20 -mt-20" />
+        
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6 relative z-10">
+          <div>
+            <div className="flex items-center gap-2 mb-1.5">
+              <span className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-indigo-500/20 border border-indigo-400/30 text-indigo-300 text-xs font-bold uppercase tracking-wider">
+                <BrainCircuit size={14} className="text-indigo-400" />
+                Aladdin AI Brain
+              </span>
+              <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 text-xs font-semibold border border-emerald-500/30">
+                70k Trained ML Engine
+              </span>
+            </div>
+            <h2 className="text-xl sm:text-2xl font-black tracking-tight text-white flex items-center gap-2">
+              High-Conviction Future Winners
+              <Sparkles size={20} className="text-amber-400" />
+            </h2>
+            <p className="text-xs sm:text-sm text-slate-300 mt-1 max-w-2xl">
+              Predictive 5-Pillar intelligence: Price Geometry + Technical Momentum + Forensic Health + F&O Smart Money + Macro Regime.
+            </p>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <button
+              onClick={handleRefreshAiPicks}
+              disabled={refreshingPicks}
+              className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-white/10 hover:bg-white/20 border border-white/15 text-xs font-bold text-white transition-all disabled:opacity-50"
+            >
+              <RefreshCw size={14} className={refreshingPicks ? "animate-spin text-indigo-400" : "text-slate-300"} />
+              {refreshingPicks ? "Analyzing Stocks..." : "Refresh AI Picks"}
+            </button>
+            <Link
+              href="/aladdin"
+              className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-xs font-bold text-white transition-all shadow-md shadow-indigo-500/20"
+            >
+              Deep MRI Scanner <ChevronRight size={14} />
+            </Link>
+          </div>
+        </div>
+
+        {deploySuccess && (
+          <div className="mb-6 p-4 rounded-xl bg-emerald-500/20 border border-emerald-500/40 text-emerald-200 text-sm font-semibold flex items-center gap-2 animate-fadeIn">
+            <CheckCircle2 size={18} className="text-emerald-400" />
+            {deploySuccess}
+          </div>
+        )}
+
+        {/* AI Cards Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 relative z-10">
+          {aiPicks.slice(0, 3).map((pick: any) => {
+            const score = pick.composite_score || 0;
+            const isHighConviction = score >= 75;
+            const isMedium = score >= 65 && score < 75;
+
+            return (
+              <div
+                key={pick.symbol}
+                className={`bg-slate-800/80 hover:bg-slate-800 border ${
+                  isHighConviction 
+                    ? "border-emerald-500/50 shadow-emerald-950/20 shadow-xl" 
+                    : "border-slate-700/80"
+                } rounded-xl p-5 transition-all flex flex-col justify-between group shadow-lg`}
+              >
+                <div>
+                  <div className="flex items-start justify-between mb-3">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-lg font-black text-white tracking-wide">{pick.symbol}</span>
+                        <span className="text-[11px] px-2 py-0.5 rounded bg-slate-700 text-slate-300 font-medium">
+                          {pick.sector || "LargeCap"}
+                        </span>
+                      </div>
+                      <div className="text-xs text-slate-400 truncate max-w-[190px] mt-0.5">
+                        {pick.company_name}
+                      </div>
+                    </div>
+
+                    {/* AI Score Badge */}
+                    <div className="text-right">
+                      <div className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-black ${
+                        isHighConviction 
+                          ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/40" 
+                          : isMedium 
+                            ? "bg-blue-500/20 text-blue-400 border border-blue-500/40" 
+                            : "bg-amber-500/10 text-amber-300 border border-amber-500/30"
+                      }`}>
+                        <Zap size={12} className={isHighConviction ? "text-emerald-400" : isMedium ? "text-blue-400" : "text-amber-400"} />
+                        {score.toFixed(1)}% AI
+                      </div>
+                      <div className={`text-[10px] font-bold uppercase tracking-wider mt-1 ${
+                        isHighConviction ? "text-emerald-400" : "text-slate-400"
+                      }`}>
+                        {pick.verdict_badge || pick.verdict}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Conviction Hurdle Notice */}
+                  {!isHighConviction && (
+                    <div className="mb-3 px-2.5 py-1 rounded-md bg-amber-500/10 border border-amber-500/20 text-[11px] text-amber-300 flex items-center justify-between font-medium">
+                      <span>Wait for 75+ Score Breakout</span>
+                      <span className="font-bold opacity-75">Watchlist Only</span>
+                    </div>
+                  )}
+
+                  {/* Price & Market Stage */}
+                  <div className="flex items-baseline justify-between py-2.5 border-y border-slate-700/60 mb-3.5">
+                    <div>
+                      <span className="text-xs text-slate-400 font-medium block">Current Price</span>
+                      <span className="text-xl font-bold text-white">₹{pick.current_price?.toFixed(2)}</span>
+                    </div>
+                    <div className="text-right">
+                      <span className="text-xs text-slate-400 font-medium block">Market Stage</span>
+                      <span className="text-xs font-bold text-amber-400 px-2 py-0.5 rounded bg-amber-400/10 border border-amber-400/20">
+                        {pick.market_phase?.replace(/_/g, " ") || "MARKUP"}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Target & Stop Loss Roadmap */}
+                  <div className="grid grid-cols-2 gap-3 mb-4">
+                    <div className="bg-emerald-950/30 border border-emerald-800/40 p-2.5 rounded-lg">
+                      <div className="text-[10px] text-emerald-400 font-bold uppercase tracking-wider flex items-center justify-between">
+                        Target 1
+                        <span className="text-xs font-bold">+{pick.target_1_pct?.toFixed(1)}%</span>
+                      </div>
+                      <div className="text-sm font-black text-white mt-0.5">₹{pick.target_1?.toFixed(2)}</div>
+                    </div>
+
+                    <div className="bg-rose-950/30 border border-rose-800/40 p-2.5 rounded-lg">
+                      <div className="text-[10px] text-rose-400 font-bold uppercase tracking-wider flex items-center justify-between">
+                        Stop Loss
+                        <span className="text-xs font-bold">-{pick.stop_loss_pct?.toFixed(1)}%</span>
+                      </div>
+                      <div className="text-sm font-black text-white mt-0.5">₹{pick.stop_loss?.toFixed(2)}</div>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between text-xs text-slate-400 mb-4 px-1">
+                    <span>Risk:Reward: <strong className="text-slate-200">{pick.risk_reward_ratio || "1:2.0"}</strong></span>
+                    <span>Horizon: <strong className="text-slate-200">{pick.time_horizon || "5-15 Days"}</strong></span>
+                  </div>
+                </div>
+
+                {/* Quick Actions */}
+                <div className="grid grid-cols-2 gap-2 pt-2 border-t border-slate-700/60">
+                  <Link
+                    href={`/aladdin?symbol=${pick.symbol}`}
+                    className="flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg bg-indigo-600/30 hover:bg-indigo-600/50 border border-indigo-500/40 text-xs font-bold text-indigo-200 hover:text-white transition-all text-center"
+                  >
+                    <BrainCircuit size={14} />
+                    Aladdin MRI
+                  </Link>
+
+                  {isHighConviction ? (
+                    <button
+                      onClick={() => handleDeployTrade(pick)}
+                      disabled={deployingSymbol === pick.symbol}
+                      className="flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-xs font-bold text-white transition-all shadow-sm disabled:opacity-50"
+                    >
+                      <Zap size={14} className={deployingSymbol === pick.symbol ? "animate-bounce" : ""} />
+                      {deployingSymbol === pick.symbol ? "Deploying..." : "Quick Deploy"}
+                    </button>
+                  ) : (
+                    <Link
+                      href={`/aladdin?symbol=${pick.symbol}`}
+                      className="flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg bg-slate-700 hover:bg-slate-600 text-xs font-bold text-slate-300 hover:text-white transition-all text-center"
+                    >
+                      <span>Wait / Monitor</span>
+                    </Link>
+                  )}
+                </div>
+              </div>
+            );
+          })}
         </div>
       </div>
 
@@ -412,6 +647,7 @@ export default function DashboardPage() {
                   <th className="py-3 px-4 text-xs font-bold uppercase tracking-wider text-slate-400">ROCE</th>
                   <th className="py-3 px-4 text-xs font-bold uppercase tracking-wider text-slate-400">Score</th>
                   <th className="py-3 px-4 text-xs font-bold uppercase tracking-wider text-slate-400">R:R</th>
+                  <th className="py-3 px-4 text-xs font-bold uppercase tracking-wider text-slate-400 text-right">Action</th>
                 </tr>
               </thead>
               <tbody>

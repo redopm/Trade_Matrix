@@ -39,6 +39,21 @@ const PATTERN_LABELS: Record<string, { label: string; icon: React.ReactNode; col
   no_pattern: { label: "No Pattern", icon: <Target size={16} />, color: "text-slate-500 bg-slate-50" },
 };
 
+function formatPatternName(name: string) {
+  return name.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+}
+
+function getPatternMeta(pname: string) {
+  if (PATTERN_LABELS[pname]) return PATTERN_LABELS[pname];
+  const isBullish = pname.includes('bottom') || pname.includes('up') || ['hammer', 'morning_star', 'three_white_soldiers', 'piercing_line'].includes(pname);
+  const isBearish = pname.includes('top') || pname.includes('down') || ['shooting_star', 'evening_star', 'three_black_crows', 'hanging_man', 'gravestone_doji'].includes(pname);
+  return {
+    label: formatPatternName(pname),
+    icon: <Activity size={16} />,
+    color: isBullish ? "text-emerald-600 bg-emerald-50" : isBearish ? "text-red-600 bg-red-50" : "text-slate-600 bg-slate-50",
+  };
+}
+
 function ConfidenceBar({ value, colorClass }: { value: number; colorClass: string }) {
   const isGreen = colorClass.includes("emerald");
   const isRed = colorClass.includes("red");
@@ -65,7 +80,7 @@ function PatternCard({ result, onChartClick }: {
   onChartClick: (result: PatternResult) => void;
 }) {
   const pname = result.pattern_name || "no_pattern";
-  const meta = PATTERN_LABELS[pname] || PATTERN_LABELS.no_pattern;
+  const meta = getPatternMeta(pname);
   const isSignificant = result.pattern_name && result.pattern_name !== "no_pattern";
 
   return (
@@ -136,7 +151,7 @@ function PatternCard({ result, onChartClick }: {
 
 function ChartModal({ result, onClose }: { result: PatternResult; onClose: () => void }) {
   const pname = result.pattern_name || "no_pattern";
-  const meta = PATTERN_LABELS[pname] || PATTERN_LABELS.no_pattern;
+  const meta = getPatternMeta(pname);
   const chartUrl = `/api/v1/patterns/chart/${result.symbol.replace(".NS", "")}`;
 
   return (
@@ -145,7 +160,7 @@ function ChartModal({ result, onClose }: { result: PatternResult; onClose: () =>
       onClick={onClose}
     >
       <div
-        className="bg-white rounded-2xl shadow-xl max-w-4xl w-full p-8 border border-slate-200"
+        className="bg-white rounded-2xl shadow-xl max-w-4xl w-full p-8 border border-slate-200 max-h-[90vh] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-start justify-between mb-6">
@@ -191,7 +206,7 @@ function ChartModal({ result, onClose }: { result: PatternResult; onClose: () =>
               {Object.entries(result.all_scores)
                 .sort(([, a], [, b]) => b - a)
                 .map(([pattern, score]) => {
-                  const m = PATTERN_LABELS[pattern] || PATTERN_LABELS.no_pattern;
+                  const m = getPatternMeta(pattern);
                   return (
                     <div key={pattern} className="flex items-center justify-between">
                       <span className="text-sm font-medium text-slate-600 w-32">

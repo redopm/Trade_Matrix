@@ -19,6 +19,7 @@ import numpy as np
 from app.config import settings
 from app.utils.logger import get_logger
 from app.services.fibonacci import get_fib_analysis
+from app.utils.helpers import sanitize_nans
 
 logger = get_logger(__name__)
 
@@ -48,7 +49,12 @@ class TechnicalAnalyzer:
         Returns:
             Dict with all indicator values and filter pass/fail flags
         """
-        if df is None or df.empty or len(df) < 200:
+        if df is None or df.empty:
+            return self._insufficient_data(symbol, df)
+
+        # Drop incomplete candles with NaN prices
+        df = df.dropna(subset=["Open", "High", "Low", "Close"])
+        if len(df) < 200:
             return self._insufficient_data(symbol, df)
 
         try:
@@ -63,10 +69,10 @@ class TechnicalAnalyzer:
             result.update(self._evaluate_filters(result))
 
             # ── Phase 4: Fibonacci Retracement ────────────────────────────────
-            fib_data = get_fib_analysis(df, result["current_price"])
+            fib_data = get_fib_analysis(df, result.get("current_price", 0.0))
             result.update(fib_data)
 
-            return result
+            return sanitize_nans(result)
 
         except Exception as e:
             logger.error(f"Technical analysis failed for {symbol}: {e}")
@@ -244,8 +250,8 @@ class TechnicalAnalyzer:
             # 52-week
             "pct_from_52w_high": safe(latest.get("PCT_FROM_52W_HIGH")),
             "pct_from_52w_low": safe(latest.get("PCT_FROM_52W_LOW")),
-            "week_52_high": round(float(df["High"].rolling(252).max().iloc[-1]), 2),
-            "week_52_low": round(float(df["Low"].rolling(252).min().iloc[-1]), 2),
+            "week_52_high": safe(df["High"].rolling(252).max().iloc[-1]),
+            "week_52_low": safe(df["Low"].rolling(252).min().iloc[-1]),
             # Pivot Points
             "pivot": safe(latest.get("PIVOT")),
             "r1": safe(latest.get("R1")),

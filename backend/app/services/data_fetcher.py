@@ -66,7 +66,7 @@ SECTOR_UNIVERSE: dict[str, list[str]] = {
         "EQUITASBNK.NS", "SURYODAY.NS", "UJJIVANSFB.NS", "UTKARSHBNK.NS", "ESAFSFB.NS",
         # Insurance
         "LICI.NS", "HDFCLIFE.NS", "SBILIFE.NS", "ICICIPRULI.NS", "ICICIGI.NS",
-        "STARHEALTH.NS", "NIACL.NS", "GODIGIT.NS", "MAXHEALTH.NS", "MFSL.NS",
+        "STARHEALTH.NS", "NIACL.NS", "GODIGIT.NS", "MFSL.NS",
         # Asset managers / Exchanges
         "HDFCAMC.NS", "CDSL.NS", "BSE.NS", "MCX.NS", "ANGELONE.NS",
         "MOTILALOFS.NS", "KFINTECH.NS", "360ONE.NS", "CAMS.NS", "IIFL.NS",
@@ -92,7 +92,7 @@ SECTOR_UNIVERSE: dict[str, list[str]] = {
         "DATAMATICS.NS", "XCHANGING.NS", "SUBEX.NS", "KSOLVES.NS",
         # Internet & Digital
         "INFOEDGE.NS", "ZOMATO.NS", "NYKAA.NS", "POLICYBZR.NS",
-        "DELHIVERY.NS", "MAPMYINDIA.NS", "INDIAMART.NS", "JUSTDIAL.NS",
+        "MAPMYINDIA.NS", "INDIAMART.NS", "JUSTDIAL.NS",
         "AFFLE.NS", "LATENTVIEW.NS", "TANLA.NS", "CARTRADE.NS",
         "PAYTM.NS", "EASEMYTRIP.NS",
     ],
@@ -158,7 +158,7 @@ SECTOR_UNIVERSE: dict[str, list[str]] = {
         "ASTERDM.NS", "RAINBOW.NS", "MEDANTA.NS", "SHALBY.NS",
         # Diagnostics
         "LALPATHLAB.NS", "METROPOLIS.NS", "THYROCARE.NS",
-        "KRSNAA.NS", "VIJAYALAB.NS", "SAPPHIREFDS.NS",
+        "KRSNAA.NS", "VIJAYALAB.NS",
     ],
 
     # ── 7. Capital Goods (~55) ───────────────────────────────────────────────
@@ -179,7 +179,7 @@ SECTOR_UNIVERSE: dict[str, list[str]] = {
         "HAL.NS", "BEL.NS", "COCHINSHIP.NS", "GRSE.NS",
         "DATAPATTERNSIND.NS", "MAZDOCK.NS", "PARAS.NS", "MTAR.NS",
         # Renewable Equipment
-        "SUZLON.NS", "KALPATARPOWER.NS", "INOXWIND.NS",
+        "KALPATARPOWER.NS",
     ],
 
     # ── 8. Construction & Real Estate (~40) ──────────────────────────────────
@@ -209,7 +209,7 @@ SECTOR_UNIVERSE: dict[str, list[str]] = {
         "MOIL.NS", "COALINDIA.NS", "GMDC.NS",
         # Ferro-alloys & misc metals
         "MIDHANI.NS", "HINDMOTORS.NS", "SUNCLAYLTD.NS",
-        "SHYAMSTL.NS", "SAREGAMA.NS",
+        "SHYAMSTL.NS",
     ],
 
     # ── 10. Power (~18) ──────────────────────────────────────────────────────
@@ -246,12 +246,11 @@ SECTOR_UNIVERSE: dict[str, list[str]] = {
         "BARBEQUE.NS", "SPECIALITY.NS",
         # Retail
         "TRENT.NS", "SHOPERSTOP.NS", "VMART.NS", "BATA.NS", "RELAXO.NS",
-        "EASEMYTRIP.NS", "ZOMATO.NS",
         # Lifestyle & Fashion
-        "TITAN.NS", "PAGEIND.NS", "RAYMOND.NS", "VEDANT.NS",
+        "TITAN.NS", "PAGEIND.NS", "VEDANT.NS",
         "ABFRL.NS", "TCNS.NS", "KALYANKJIL.NS",
         # Entertainment
-        "PVRINOX.NS", "WONDERLA.NS", "CHALET.NS", "LEMONTREE.NS",
+        "WONDERLA.NS", "CHALET.NS", "LEMONTREE.NS",
         # Jewellery
         "SENCO.NS", "THANGAMAYIL.NS",
     ],
@@ -267,8 +266,8 @@ SECTOR_UNIVERSE: dict[str, list[str]] = {
     # ── 14. Telecommunication (~12) ──────────────────────────────────────────
     "Telecommunication": [
         "BHARTIARTL.NS", "IDEA.NS", "TATACOMM.NS", "HFCL.NS", "STLTECH.NS",
-        "INDUS.NS", "TEJAS.NS", "RAILTEL.NS",
-        "GTLINFRA.NS", "ONMOBILE.NS", "TANLA.NS",
+        "INDUSTOWER.NS", "TEJASNET.NS", "RAILTEL.NS",
+        "GTLINFRA.NS", "ONMOBILE.NS",
     ],
 
     # ── 15. Media & Entertainment (~10) ──────────────────────────────────────
@@ -281,13 +280,12 @@ SECTOR_UNIVERSE: dict[str, list[str]] = {
     # ── 16. Agriculture, Food & Agri Inputs (~18) ────────────────────────────
     "Agriculture & Food Processing": [
         # Agri inputs
-        "COROMANDEL.NS", "BALRAMCHIN.NS", "TRIVENI.NS", "EIDPARRY.NS",
-        "DHANUKA.NS",
+        "BALRAMCHIN.NS", "TRIVENI.NS", "EIDPARRY.NS",
         # Food processing
-        "KRBL.NS", "AVANTIFEED.NS", "WATERBASE.NS",
+        "AVANTIFEED.NS", "WATERBASE.NS",
         "DAAWAT.NS", "SATIA.NS", "GODREJAGRO.NS",
         # Ports & Commodities
-        "ADANIPORTS.NS", "CONCOR.NS", "ADANIENT.NS",
+        "ADANIPORTS.NS", "ADANIENT.NS",
         "NATESTEELS.NS",
     ],
 
@@ -311,7 +309,7 @@ SECTOR_UNIVERSE: dict[str, list[str]] = {
     # ── 19. Diversified Conglomerates (~8) ────────────────────────────────────
     "Diversified": [
         "GRASIM.NS", "3MINDIA.NS",
-        "WELSPUN.NS", "BAJAJHLDNG.NS",
+        "WELSPUN.NS",
     ],
 }
 
@@ -324,7 +322,7 @@ for _sector_stocks in SECTOR_UNIVERSE.values():
             _seen.add(_sym)
             _all_symbols.append(_sym)
 
-NIFTY500_SYMBOLS: list[str] = _all_symbols
+NIFTY500_SYMBOLS: list[str] = _all_symbols[:500]
 
 # Sector count summary (for logging/API)
 SECTOR_COUNTS: dict[str, int] = {s: len(v) for s, v in SECTOR_UNIVERSE.items()}
@@ -403,7 +401,9 @@ class DataFetcher:
     def _fetch_info_sync(symbol: str) -> Optional[dict[str, Any]]:
         """Synchronous yfinance info fetch (runs in thread pool)."""
         try:
-            ticker = yf.Ticker(symbol)
+            clean_sym = symbol.replace(".NS", "").replace(".BO", "").strip()
+            yf_sym = f"{clean_sym}.BO" if symbol.endswith(".BO") else f"{clean_sym}.NS"
+            ticker = yf.Ticker(yf_sym)
             info = ticker.info
             if not info or info.get("regularMarketPrice") is None:
                 # Try fast_info as fallback
@@ -429,20 +429,26 @@ class DataFetcher:
         interval = interval or settings.DATA_INTERVAL
 
         # ── Try Fyers first (official NSE data) ─────────────────────────
-        if interval in (None, "1d", "1D", "D"):  # Fyers daily data
+        # Note: Fyers API historical data has a ~1-2 year limit (max ~500 daily candles).
+        # For multi-year backtesting (>= 2y), we route directly to yfinance for complete historical depth.
+        is_multi_year = False
+        if period:
+            p_clean = period.lower().strip()
+            if p_clean == "max" or (p_clean.endswith("y") and p_clean[:-1].isdigit() and int(p_clean[:-1]) >= 2):
+                is_multi_year = True
+
+        if interval in (None, "1d", "1D", "D") and not is_multi_year:  # Fyers daily data for short periods
             fyers = _get_fyers_client()
             if fyers is not None:
                 try:
-                    # Map period string to date range
-                    days_map = {"1mo": 30, "3mo": 90, "6mo": 180, "1y": 365,
-                                "2y": 730, "3y": 1095, "5y": 1825}
-                    days = days_map.get(period, 730)
+                    days_map = {"1mo": 30, "3mo": 90, "6mo": 180, "1y": 365}
+                    days = days_map.get(period, 365)
                     range_from = (dt_date.today() - timedelta(days=days)).strftime("%Y-%m-%d")
                     df = await asyncio.get_event_loop().run_in_executor(
                         None, fyers.get_historical_data, symbol, "D", range_from, None
                     )
                     if df is not None and not df.empty:
-                        df = df[["Open", "High", "Low", "Close", "Volume"]]
+                        df = df[["Open", "High", "Low", "Close", "Volume"]].dropna(subset=["Open", "High", "Low", "Close"])
                         logger.debug(f"Fyers data fetched for {symbol}: {len(df)} rows")
                         return df
                 except Exception as e:
@@ -452,8 +458,10 @@ class DataFetcher:
         async with self._semaphore:
             await asyncio.sleep(settings.FETCH_DELAY_SECONDS)
             try:
+                clean_sym = symbol.replace(".NS", "").replace(".BO", "").strip()
+                yf_symbol = f"{clean_sym}.BO" if symbol.endswith(".BO") else f"{clean_sym}.NS"
                 df = await asyncio.get_event_loop().run_in_executor(
-                    None, self._fetch_history_sync, symbol, period, interval
+                    None, self._fetch_history_sync, yf_symbol, period, interval
                 )
                 return df
             except Exception as e:
@@ -480,9 +488,16 @@ class DataFetcher:
         # Convert period string to explicit date range
         period_days = {
             "1mo": 30, "3mo": 90, "6mo": 180,
-            "1y": 365, "2y": 730, "3y": 1095, "5y": 1825
+            "1y": 365, "2y": 730, "3y": 1095, "4y": 1460,
+            "5y": 1825, "6y": 2190, "10y": 3650, "12y": 4380,
+            "15y": 5475, "17y": 6205, "20y": 7300, "22y": 8030
         }
-        days = period_days.get(period, 730)
+        if period in period_days:
+            days = period_days[period]
+        elif period and period.endswith("y") and period[:-1].isdigit():
+            days = int(period[:-1]) * 365
+        else:
+            days = 3650
         end_dt = date.today()
         start_dt = end_dt - td(days=days)
         
@@ -507,7 +522,8 @@ class DataFetcher:
                 for col in ["Open", "High", "Low", "Close", "Volume"]:
                     if col not in df.columns:
                         return None
-                return df[["Open", "High", "Low", "Close", "Volume"]]
+                df = df[["Open", "High", "Low", "Close", "Volume"]].dropna(subset=["Open", "High", "Low", "Close"])
+                return df
         except Exception as e:
             logger.debug(f"yfinance failed for {symbol}: {e}")
         
@@ -582,23 +598,20 @@ class DataFetcher:
 
     async def fetch_current_price(self, symbol: str) -> Optional[float]:
         """Fetch the latest market price for a symbol."""
+        clean_sym = symbol.replace(".NS", "").replace(".BO", "").replace("NSE:", "").replace("BSE:", "").replace("-EQ", "")
+        fyers_sym = f"NSE:{clean_sym}-EQ"
+        yf_sym = f"{clean_sym}.NS"
+
         # ── Try Fyers first ──────────────────────────────────────────────
         fyers = _get_fyers_client()
         if fyers is not None:
             try:
-                if symbol.endswith(".NS"):
-                    fyers_sym = f"NSE:{symbol.replace('.NS', '')}-EQ"
-                elif symbol.endswith(".BO"):
-                    fyers_sym = f"BSE:{symbol.replace('.BO', '')}-EQ"
-                else:
-                    fyers_sym = symbol
-                    
                 quotes = await asyncio.get_event_loop().run_in_executor(
                     None, fyers.fetch_quotes, [fyers_sym]
                 )
                 if quotes and quotes.get("s") == "ok" and quotes.get("d"):
                     data = quotes["d"][0].get("v", {})
-                    if "lp" in data:
+                    if "lp" in data and float(data["lp"]) > 0:
                         return float(data["lp"])
             except Exception as e:
                 logger.debug(f"Fyers failed to fetch current price for {symbol}: {e}. Falling back to yfinance.")
@@ -607,7 +620,7 @@ class DataFetcher:
         async with self._semaphore:
             try:
                 price = await asyncio.get_event_loop().run_in_executor(
-                    None, self._fetch_price_sync, symbol
+                    None, self._fetch_price_sync, yf_sym
                 )
                 return price
             except Exception as e:

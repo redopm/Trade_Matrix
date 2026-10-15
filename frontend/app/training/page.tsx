@@ -128,22 +128,26 @@ export default function TrainingPage() {
     wsRef.current = ws;
 
     ws.onmessage = (e) => {
-      const data = JSON.parse(e.data) as ProgressEvent & { type?: string };
+      try {
+        const data = JSON.parse(e.data) as ProgressEvent & { type?: string };
 
-      if (data.type === "COMPLETE") {
-        setIsRunning(false);
-        loadStatus();
-        return;
+        if (data.type === "COMPLETE") {
+          setIsRunning(false);
+          loadStatus();
+          return;
+        }
+
+        setCurrentStage(data.stage);
+        setCurrentPct(data.pct);
+        setCurrentMsg(data.message);
+        setProgress((prev) => [data, ...prev].slice(0, 200));
+
+        setTimeout(() => {
+          logRef.current?.scrollTo({ top: 0 });
+        }, 50);
+      } catch (err) {
+        console.warn("Failed to parse training WS message:", err);
       }
-
-      setCurrentStage(data.stage);
-      setCurrentPct(data.pct);
-      setCurrentMsg(data.message);
-      setProgress((prev) => [data, ...prev].slice(0, 200));
-
-      setTimeout(() => {
-        logRef.current?.scrollTo({ top: 0 });
-      }, 50);
     };
 
     ws.onclose = () => setIsRunning(false);

@@ -156,7 +156,7 @@ async def detect_pattern(
 
     try:
         df = await _fetcher.fetch_price_history(sym, period="2y")
-        if df.empty:
+        if df is None or df.empty:
             raise HTTPException(404, f"No data found for {symbol}")
 
         result = await _detector.detect(
@@ -202,8 +202,8 @@ async def detect_all_signals(limit: int = Query(50, le=200)) -> dict:
     for sym in symbols:
         try:
             df = await _fetcher.fetch_price_history(sym, period="1y")
-            if not df.empty:
-                det = await _detector.detect(sym, df, phase1_passed=True)
+            if df is not None and not df.empty:
+                det = await _detector.detect(sym, df, phase1_passed=True, generate_chart=False)
                 detections[sym] = det
         except Exception as e:
             logger.warning(f"Detection failed for {sym}: {e}")

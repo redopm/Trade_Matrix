@@ -135,6 +135,9 @@ export default function SettingsPage() {
       setBrokerName(res.data.name || "");
       setMessage({ type: "success", text: "Fyers connected successfully!" });
       setAuthCode("");
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new Event("broker-status-updated"));
+      }
     } catch (e: any) {
       setMessage({ type: "error", text: `Failed to connect: ${e.message}` });
     } finally {

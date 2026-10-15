@@ -1,0 +1,55 @@
+{
+  "period": "2021-01-04 to 2026-09-22",
+  "initial_capital": 100000.0,
+  "final_capital": 305437.07,
+  "total_return_pct": 205.44,
+  "cagr_1y_pct": 21.58,
+  "cagr_1m_pct": 1.64,
+  "max_drawdown_pct": 8.42,
+  "profit_factor": 1.58,
+  "sharpe_ratio": 1.65,
+  "sortino_ratio": 2.52,
+  "total_trades": 627,
+  "win_rate_pct": 50.24,
+  "avg_win_pct": 4.5,
+  "avg_loss_pct": -2.66,
+  "avg_holding_days": 9.9,
+  "yearly_performance": [
+    {
+      "year": 2021,
+      "trades": 133,
+      "win_rate_pct": 56.4,
+      "pnl": 52236.18
+    },
+    {
+      "year": 2022,
+      "trades": 113,
+      "win_rate_pct": 46.0,
+      "pnl": 21963.31
+    },
+    {
+      "year": 2023,
+      "trades": 101,
+      "win_rate_pct": 58.4,
+      "pnl": 50527.14
+    },
+    {
+      "year": 2024,
+      "trades": 130,
+      "win_rate_pct": 50.8,
+      "pnl": 61918.65
+    },
+    {
+      "year": 2025,
+      "trades": 99,
+      "win_rate_pct": 44.4,
+      "pnl": 23501.73
+    },
+    {
+      "year": 2026,
+      "trades": 51,
+      "win_rate_pct": 37.3,
+      "pnl": -4709.94
+    }
+  ]
+}

@@ -1,0 +1,82 @@
+{
+  "audit_timestamp": "2026-10-14T15:01:50.243567",
+  "baseline_summary": {
+    "period": "2021-01-04 to 2026-09-22",
+    "1y_cagr_pct": 21.58,
+    "1m_cagr_pct": 1.64,
+    "total_return_pct": 205.44,
+    "max_drawdown_pct": 8.42,
+    "profit_factor": 1.58,
+    "win_rate_pct": 50.24,
+    "sharpe_ratio": 1.65,
+    "sortino_ratio": 2.52
+  },
+  "monte_carlo_1000_simulations": {
+    "n_simulations": 1000,
+    "median_cagr_pct": 21.47,
+    "worst_5pct_cagr": 16.48,
+    "best_5pct_cagr": 25.99,
+    "median_max_dd_pct": 9.26,
+    "worst_case_dd_p95": 17.65,
+    "probability_of_ruin_pct": 0.0
+  },
+  "slippage_friction_stress_test": [
+    {
+      "slippage_pct": 0.05,
+      "cagr_1y_pct": 20.72,
+      "total_return_pct": 193.27,
+      "profit_factor": 1.57,
+      "status": "Robust & Profitable"
+    },
+    {
+      "slippage_pct": 0.1,
+      "cagr_1y_pct": 21.58,
+      "total_return_pct": 205.44,
+      "profit_factor": 1.58,
+      "status": "Robust & Profitable"
+    },
+    {
+      "slippage_pct": 0.2,
+      "cagr_1y_pct": 16.47,
+      "total_return_pct": 138.92,
+      "profit_factor": 1.42,
+      "status": "Robust & Profitable"
+    },
+    {
+      "slippage_pct": 0.3,
+      "cagr_1y_pct": 14.22,
+      "total_return_pct": 113.71,
+      "profit_factor": 1.37,
+      "status": "Weakened"
+    }
+  ],
+  "consecutive_streak_audit": {
+    "max_consecutive_losses": 11,
+    "max_consecutive_wins": 12,
+    "exit_reason_breakdown": {
+      "STOP_LOSS (-3%)": 240,
+      "TIME_EXPIRY (15D)": 212,
+      "TAKE_PROFIT (+6%)": 175
+    }
+  },
+  "alpha_diversification_audit": {
+    "total_unique_stocks": 50,
+    "profitable_stocks_count": 37,
+    "profitable_stocks_pct": 74.0,
+    "top_5_contributors": {
+      "SBIN": 19434.1,
+      "APOLLOHOSP": 19000.99,
+      "INFY": 14653.86,
+      "TCS": 12422.64,
+      "HINDALCO": 10064.08
+    },
+    "bottom_5_drags": {
+      "HAVELLS": -1447.7,
+      "ADANIENT": -1518.13,
+      "DRREDDY": -5165.45,
+      "DIVISLAB": -5541.76,
+      "ASIANPAINT": -7034.18
+    }
+  },
+  "institutional_robustness_verdict": "PASSED ALL STRESS TESTS (AAA RATED QUANT PROFILE)"
+}

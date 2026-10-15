@@ -20,7 +20,7 @@ const WS_URL = process.env.NEXT_PUBLIC_WS_URL || defaultWsUrl;
 
 export const api = axios.create({
   baseURL: BASE_URL,
-  timeout: 60000,   // 60s — backend can be slow during model load
+  timeout: 300000,  // 5 minutes — massive operations like detectAll take ~2 minutes
   headers: {
     "Content-Type": "application/json",
   },
@@ -55,7 +55,12 @@ api.interceptors.response.use(
     }
 
     const status = error.response?.status ?? "network";
-    console.error(`API Error [${status}]: ${message}`);
+    const endpoint = error.config?.url ? ` on [${error.config?.method?.toUpperCase()} ${error.config.url}]` : "";
+    if (status === "network") {
+      console.warn(`[API Connection Waiting]${endpoint}: Backend momentarily offline or restarting`);
+    } else {
+      console.error(`API Error [${status}]${endpoint}: ${message}`);
+    }
     return Promise.reject(new Error(message));
   }
 );
@@ -92,6 +97,8 @@ export const dashboardApi = {
   getHeatmap: () => api.get("/dashboard/heatmap"),
   getRecentSignals: (limit: number = 10) =>
     api.get(`/dashboard/recent-signals?limit=${limit}`),
+  getAiPicks: (forceRefresh: boolean = false) =>
+    api.get(`/dashboard/ai-picks?force_refresh=${forceRefresh}`),
 };
 
 // ── Settings ────────────────────────────────────────────────────────────────────
@@ -110,6 +117,35 @@ export const brokerApi = {
   getStatus: () => api.get("/broker/status"),
   getAuthUrl: () => api.get("/broker/auth-url"),
   setAuthCode: (auth_code: string) => api.post("/broker/auth", { auth_code }),
+};
+
+// ── Backtesting ─────────────────────────────────────────────────────────────────
+export const backtestApi = {
+  getStrategies: () => api.get("/backtest/strategies"),
+  runBacktest: (data: {
+    symbol: string;
+    strategy: string;
+    period?: string;
+    initial_capital?: number;
+    risk_per_trade_pct?: number;
+    atr_multiplier?: number;
+    rr_ratio?: number;
+    slippage_pct?: number;
+  }) => api.post("/backtest/run", data),
+  quickBacktest: (symbol: string, strategy: string = "ALPHA_PULLBACK", period: string = "3y") =>
+    api.get(`/backtest/quick/${symbol}?strategy=${strategy}&period=${period}`),
+  getUniverses: () => api.get("/backtest/universes"),
+  runPortfolioBacktest: (data: {
+    universe: string;
+    period?: string;
+    initial_capital?: number;
+    top_n?: number;
+    rebalance_freq?: number;
+    slippage_pct?: number;
+    custom_symbols?: string[];
+    use_macro_regime?: boolean;
+    max_per_sector?: number;
+  }) => api.post("/backtest/portfolio", data),
 };
 
 // ── Screener ──────────────────────────────────────────────────────────────────
@@ -151,7 +187,7 @@ export const tradesApi = {
     api.put(`/trades/${id}/close`, { exit_price: exitPrice, notes }),
   deleteTrade: (id: number) => api.delete(`/trades/${id}`),
   deleteAllClosed: () => api.delete("/trades/closed/all"),
-  updateAll: () => api.post("/trades/update-all"),
+  updateAll: (sync = true) => api.post(`/trades/update-all?sync=${sync}`),
 };
 
 // ── Stocks ────────────────────────────────────────────────────────────────────
@@ -196,6 +232,42 @@ export const patternsApi = {
     api.get("/patterns/labels", { params }),
   exportLabels: () => `${BASE_URL}/patterns/labels/export`,
 };
+
+// ── Research Engine (Phase 1 Rebuilt) ─────────────────────────────────────────
+export const researchApi = {
+  startRun: (mode: string = "SWING", universe: string = "NIFTY500", symbols?: string[]) =>
+    api.post("/research/run", { mode, universe, symbols }),
+  getRunStatus: (runId: string) => api.get(`/research/run/${runId}`),
+  getRunSignals: (runId: string, minScore: number = 0, limit: number = 100) =>
+    api.get(`/research/signals/${runId}?min_score=${minScore}&limit=${limit}`),
+  listRuns: () => api.get("/research/runs"),
+  analyzeStock: (symbol: string, mode: string = "SWING") =>
+    api.post(`/research/analyze/${symbol}?mode=${mode}`),
+};
+
+// ── Aladdin Brain (Universal Stock Intelligence) ───────────────────────────
+export const aladdinApi = {
+  diagnose: (symbol: string, forceRefresh: boolean = false) =>
+    api.get(`/aladdin/diagnose/${encodeURIComponent(symbol)}`, {
+      params: { force_refresh: forceRefresh }
+    }),
+  getPopular: () => api.get("/aladdin/popular"),
+  deploy: (data: {
+    symbol: string;
+    company_name: string;
+    sector?: string;
+    entry_price: number;
+    stop_loss: number;
+    target_price: number;
+    quantity: number;
+    capital?: number;
+    notes?: string;
+  }) => api.post("/aladdin/deploy", data),
+  getBacktestReport: () => api.get("/aladdin/backtest"),
+  getStressTestReport: () => api.get("/aladdin/stress-test"),
+};
+// Backward compatibility alias
+export const oracleApi = aladdinApi;
 
 // ── WebSocket ─────────────────────────────────────────────────────────────────
 export const createScreenerWebSocket = (

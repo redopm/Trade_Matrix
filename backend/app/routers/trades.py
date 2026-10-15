@@ -235,15 +235,33 @@ async def close_trade(
 @router.post("/update-all")
 async def update_all_trades(
     background_tasks: BackgroundTasks,
+    sync: bool = Query(False, description="Wait for update to complete before returning"),
     db: AsyncSession = Depends(get_db),
 ):
     """
     Trigger a P&L update for all open trades.
-    Runs in background and checks exit conditions.
+    Runs synchronously if sync=True, otherwise runs in background.
+    Automatically halts background polling after 4:00 PM IST (post-market).
     """
+    import pytz
+    from datetime import datetime
+    ist = pytz.timezone("Asia/Kolkata")
+    now_ist = datetime.now(ist)
+    is_after_market = (now_ist.hour >= 16) or (now_ist.hour < 9) or (now_ist.weekday() >= 5)
+
+    if not sync and is_after_market:
+        return {
+            "message": "Market closed (outside 09:00 - 16:00 IST). Background polling paused.",
+            "market_open": False
+        }
+
+    engine = PaperTradingEngine()
+    if sync:
+        summary = await engine.update_open_trades(db)
+        return {"message": "P&L update complete", "summary": summary}
+
     async def update_bg():
         from app.database import AsyncSessionLocal
-        engine = PaperTradingEngine()
         async with AsyncSessionLocal() as bg_db:
             summary = await engine.update_open_trades(bg_db)
             logger.info(f"Background P&L update complete: {summary}")

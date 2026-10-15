@@ -1,0 +1,60 @@
+{
+  "generated_at": "2026-10-14T13:15:47.804936",
+  "total_rows": 70691,
+  "total_symbols": 50,
+  "date_range": [
+    "2021-01-04",
+    "2026-09-22"
+  ],
+  "class_distribution": {
+    "wins": 26352,
+    "losses": 44339,
+    "win_rate_pct": 37.28
+  },
+  "feature_count": 38,
+  "feature_columns": [
+    "dist_ema_20",
+    "dist_ema_50",
+    "dist_ema_200",
+    "ema_20_slope_5",
+    "ema_50_slope_5",
+    "ema_alignment",
+    "rsi_14",
+    "rsi_slope_5",
+    "rsi_oversold",
+    "rsi_overbought",
+    "macd_line",
+    "macd_signal",
+    "macd_hist",
+    "macd_hist_slope_3",
+    "atr_pct",
+    "bb_width",
+    "bb_pos",
+    "vol_ratio_20",
+    "vol_ratio_50",
+    "vol_change_5",
+    "dist_52w_high",
+    "dist_52w_low",
+    "dist_swing_high",
+    "dist_swing_low",
+    "fib_retrace_ratio",
+    "dist_fib_50",
+    "dist_fib_618",
+    "candle_body_ratio",
+    "upper_wick_ratio",
+    "lower_wick_ratio",
+    "is_bullish_candle",
+    "ret_5d",
+    "ret_20d",
+    "nifty_dist_ema_50",
+    "nifty_dist_ema_200",
+    "nifty_rsi_14",
+    "nifty_bull_regime",
+    "rel_strength_nifty_20"
+  ],
+  "target_rules": {
+    "upper_barrier_pct": 6.0,
+    "lower_barrier_pct": -3.0,
+    "time_barrier_days": 15
+  }
+}

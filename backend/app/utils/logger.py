@@ -32,10 +32,10 @@ logger.add(
     str(log_dir / "tradematrix.log"),
     level="DEBUG",
     format="{time:YYYY-MM-DD HH:mm:ss} | {level} | {name}:{function}:{line} | {message}",
-    rotation="10 MB",
-    retention="30 days",
-    compression="zip",
-    enqueue=True,  # Thread-safe
+    rotation="100 MB",
+    retention="14 days",
+    enqueue=True,
+    delay=True,
 )
 
 # ── Screener-specific log ─────────────────────────────────────────────────────
