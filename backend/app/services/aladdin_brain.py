@@ -590,19 +590,23 @@ class AladdinBrainEngine:
         regime = macro_data.get("regime", "SIDEWAYS")
         vix = macro_data.get("vix") or 14.5
         confidence = macro_data.get("confidence") or 0.6
+        nifty_price = float(macro_data.get("nifty_price") or 0.0)
+        nifty_ema200 = float(macro_data.get("nifty_ema200") or 0.0)
+        is_macro_bullish = (nifty_price > nifty_ema200) if (nifty_price > 0 and nifty_ema200 > 0) else (regime == "BULLISH")
+
         score = 50.0
         bull_points = []
         bear_points = []
 
-        if regime == "BULLISH":
+        if is_macro_bullish:
             score = 85.0
-            bull_points.append(f"Macro Tailwind: Broad market is in a confirmed BULLISH regime (VIX: {vix:.1f}).")
+            bull_points.append(f"Macro Tailwind: Nifty ({nifty_price:.0f}) > 200 EMA ({nifty_ema200:.0f}). Regime: BULLISH (VIX: {vix:.1f}).")
         elif regime == "SIDEWAYS":
             score = 55.0
             bull_points.append(f"Neutral Market: Nifty consolidating in a SIDEWAYS range (VIX: {vix:.1f}).")
-        else: # BEARISH
+        else: # BEARISH / Under 200 EMA
             score = 25.0
-            bear_points.append(f"Macro Headwind: Broad market is in a BEARISH regime — risk-off climate.")
+            bear_points.append(f"Macro Headwind: Nifty ({nifty_price:.0f}) < 200 EMA ({nifty_ema200:.0f}). Market weak: naya paisa mat lagao.")
 
         if vix < 14.0:
             bull_points.append(f"Low Volatility: India VIX at {vix:.1f} signals stable, steady market expansion.")
@@ -614,6 +618,12 @@ class AladdinBrainEngine:
             "regime": regime,
             "vix": round(vix, 1),
             "confidence": round(confidence * 100, 1),
+            "nifty_price": round(nifty_price, 2),
+            "nifty_ema200": round(nifty_ema200, 2),
+            "is_macro_bullish": is_macro_bullish,
+            "regime_status": "BULLISH_REGIME" if is_macro_bullish else "DEFENSIVE_CASH_REGIME",
+            "capital_defense_guidance": "Capital deployment allowed (Macro trend supportive)" if is_macro_bullish else "Market weak hai, naya paisa mat lagao",
+            "regulatory_disclosure": "Capital Defense indicates broad market weakness (naya paisa mat lagao); it does not guarantee complete portfolio drawdown immunity.",
             "bull_points": bull_points,
             "bear_points": bear_points,
         }
@@ -1002,36 +1012,46 @@ class AladdinBrainEngine:
             "reason": b5_reason,
         })
 
-        # ── Master Consensus Arbiter ──
+        # ── Master Consensus Arbiter (Descriptive Educational Confluence) ──
         buy_votes = sum(1 for b in brains if b["vote"] == "BUY")
         hold_votes = sum(1 for b in brains if b["vote"] == "HOLD")
         avoid_votes = sum(1 for b in brains if b["vote"] == "AVOID")
+        is_macro_bullish = p5.get("is_macro_bullish", True)
 
-        if safety_veto or macro_veto:
-            consensus_status = "VETOED"
-            consensus_badge = "🔴 RISK VETO ACTIVE: DO NOT ENTER"
+        # Tag each brain with explicit descriptive disclosure
+        for b in brains:
+            b["status_note"] = "Unvalidated Descriptive Heuristic (Forward Paper Testing Only)"
+
+        if safety_veto:
+            consensus_status = "SAFETY_VETO"
+            consensus_badge = "🔴 FUNDAMENTAL SOLVENCY VETO: HIGH RISK"
             action_trigger = "AVOID"
-            action_title = "Capital Defense: Safety Veto Triggered"
+            action_title = "Fundamental Risk: Weak Balance Sheet"
+        elif not is_macro_bullish or macro_veto:
+            consensus_status = "DEFENSIVE_CASH_REGIME"
+            consensus_badge = "🔴 DEFENSIVE CASH REGIME (Market weak: naya paisa mat lagao)"
+            action_trigger = "DEFENSIVE_HOLD_CASH"
+            action_title = "Capital Defense: Market Weak (Naya Paisa Mat Lagao)"
         elif buy_votes == 5:
-            consensus_status = "UNANIMOUS_BUY"
-            consensus_badge = "🟢 5/5 UNANIMOUS ACCORD: BUY THIS STOCK NOW"
-            action_trigger = "INSTANT_BUY"
-            action_title = "Unanimous Institutional Consensus"
+            consensus_status = "DESCRIPTIVE_CONFLUENCE"
+            consensus_badge = "📊 5/5 Descriptive Confluence (Top Watchlist Rank)"
+            action_trigger = "WATCHLIST_TOP_RANK"
+            action_title = "High Multi-Factor Confluence (Descriptive Heuristic)"
         elif buy_votes == 4:
-            consensus_status = "STRONG_BUY"
-            consensus_badge = "🟢 4/5 STRONG ACCORD: HIGH PROBABILITY SWING"
-            action_trigger = "CONFIRMED_BUY"
-            action_title = "High-Probability Swing Setup"
+            consensus_status = "DESCRIPTIVE_CONFLUENCE"
+            consensus_badge = "📊 4/5 Descriptive Confluence (Favorable Watchlist)"
+            action_trigger = "WATCHLIST_FAVORABLE"
+            action_title = "Favorable Confluence (Descriptive Heuristic)"
         elif buy_votes == 3:
-            consensus_status = "SELECTIVE_DIP"
-            consensus_badge = "⚪ 3/5 PARTIAL CONFLUENCE: SELECTIVE DIP"
-            action_trigger = "WAIT_CONFIRMATION"
-            action_title = "Selective Dip / Awaiting Confirmation"
+            consensus_status = "DESCRIPTIVE_NEUTRAL"
+            consensus_badge = "📊 3/5 Partial Confluence (Neutral Watchlist)"
+            action_trigger = "WATCHLIST_NEUTRAL"
+            action_title = "Partial Confluence (Descriptive Heuristic)"
         else:
-            consensus_status = "AVOID"
-            consensus_badge = f"🔴 {avoid_votes}/5 BRAINS VETO: CAPITAL DEFENSE"
-            action_trigger = "AVOID"
-            action_title = "Avoid: Conflicting Institutional Signals"
+            consensus_status = "DESCRIPTIVE_CAUTIOUS"
+            consensus_badge = f"⚪ {buy_votes}/5 Low Confluence (Cautious Watchlist)"
+            action_trigger = "WATCHLIST_CAUTIOUS"
+            action_title = "Cautious / Divergent Factors"
 
         return {
             "consensus_ratio": f"{buy_votes}/5",
@@ -1102,26 +1122,27 @@ class AladdinBrainEngine:
         else:
             composite_score = pillar_score
 
-        # 3. Determine Verdict & Signal Classification
-        if composite_score >= 80.0:
-            verdict = "STRONG_BUY"
-            verdict_badge = "Strong Conviction Buy"
+        # 3. Determine Verdict & Signal Classification (Compliant Institutional Tone)
+        is_macro_bullish = p5.get("is_macro_bullish", True)
+        if not is_macro_bullish:
+            verdict = "DEFENSIVE_REGIME"
+            verdict_badge = "Defensive Cash Regime (Market Weak: Naya Paisa Mat Lagao)"
+            verdict_color = "rose"
+        elif composite_score >= 70.0:
+            verdict = "DESCRIPTIVE_BULLISH"
+            verdict_badge = "Descriptive Technical Confluence (Educational Screener)"
             verdict_color = "emerald"
-        elif composite_score >= 65.0:
-            verdict = "BUY"
-            verdict_badge = "High Probability Swing"
-            verdict_color = "blue"
         elif composite_score >= 45.0:
-            verdict = "NEUTRAL"
-            verdict_badge = "Neutral / Wait for Setup"
-            verdict_color = "slate"
+            verdict = "DESCRIPTIVE_NEUTRAL"
+            verdict_badge = "Descriptive Neutral Setup (Educational Screener)"
+            verdict_color = "blue"
         elif composite_score >= 30.0:
             verdict = "CAUTION"
-            verdict_badge = "Caution / Weak Structure"
+            verdict_badge = "Caution / Weak Descriptive Structure"
             verdict_color = "amber"
         else:
             verdict = "AVOID"
-            verdict_badge = "Strong Avoid / Bearish"
+            verdict_badge = "Avoid / Low Confluence Structure"
             verdict_color = "rose"
 
         # 4. Determine Current Market Phase (Accumulation, Markup, Distribution, etc.)
@@ -1211,6 +1232,17 @@ class AladdinBrainEngine:
             # Multi-Brain Consensus Voting Council
             "voting_council": voting_council,
             
+            # Tier 1 Validated Macro Regime Gate
+            "macro_regime_gate": {
+                "nifty_close": p5.get("nifty_price", 0.0),
+                "nifty_ema_200": p5.get("nifty_ema200", 0.0),
+                "is_macro_bullish": p5.get("is_macro_bullish", True),
+                "regime_status": p5.get("regime_status", "BULLISH_REGIME"),
+                "capital_defense_guidance": p5.get("capital_defense_guidance", "Capital deployment allowed"),
+                "regulatory_disclosure": p5.get("regulatory_disclosure", "Capital Defense indicates market weakness (naya paisa mat lagao); it does not guarantee complete portfolio drawdown immunity."),
+            },
+            "regulatory_disclaimer": "This platform is an automated quantitative research and backtesting tool intended solely for algorithmic demonstration and educational analysis. It does not constitute investment advice or stock recommendations under SEBI (Research Analysts) Regulations 2014.",
+
             # Master Intelligence Verdict
             "composite_score": composite_score,
             "verdict": verdict,

@@ -166,10 +166,10 @@ export default function AladdinPage() {
             </div>
             <button
               onClick={handleOpenBacktest}
-              className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/20 hover:bg-amber-500/30 border border-amber-400/40 text-amber-300 text-xs font-black uppercase tracking-wider transition-all cursor-pointer shadow-sm hover:scale-105"
+              className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-800/80 hover:bg-slate-700 border border-slate-600 text-slate-200 text-xs font-black uppercase tracking-wider transition-all cursor-pointer shadow-sm hover:scale-105"
             >
               <BarChart3 size={13} className="text-amber-400" />
-              <span>5.7Y Backtest Proof (27.17% CAGR)</span>
+              <span>Quantitative Audit &amp; OOS Results (2016-2021)</span>
             </button>
           </div>
 
@@ -271,6 +271,51 @@ export default function AladdinPage() {
         </div>
       ) : diagnosis ? (
         <div className="flex flex-col gap-6">
+          {/* ── Tier 1 Macro Regime Defense Banner ── */}
+          {diagnosis.macro_regime_gate && (
+            <div className={`p-5 rounded-3xl border shadow-sm transition-all ${
+              diagnosis.macro_regime_gate.is_macro_bullish
+                ? "bg-emerald-50/80 border-emerald-200 text-emerald-950"
+                : "bg-rose-50/90 border-rose-300 text-rose-950"
+            }`}>
+              <div className="flex items-center justify-between flex-wrap gap-4">
+                <div className="flex items-center gap-3.5">
+                  <div className={`w-12 h-12 rounded-2xl flex items-center justify-center font-black text-xl shadow-inner ${
+                    diagnosis.macro_regime_gate.is_macro_bullish
+                      ? "bg-emerald-600 text-white"
+                      : "bg-rose-600 text-white animate-pulse"
+                  }`}>
+                    {diagnosis.macro_regime_gate.is_macro_bullish ? "🟢" : "🔴"}
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[11px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-white/70 border border-current">
+                        Tier 1 Macro Regime Defense Gate
+                      </span>
+                      <span className="text-xs font-mono font-bold">
+                        Nifty: ₹{diagnosis.macro_regime_gate.nifty_close?.toLocaleString("en-IN") || "—"} vs 200 EMA: ₹{diagnosis.macro_regime_gate.nifty_ema_200?.toLocaleString("en-IN") || "—"}
+                      </span>
+                    </div>
+                    <h3 className="text-lg font-black tracking-tight mt-0.5">
+                      {diagnosis.macro_regime_gate.is_macro_bullish
+                        ? "BULLISH REGIME: Capital Deployment Allowed"
+                        : "DEFENSIVE CASH REGIME: Market Weak (Naya Paisa Mat Lagao)"}
+                    </h3>
+                  </div>
+                </div>
+
+                <div className="text-right max-w-md">
+                  <div className={`text-xs font-extrabold ${diagnosis.macro_regime_gate.is_macro_bullish ? "text-emerald-800" : "text-rose-800"}`}>
+                    {diagnosis.macro_regime_gate.capital_defense_guidance}
+                  </div>
+                  <div className="text-[11px] text-slate-500 font-medium mt-0.5">
+                    {diagnosis.macro_regime_gate.regulatory_disclosure}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Top Summary Card: Score, Phase, Targets */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             {/* Conviction Gauge Card */}
@@ -287,9 +332,12 @@ export default function AladdinPage() {
                     {diagnosis.company_name} &bull; {diagnosis.sector}
                   </div>
                 </div>
-                <div className={`px-3.5 py-1.5 rounded-full text-xs font-black uppercase tracking-wider border shadow-sm ${scoreTheme?.badge}`}>
-                  {diagnosis.composite_score >= 65 || (diagnosis.composite_score >= 50 && diagnosis.pillars?.pillar_5_macro?.regime === "BEARISH") ? "🟢 " : diagnosis.composite_score < 40 ? "🔴 " : "⚪ "}
-                  ACTION: {diagnosis.verdict_badge}
+                <div className={`px-3.5 py-1.5 rounded-full text-xs font-black uppercase tracking-wider border shadow-sm ${
+                  !diagnosis.macro_regime_gate?.is_macro_bullish
+                    ? "bg-rose-50 text-rose-700 border-rose-300"
+                    : (scoreTheme?.badge || "bg-slate-50 text-slate-700 border-slate-200")
+                }`}>
+                  {!diagnosis.macro_regime_gate?.is_macro_bullish ? "🔴 DEFENSIVE CASH REGIME" : `📊 ${diagnosis.verdict_badge}`}
                 </div>
               </div>
 
@@ -844,6 +892,24 @@ export default function AladdinPage() {
         </div>
       ) : null}
 
+      {/* Mandatory SEBI Educational & Research Disclaimer */}
+      <div className="p-6 rounded-3xl bg-slate-900 border border-slate-800 text-slate-400 text-xs leading-relaxed flex flex-col md:flex-row items-start md:items-center justify-between gap-4 shadow-sm">
+        <div className="flex items-start gap-3 max-w-4xl">
+          <ShieldAlert size={20} className="text-amber-400 shrink-0 mt-0.5" />
+          <div>
+            <div className="font-bold text-slate-200 uppercase tracking-wider text-[11px] mb-0.5">
+              SEBI Statutory Research &amp; Regulatory Compliance Disclosure
+            </div>
+            <p className="text-slate-400 font-medium text-[11px]">
+              This platform is an automated quantitative research and backtesting engine built strictly for algorithmic evaluation and educational purposes. It does NOT provide stock tips, buy/sell recommendations, or investment advisory services under SEBI (Research Analysts) Regulations 2014. The Tier 2 swing engine was retired following rigorous out-of-sample backtesting; all technical &amp; fundamental factors operate strictly as unvalidated descriptive heuristics for forward paper observation.
+            </p>
+          </div>
+        </div>
+        <div className="shrink-0 text-right text-[10px] text-slate-500 font-mono">
+          SEBI (RA) Non-Advisory Engine<br />Algorithmic Research Desk
+        </div>
+      </div>
+
       {/* Backtest Track Record Modal */}
       {showBacktestModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md animate-in fade-in duration-200">
@@ -856,10 +922,10 @@ export default function AladdinPage() {
                 </div>
                 <div>
                   <h3 className="text-xl font-black text-white">
-                    Aladdin AI 5.7-Year Institutional Backtest Audit
+                    Quantitative Empirical Audit: Out-of-Sample &amp; Ablation Studies
                   </h3>
                   <p className="text-xs font-semibold text-slate-400">
-                    Period: 2021-01-04 to 2026-09-22 &bull; 50 Top Nifty Constituents &bull; Strict 0.1% Slippage
+                    Rigorous Out-of-Sample Backtest (2016-2021) &bull; Pre-Registered Single-Shot Protocol &bull; 0.20% STT + ₹40 Brokerage + 18% GST
                   </p>
                 </div>
               </div>

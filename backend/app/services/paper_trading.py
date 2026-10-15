@@ -56,6 +56,25 @@ class PaperTradingEngine:
         capital = capital or self.cfg.DEFAULT_CAPITAL
         entry_price = signal.signal_price
 
+        # ── Tier 1 Macro Regime Defense Gate ────────────────────────────────
+        try:
+            from app.services.market_regime import MarketRegimeDetector
+            regime_data = await MarketRegimeDetector.get_current_regime()
+            regime = regime_data.get("regime", "SIDEWAYS")
+            nifty_price = float(regime_data.get("nifty_price") or 0.0)
+            nifty_ema200 = float(regime_data.get("nifty_ema200") or 0.0)
+            is_macro_bullish = (nifty_price > nifty_ema200) if (nifty_price > 0 and nifty_ema200 > 0) else (regime != "BEARISH")
+
+            if signal.direction == "LONG" and not is_macro_bullish:
+                logger.info(
+                    f"Paper Trade REJECTED for {signal.symbol}: Tier 1 Macro Gate Active "
+                    f"(Capital Defense: Nifty {nifty_price:.0f} < 200 EMA {nifty_ema200:.0f} | Regime: {regime}). "
+                    f"Market weak hai, naya paisa mat lagao."
+                )
+                return None
+        except Exception as e:
+            logger.warning(f"Macro regime gate check bypassed due to exception: {e}")
+
         # ── Phase 3: Confluence Checks ───────────────────────────────────────
         df = await self.fetcher.fetch_price_history(signal.symbol, period="3mo")
         if df is None or df.empty:
