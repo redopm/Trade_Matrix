@@ -298,8 +298,8 @@ export default function AladdinPage() {
                     </div>
                     <h3 className="text-lg font-black tracking-tight mt-0.5">
                       {diagnosis.macro_regime_gate.is_macro_bullish
-                        ? "BULLISH REGIME: Capital Deployment Allowed"
-                        : "DEFENSIVE CASH REGIME: Market Weak (Naya Paisa Mat Lagao)"}
+                        ? "BULLISH REGIME: Nifty 200-day EMA se upar hai (trend positive)"
+                        : "DEFENSIVE REGIME: Nifty 200-day EMA se neeche hai (trend weak)"}
                     </h3>
                   </div>
                 </div>
@@ -337,7 +337,7 @@ export default function AladdinPage() {
                     ? "bg-rose-50 text-rose-700 border-rose-300"
                     : (scoreTheme?.badge || "bg-slate-50 text-slate-700 border-slate-200")
                 }`}>
-                  {!diagnosis.macro_regime_gate?.is_macro_bullish ? "🔴 DEFENSIVE CASH REGIME" : `📊 ${diagnosis.verdict_badge}`}
+                  {!diagnosis.macro_regime_gate?.is_macro_bullish ? "🔴 DEFENSIVE REGIME" : `📊 ${diagnosis.verdict_badge}`}
                 </div>
               </div>
 
@@ -815,8 +815,8 @@ export default function AladdinPage() {
                     </li>
                   </ul>
                 </div>
-                <div className="mt-3 pt-3 border-t border-slate-100 text-[11px] font-bold text-emerald-700">
-                  Directive: Enter positions exclusively on validated Green Action signals.
+                <div className="mt-3 pt-3 border-t border-slate-100 text-[11px] font-bold text-slate-600">
+                  Observation Note: Track factor alignment as descriptive heuristics in forward paper trading.
                 </div>
               </div>
 

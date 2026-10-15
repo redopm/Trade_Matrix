@@ -1,0 +1,353 @@
+commit 3032624d6b749ab6656595a81009522622975d9d
+Author: redopm <redopm@users.noreply.github.com>
+Date:   Thu Oct 15 16:07:25 2026 +0530
+
+    Pre-registration of Trial 9: Nifty 50 TRI Trend-Following (2007-2015) with post-budget 2024 tax drag model, variable RBI T-bill cash yields, and NSE official archives
+
+diff --git a/.gitignore b/.gitignore
+index fb99579..5636e65 100644
+--- a/.gitignore
++++ b/.gitignore
+@@ -58,3 +58,4 @@ Kronos/
+ *.pkl 
+ data/charts/ 
+ backend/database/ 
++scratch/
+diff --git a/backend/scripts/run_trial_9_nifty_trend.py b/backend/scripts/run_trial_9_nifty_trend.py
+new file mode 100644
+index 0000000..2b804e6
+--- /dev/null
++++ b/backend/scripts/run_trial_9_nifty_trend.py
+@@ -0,0 +1,332 @@
++"""
++Trial 9: Macro Index Trend-Following Backtest (2007-2015)
++Historical Single-Shot Evaluation on Official Nifty 50 Total Returns Index (TRI).
++Pre-warmed from 2000-01-01 to 2006-12-31 (7 years).
++Evaluated strictly out-of-sample: 2007-01-01 to 2015-12-31 (9 years).
++
++Strategy Rules:
++- Equity Regime (Nifty TRI Close > 200 EMA): 100% invested in Nifty 50 ETF.
++- Defensive Cash Regime (Nifty TRI Close <= 200 EMA): 100% invested in Sovereign Liquid Fund earning RBI 91-day T-bill yield.
++- Execution: Signal evaluated on Day N Close, executed Day N+1 Open/Close.
++- Frictions: Brokerage Rs 20/trade, Bid-ask spread 0.05% per execution, Tracking error 0.10% p.a., STT 0.001% on sell.
++- Tax Model (Post-Budget 2024 Indian Law):
++  - Equity ETF STCG (Sec 111A): 20.0% + 4% cess = 20.8%, deducted on March 31 for net FY gains.
++  - Debt / Liquid Fund (Sec 50AA): 30.0% + 4% cess = 31.2% on interest income, deducted on March 31.
++  - Buy & Hold LTCG (Sec 112A): 12.5% + 4% cess = 13.0% deferred to terminal date.
++"""
++
++import os
++import sys
++import math
++from datetime import date, datetime
++import numpy as np
++import pandas as pd
++import pandas_ta as ta
++
++# Force UTF-8 stdout
++if sys.stdout.encoding != 'utf-8':
++    sys.stdout.reconfigure(encoding='utf-8')
++
++# Historical RBI 91-Day T-Bill Annual Yields (2007-2015)
++RBI_TBILL_YIELDS = {
++    2007: 0.075,
++    2008: 0.075,
++    2009: 0.045,
++    2010: 0.055,
++    2011: 0.082,
++    2012: 0.082,
++    2013: 0.085,
++    2014: 0.085,
++    2015: 0.075,
++}
++
++def load_or_fetch_nifty_tri(csv_path: str = "scratch/nifty_50_tri_2000_2015.csv") -> pd.DataFrame:
++    if os.path.exists(csv_path):
++        df = pd.read_csv(csv_path)
++    else:
++        from jugaad_data.nse import index_tri_raw
++        all_records = []
++        for yr in range(2000, 2016):
++            records = index_tri_raw("NIFTY 50", "NIFTY 50", date(yr, 1, 1), date(yr, 12, 31))
++            all_records.extend(records)
++        df = pd.DataFrame(all_records)
++        os.makedirs(os.path.dirname(csv_path), exist_ok=True)
++        df.to_csv(csv_path, index=False)
++
++    df["Date"] = pd.to_datetime(df["Date"], format="%d %b %Y")
++    df = df.sort_values("Date").reset_index(drop=True)
++    df["Close"] = df["TotalReturnsIndex"].astype(float)
++    df = df.drop_duplicates(subset=["Date"]).set_index("Date")
++    return df
++
++def run_trial_9_simulation(
++    df: pd.DataFrame,
++    start_date: str = "2007-01-01",
++    end_date: str = "2015-12-31",
++    initial_capital: float = 500000.0,
++    brokerage_per_order: float = 20.0,
++    slippage_pct: float = 0.05,
++    tracking_error_pa: float = 0.0010, # 0.10% p.a.
++    stt_sell_pct: float = 0.00001,      # 0.001%
++    tax_stcg_equity: float = 0.208,     # 20% + 4% cess
++    tax_debt_income: float = 0.312,     # 30% slab + 4% cess
++    tax_ltcg_bh: float = 0.130,         # 12.5% + 4% cess
++):
++    # Pre-warm 200 EMA on complete history
++    df["EMA_200"] = ta.ema(df["Close"], length=200)
++
++    # Slice evaluation period
++    eval_df = df.loc[start_date:end_date].copy()
++    trading_dates = list(eval_df.index)
++
++    # ─────────────────────────────────────────────────────────────
++    # SIMULATION 1: TACTICAL TREND-GATED NIFTY 50 STRATEGY
++    # ─────────────────────────────────────────────────────────────
++    cash = float(initial_capital)
++    in_equity = False
++    etf_shares = 0.0
++    etf_cost_basis = 0.0
++    switches_count = 0
++    trade_log = []
++    daily_nav_strategy = []
++
++    # Fiscal year tax accounting (FY ends March 31)
++    fy_realized_stcg = 0.0
++    fy_interest_income = 0.0
++    tax_paid_total = 0.0
++
++    current_fy = None
++
++    for i in range(len(eval_df)):
++        dt = trading_dates[i]
++        row = eval_df.iloc[i]
++        close_price = float(row["Close"])
++        ema = float(row["EMA_200"])
++        year = dt.year
++
++        # Determine Fiscal Year: e.g. 2007-04-01 to 2008-03-31 is FY 2007-08
++        fy = year if dt.month >= 4 else year - 1
++        if current_fy is None:
++            current_fy = fy
++        elif fy != current_fy:
++            # FY END TAX DEDUCTION (March 31 / first day of April)
++            stcg_tax = max(0.0, fy_realized_stcg * tax_stcg_equity)
++            debt_tax = max(0.0, fy_interest_income * tax_debt_income)
++            total_fy_tax = stcg_tax + debt_tax
++
++            if in_equity:
++                # Deduct from equity (sell fractional shares to pay tax)
++                tax_shares = total_fy_tax / close_price if close_price > 0 else 0
++                etf_shares = max(0.0, etf_shares - tax_shares)
++            else:
++                cash = max(0.0, cash - total_fy_tax)
++
++            tax_paid_total += total_fy_tax
++            current_fy = fy
++            fy_realized_stcg = 0.0
++            fy_interest_income = 0.0
++
++        # Daily Interest on Cash (if in defensive mode)
++        if not in_equity:
++            annual_tbill = RBI_TBILL_YIELDS.get(year, 0.065)
++            daily_rate = annual_tbill / 252.0
++            daily_interest = cash * daily_rate
++            cash += daily_interest
++            fy_interest_income += daily_interest
++        else:
++            # Daily tracking error deduction on ETF
++            daily_te = tracking_error_pa / 252.0
++            etf_shares *= (1.0 - daily_te)
++
++        # Signal evaluated on Day N Close
++        bullish_signal = close_price > ema
++
++        # Execution check for next day (or immediate EOD transition model)
++        if bullish_signal and not in_equity:
++            # Switch to Equity (BUY NIFTY ETF)
++            exec_price = close_price * (1.0 + slippage_pct / 100.0)
++            investable = cash - brokerage_per_order
++            if investable > 0:
++                etf_shares = investable / exec_price
++                etf_cost_basis = exec_price
++                cash = 0.0
++                in_equity = True
++                switches_count += 1
++                trade_log.append({
++                    "date": dt,
++                    "action": "BUY_EQUITY",
++                    "price": round(exec_price, 2),
++                    "capital": round(investable, 2),
++                })
++        elif not bullish_signal and in_equity:
++            # Switch to Cash (SELL NIFTY ETF)
++            exec_price = close_price * (1.0 - slippage_pct / 100.0)
++            gross_proceeds = etf_shares * exec_price
++            stt = gross_proceeds * stt_sell_pct
++            net_proceeds = gross_proceeds - brokerage_per_order - stt
++
++            realized_pnl = net_proceeds - (etf_shares * etf_cost_basis)
++            fy_realized_stcg += realized_pnl
++
++            cash = net_proceeds
++            etf_shares = 0.0
++            in_equity = False
++            switches_count += 1
++            trade_log.append({
++                "date": dt,
++                "action": "SELL_EQUITY",
++                "price": round(exec_price, 2),
++                "proceeds": round(net_proceeds, 2),
++                "pnl": round(realized_pnl, 2),
++            })
++
++        # Calculate Day N MTM Portfolio NAV
++        unrealized_eq = (etf_shares * close_price) if in_equity else 0.0
++        day_nav = cash + unrealized_eq
++        daily_nav_strategy.append({"date": dt, "nav": day_nav})
++
++    # Terminal Liquidation for Strategy at end of 2015
++    final_row = eval_df.iloc[-1]
++    final_dt = trading_dates[-1]
++    final_price = float(final_row["Close"])
++
++    if in_equity:
++        exec_price = final_price * (1.0 - slippage_pct / 100.0)
++        gross_proceeds = etf_shares * exec_price
++        stt = gross_proceeds * stt_sell_pct
++        net_proceeds = gross_proceeds - brokerage_per_order - stt
++        realized_pnl = net_proceeds - (etf_shares * etf_cost_basis)
++        fy_realized_stcg += realized_pnl
++        cash = net_proceeds
++        etf_shares = 0.0
++        in_equity = False
++
++    # Terminal FY tax settlement
++    terminal_stcg_tax = max(0.0, fy_realized_stcg * tax_stcg_equity)
++    terminal_debt_tax = max(0.0, fy_interest_income * tax_debt_income)
++    final_tax = terminal_stcg_tax + terminal_debt_tax
++    cash -= final_tax
++    tax_paid_total += final_tax
++    terminal_nav_strategy = cash
++
++    # ─────────────────────────────────────────────────────────────
++    # SIMULATION 2: NIFTY 50 TRI BUY & HOLD BENCHMARK
++    # ─────────────────────────────────────────────────────────────
++    start_close = float(eval_df.iloc[0]["Close"])
++    bh_entry_price = start_close * (1.0 + slippage_pct / 100.0)
++    bh_investable = initial_capital - brokerage_per_order
++    bh_shares = bh_investable / bh_entry_price
++
++    daily_nav_bh = []
++    for i in range(len(eval_df)):
++        dt = trading_dates[i]
++        c_price = float(eval_df.iloc[i]["Close"])
++        # Daily tracking error deduction
++        bh_shares *= (1.0 - tracking_error_pa / 252.0)
++        daily_nav_bh.append({"date": dt, "nav": bh_shares * c_price})
++
++    # Terminal Liquidation for Buy & Hold
++    bh_exit_price = final_price * (1.0 - slippage_pct / 100.0)
++    bh_gross = bh_shares * bh_exit_price
++    bh_stt = bh_gross * stt_sell_pct
++    bh_net_pre_tax = bh_gross - brokerage_per_order - bh_stt
++    bh_gain = bh_net_pre_tax - initial_capital
++    bh_ltcg_tax = max(0.0, bh_gain * tax_ltcg_bh)
++    terminal_nav_bh = bh_net_pre_tax - bh_ltcg_tax
++
++    # ─────────────────────────────────────────────────────────────
++    # METRICS CALCULATION
++    # ─────────────────────────────────────────────────────────────
++    n_days = len(eval_df)
++    n_years = n_days / 252.0
++
++    # Strategy Metrics
++    strat_cagr = (((terminal_nav_strategy / initial_capital) ** (1.0 / n_years)) - 1.0) * 100.0
++    strat_nav_s = pd.Series([d["nav"] for d in daily_nav_strategy], index=trading_dates)
++    strat_peak = strat_nav_s.cummax()
++    strat_dd = (strat_nav_s - strat_peak) / strat_peak * 100.0
++    strat_max_dd = abs(float(strat_dd.min()))
++    strat_calmar = (strat_cagr / strat_max_dd) if strat_max_dd > 0 else 0.0
++
++    # Buy & Hold Metrics
++    bh_cagr = (((terminal_nav_bh / initial_capital) ** (1.0 / n_years)) - 1.0) * 100.0
++    bh_nav_s = pd.Series([d["nav"] for d in daily_nav_bh], index=trading_dates)
++    bh_peak = bh_nav_s.cummax()
++    bh_dd = (bh_nav_s - bh_peak) / bh_peak * 100.0
++    bh_max_dd = abs(float(bh_dd.min()))
++    bh_calmar = (bh_cagr / bh_max_dd) if bh_max_dd > 0 else 0.0
++
++    # Evaluation against Pre-Committed Criteria
++    crit_1_pass = switches_count >= 15
++    crit_2_pass = terminal_nav_strategy > terminal_nav_bh
++    crit_3_pass = strat_max_dd <= (bh_max_dd * 0.60)
++    crit_4_pass = strat_calmar >= (bh_calmar * 1.5)
++
++    all_criteria_passed = crit_1_pass and crit_2_pass and crit_3_pass and crit_4_pass
++
++    results = {
++        "period": f"{start_date} to {end_date} ({n_years:.2f} trading years, {n_days} bars)",
++        "switches_count": switches_count,
++        "initial_capital": initial_capital,
++        "strategy": {
++            "terminal_nav_post_tax": round(terminal_nav_strategy, 0),
++            "cagr_post_tax": round(strat_cagr, 2),
++            "max_dd": round(strat_max_dd, 2),
++            "calmar": round(strat_calmar, 2),
++            "tax_paid_total": round(tax_paid_total, 0),
++        },
++        "benchmark_nifty_tri_bh": {
++            "terminal_nav_post_tax": round(terminal_nav_bh, 0),
++            "cagr_post_tax": round(bh_cagr, 2),
++            "max_dd": round(bh_max_dd, 2),
++            "calmar": round(bh_calmar, 2),
++            "ltcg_tax_paid": round(bh_ltcg_tax, 0),
++        },
++        "criteria_evaluation": {
++            "Criterion 1 (Switches >= 15)": f"{switches_count} switches -> {'PASS' if crit_1_pass else 'FAIL'}",
++            "Criterion 2 (Terminal NAV > B&H)": f"Rs {terminal_nav_strategy:,.0f} vs Rs {terminal_nav_bh:,.0f} -> {'PASS' if crit_2_pass else 'FAIL'}",
++            "Criterion 3 (Max DD <= 60% of B&H)": f"{strat_max_dd:.2f}% vs {bh_max_dd * 0.60:.2f}% (B&H Max DD: {bh_max_dd:.2f}%) -> {'PASS' if crit_3_pass else 'FAIL'}",
++            "Criterion 4 (Calmar >= 1.5x B&H)": f"{strat_calmar:.2f} vs {bh_calmar * 1.5:.2f} (B&H Calmar: {bh_calmar:.2f}) -> {'PASS' if crit_4_pass else 'FAIL'}",
++        },
++        "overall_verdict": "PASS" if all_criteria_passed else "FAIL",
++        "trade_log": trade_log,
++    }
++
++    return results
++
++def print_trial_9_report(res: dict):
++    print("=" * 80)
++    print("🏛️ TRIAL 9: HISTORICAL OUT-OF-SAMPLE EVALUATION (2007-2015)")
++    print("Strategy: Nifty 50 TRI Trend-Following (Nifty > 200 EMA vs T-Bill Cash)")
++    print(f"Evaluation Window: {res['period']}")
++    print("=" * 80)
++
++    strat = res["strategy"]
++    bh = res["benchmark_nifty_tri_bh"]
++
++    print(f"{'Metric':<35} | {'Trial 9 Trend-Following':<20} | {'Nifty 50 TRI Buy & Hold':<20}")
++    print("-" * 80)
++    print(f"{'Initial Capital':<35} | Rs {res['initial_capital']:,.0f}{'':<10} | Rs {res['initial_capital']:,.0f}")
++    print(f"{'Post-Tax Terminal Wealth':<35} | Rs {strat['terminal_nav_post_tax']:,.0f}{'':<10} | Rs {bh['terminal_nav_post_tax']:,.0f}")
++    print(f"{'Post-Tax CAGR %':<35} | {strat['cagr_post_tax']:.2f}%{'':<15} | {bh['cagr_post_tax']:.2f}%")
++    print(f"{'Maximum Drawdown %':<35} | {strat['max_dd']:.2f}%{'':<15} | {bh['max_dd']:.2f}%")
++    print(f"{'Calmar Ratio (CAGR / Max DD)':<35} | {strat['calmar']:.2f}{'':<16} | {bh['calmar']:.2f}")
++    print(f"{'Total Taxes Paid':<35} | Rs {strat['tax_paid_total']:,.0f}{'':<10} | Rs {bh['ltcg_tax_paid']:,.0f}")
++    print(f"{'Total Allocation Switches':<35} | {res['switches_count']}{'':<20} | 1")
++    print("-" * 80)
++
++    print("\n⚖️ PRE-COMMITTED PASS/FAIL CRITERIA EVALUATION:")
++    for k, v in res["criteria_evaluation"].items():
++        print(f"  • {k}: {v}")
++
++    print("\n" + "=" * 80)
++    print(f"🎯 FINAL TRIAL 9 VERDICT: {res['overall_verdict']}")
++    print("=" * 80)
++
++if __name__ == "__main__":
++    print("Loading official Nifty 50 Total Returns Index data (2000-2015)...")
++    df = load_or_fetch_nifty_tri()
++    print(f"Data range: {df.index.min().strftime('%Y-%m-%d')} to {df.index.max().strftime('%Y-%m-%d')} ({len(df)} bars)")
++    print("Running Trial 9 single-shot evaluation...")
++    results = run_trial_9_simulation(df)
++    print_trial_9_report(results)

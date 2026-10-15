@@ -46,6 +46,7 @@ class PaperTradingEngine:
         signal: ScreenerSignal,
         capital: float = None,
         notes: str = None,
+        enforce_regime_gate: bool = False,
     ) -> Optional[PaperTrade]:
         """
         Create a new paper trade from a screener signal with Confluence Checks.
@@ -66,12 +67,19 @@ class PaperTradingEngine:
             is_macro_bullish = (nifty_price > nifty_ema200) if (nifty_price > 0 and nifty_ema200 > 0) else (regime != "BEARISH")
 
             if signal.direction == "LONG" and not is_macro_bullish:
-                logger.info(
-                    f"Paper Trade REJECTED for {signal.symbol}: Tier 1 Macro Gate Active "
-                    f"(Capital Defense: Nifty {nifty_price:.0f} < 200 EMA {nifty_ema200:.0f} | Regime: {regime}). "
-                    f"Market weak hai, naya paisa mat lagao."
-                )
-                return None
+                if enforce_regime_gate:
+                    logger.info(
+                        f"Paper Trade REJECTED for {signal.symbol}: Tier 1 Macro Gate Active "
+                        f"(Nifty {nifty_price:.0f} < 200 EMA {nifty_ema200:.0f} | Regime: {regime}). "
+                        f"Nifty 200-day EMA se neeche hai (trend weak)."
+                    )
+                    return None
+                else:
+                    regime_tag = f"[Macro Warning: Nifty ({nifty_price:.0f}) < 200 EMA ({nifty_ema200:.0f}) - Trend Weak]"
+                    notes = f"{notes} | {regime_tag}" if notes else regime_tag
+                    logger.info(
+                        f"Paper Trade ALLOWED in observation mode for {signal.symbol}: {regime_tag}"
+                    )
         except Exception as e:
             logger.warning(f"Macro regime gate check bypassed due to exception: {e}")
 

@@ -606,7 +606,7 @@ class AladdinBrainEngine:
             bull_points.append(f"Neutral Market: Nifty consolidating in a SIDEWAYS range (VIX: {vix:.1f}).")
         else: # BEARISH / Under 200 EMA
             score = 25.0
-            bear_points.append(f"Macro Headwind: Nifty ({nifty_price:.0f}) < 200 EMA ({nifty_ema200:.0f}). Market weak: naya paisa mat lagao.")
+            bear_points.append(f"Macro Headwind: Nifty ({nifty_price:.0f}) < 200 EMA ({nifty_ema200:.0f}). Nifty 200-day EMA se neeche hai (trend weak).")
 
         if vix < 14.0:
             bull_points.append(f"Low Volatility: India VIX at {vix:.1f} signals stable, steady market expansion.")
@@ -622,8 +622,8 @@ class AladdinBrainEngine:
             "nifty_ema200": round(nifty_ema200, 2),
             "is_macro_bullish": is_macro_bullish,
             "regime_status": "BULLISH_REGIME" if is_macro_bullish else "DEFENSIVE_CASH_REGIME",
-            "capital_defense_guidance": "Capital deployment allowed (Macro trend supportive)" if is_macro_bullish else "Market weak hai, naya paisa mat lagao",
-            "regulatory_disclosure": "Capital Defense indicates broad market weakness (naya paisa mat lagao); it does not guarantee complete portfolio drawdown immunity.",
+            "capital_defense_guidance": "Nifty 200-day EMA se upar hai (trend positive)" if is_macro_bullish else "Nifty 200-day EMA se neeche hai (trend weak)",
+            "regulatory_disclosure": "Regime gate indicates broad market trend relative to 200 EMA; it does not guarantee individual stock trajectory or drawdown immunity.",
             "bull_points": bull_points,
             "bear_points": bear_points,
         }
@@ -1029,28 +1029,28 @@ class AladdinBrainEngine:
             action_title = "Fundamental Risk: Weak Balance Sheet"
         elif not is_macro_bullish or macro_veto:
             consensus_status = "DEFENSIVE_CASH_REGIME"
-            consensus_badge = "🔴 DEFENSIVE CASH REGIME (Market weak: naya paisa mat lagao)"
+            consensus_badge = "🔴 DEFENSIVE REGIME (Nifty 200-day EMA se neeche hai - trend weak)"
             action_trigger = "DEFENSIVE_HOLD_CASH"
-            action_title = "Capital Defense: Market Weak (Naya Paisa Mat Lagao)"
+            action_title = "Regime Status: Nifty 200-day EMA se neeche hai (trend weak)"
         elif buy_votes == 5:
-            consensus_status = "DESCRIPTIVE_CONFLUENCE"
-            consensus_badge = "📊 5/5 Descriptive Confluence (Top Watchlist Rank)"
-            action_trigger = "WATCHLIST_TOP_RANK"
+            consensus_status = "DESCRIPTIVE_CONFLUENCE_HIGH"
+            consensus_badge = "📊 5/5 Descriptive Confluence (High Factor Alignment)"
+            action_trigger = "DESCRIPTIVE_CONFLUENCE_HIGH"
             action_title = "High Multi-Factor Confluence (Descriptive Heuristic)"
         elif buy_votes == 4:
-            consensus_status = "DESCRIPTIVE_CONFLUENCE"
-            consensus_badge = "📊 4/5 Descriptive Confluence (Favorable Watchlist)"
-            action_trigger = "WATCHLIST_FAVORABLE"
-            action_title = "Favorable Confluence (Descriptive Heuristic)"
+            consensus_status = "DESCRIPTIVE_CONFLUENCE_MODERATE"
+            consensus_badge = "📊 4/5 Descriptive Confluence (Moderate Factor Alignment)"
+            action_trigger = "DESCRIPTIVE_CONFLUENCE_MODERATE"
+            action_title = "Moderate Confluence (Descriptive Heuristic)"
         elif buy_votes == 3:
-            consensus_status = "DESCRIPTIVE_NEUTRAL"
-            consensus_badge = "📊 3/5 Partial Confluence (Neutral Watchlist)"
-            action_trigger = "WATCHLIST_NEUTRAL"
+            consensus_status = "DESCRIPTIVE_CONFLUENCE_NEUTRAL"
+            consensus_badge = "📊 3/5 Partial Confluence (Neutral Alignment)"
+            action_trigger = "DESCRIPTIVE_CONFLUENCE_NEUTRAL"
             action_title = "Partial Confluence (Descriptive Heuristic)"
         else:
             consensus_status = "DESCRIPTIVE_CAUTIOUS"
-            consensus_badge = f"⚪ {buy_votes}/5 Low Confluence (Cautious Watchlist)"
-            action_trigger = "WATCHLIST_CAUTIOUS"
+            consensus_badge = f"⚪ {buy_votes}/5 Low Confluence (Divergent Factors)"
+            action_trigger = "DESCRIPTIVE_CAUTIOUS"
             action_title = "Cautious / Divergent Factors"
 
         return {
@@ -1126,7 +1126,7 @@ class AladdinBrainEngine:
         is_macro_bullish = p5.get("is_macro_bullish", True)
         if not is_macro_bullish:
             verdict = "DEFENSIVE_REGIME"
-            verdict_badge = "Defensive Cash Regime (Market Weak: Naya Paisa Mat Lagao)"
+            verdict_badge = "Defensive Regime (Nifty 200-day EMA se neeche hai - trend weak)"
             verdict_color = "rose"
         elif composite_score >= 70.0:
             verdict = "DESCRIPTIVE_BULLISH"
@@ -1238,8 +1238,8 @@ class AladdinBrainEngine:
                 "nifty_ema_200": p5.get("nifty_ema200", 0.0),
                 "is_macro_bullish": p5.get("is_macro_bullish", True),
                 "regime_status": p5.get("regime_status", "BULLISH_REGIME"),
-                "capital_defense_guidance": p5.get("capital_defense_guidance", "Capital deployment allowed"),
-                "regulatory_disclosure": p5.get("regulatory_disclosure", "Capital Defense indicates market weakness (naya paisa mat lagao); it does not guarantee complete portfolio drawdown immunity."),
+                "capital_defense_guidance": p5.get("capital_defense_guidance", "Nifty 200-day EMA se upar hai (trend positive)"),
+                "regulatory_disclosure": p5.get("regulatory_disclosure", "Regime gate indicates broad market trend relative to 200 EMA; it does not guarantee individual stock trajectory or drawdown immunity."),
             },
             "regulatory_disclaimer": "This platform is an automated quantitative research and backtesting tool intended solely for algorithmic demonstration and educational analysis. It does not constitute investment advice or stock recommendations under SEBI (Research Analysts) Regulations 2014.",
 

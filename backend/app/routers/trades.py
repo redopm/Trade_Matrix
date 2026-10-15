@@ -31,6 +31,7 @@ class CreateTradeRequest(BaseModel):
     signal_id: int
     capital: Optional[float] = None
     notes: Optional[str] = None
+    enforce_regime_gate: Optional[bool] = False
 
 
 class CloseTradeRequest(BaseModel):
@@ -145,7 +146,13 @@ async def create_trade(
         )
 
     engine = PaperTradingEngine()
-    trade = await engine.enter_trade(db, signal, request.capital, request.notes)
+    trade = await engine.enter_trade(
+        db,
+        signal,
+        request.capital,
+        request.notes,
+        enforce_regime_gate=request.enforce_regime_gate or False,
+    )
     return trade
 
 
