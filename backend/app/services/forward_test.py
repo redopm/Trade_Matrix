@@ -12,6 +12,8 @@ import asyncio
 import json
 import numpy as np
 import subprocess
+import hashlib
+from pathlib import Path
 from datetime import datetime, date
 from typing import Dict, List, Any, Optional, Tuple
 from collections import Counter
@@ -32,6 +34,24 @@ logger = get_logger(__name__)
 # STT: 0.20% round-trip | Stamp: 0.015% | Exch+SEBI: 0.006% | GST: 0.001% | DP: 0.063% | Slippage: 0.10%
 FROZEN_DELIVERY_FRICTION_PCT: float = 0.00385  # 0.385%
 SCORING_FORMULA_VERSION: str = "ALADDIN_V2_5PILLAR"
+
+# All files that directly define the stock scoring algorithm (excludes forward_test.py harness)
+SCORING_CRITICAL_CODE_FILES: List[str] = [
+    "backend/app/services/aladdin_brain.py",
+    "backend/app/services/technical.py",
+    "backend/app/services/fundamental.py",
+    "backend/app/services/fibonacci.py",
+    "backend/app/services/market_regime.py",
+    "backend/app/services/data_fetcher.py",
+]
+
+# Model weight artifacts that directly drive the ML conviction pillar
+SCORING_WEIGHTS_FILES: List[str] = [
+    "backend/models/aladdin_classifier.pkl",
+    "backend/models/aladdin_regressor.pkl",
+    "backend/models/aladdin_feature_names.json",
+    "backend/models/expert_model_weights.pth",
+]
 
 # Pre-registered Nifty 100 Eligible Universe (Top liquid, high-turnover blue chips)
 NIFTY100_ELIGIBLE_UNIVERSE: List[str] = [
@@ -58,21 +78,29 @@ class ForwardTestEngine:
     """
 
     @staticmethod
+    def get_scoring_weights_hash() -> str:
+        """Computes SHA256 content hash of active model weights to detect any silent retraining."""
+        h = hashlib.sha256()
+        found_any = False
+        for p_str in SCORING_WEIGHTS_FILES:
+            p = Path(p_str)
+            if p.exists():
+                h.update(p.read_bytes())
+                found_any = True
+        return h.hexdigest()[:8] if found_any else "NOWEIGHTS"
+
+    @staticmethod
     def get_scoring_git_hash(enforce_clean: bool = True) -> str:
         """
-        Extract exact git commit SHA for audit tracking.
+        Extract exact git commit SHA and weights fingerprint for audit tracking.
         Enforces a clean git working tree on scoring-critical files only,
         preventing accidental refusal due to unrelated workspace files (notes, scratch scripts, docs).
+        Harness files like forward_test.py are excluded so harness display tweaks do not alter scoring fingerprint.
         """
-        scoring_files = [
-            "backend/app/services/aladdin_brain.py",
-            "backend/app/services/forward_test.py",
-            "backend/app/services/data_fetcher.py",
-        ]
         try:
             if enforce_clean:
                 status_res = subprocess.run(
-                    ["git", "status", "--porcelain", "--"] + scoring_files,
+                    ["git", "status", "--porcelain", "--"] + SCORING_CRITICAL_CODE_FILES,
                     capture_output=True,
                     text=True,
                     timeout=5
@@ -85,9 +113,9 @@ class ForwardTestEngine:
                         + "\nProtocol v2.1.1 requires scoring code changes to be committed before freezing an empirical cohort."
                     )
 
-            # Get the commit hash that last touched the scoring logic
+            # Get the commit hash that last touched any scoring file
             res = subprocess.run(
-                ["git", "log", "-1", "--format=%h", "--"] + scoring_files,
+                ["git", "log", "-1", "--format=%h", "--"] + SCORING_CRITICAL_CODE_FILES,
                 capture_output=True,
                 text=True,
                 check=True,
@@ -95,16 +123,17 @@ class ForwardTestEngine:
             )
             scoring_hash = res.stdout.strip()
             if not scoring_hash:
-                # Fallback to repo HEAD if git log returned empty
                 head_res = subprocess.run(
-                    ["git", "rev-parse", "--short=10", "HEAD"],
+                    ["git", "rev-parse", "--short=7", "HEAD"],
                     capture_output=True,
                     text=True,
                     check=True,
                     timeout=5
                 )
                 scoring_hash = head_res.stdout.strip()
-            return scoring_hash
+
+            weights_hash = ForwardTestEngine.get_scoring_weights_hash()
+            return f"{scoring_hash}+{weights_hash}"
         except RuntimeError:
             raise
         except Exception as e:
@@ -166,10 +195,11 @@ class ForwardTestEngine:
 
         # 3. Score Full Eligible Universe (Nifty 100)
         brain = AladdinBrainEngine()
+        as_of_date = now.date()
         universe_scores = []
         for sym in NIFTY100_ELIGIBLE_UNIVERSE:
             try:
-                diag = await brain.diagnose_stock(sym)
+                diag = await brain.diagnose_stock(sym, force_refresh=True, as_of_date=as_of_date)
                 if not diag.get("error") and diag.get("current_price"):
                     universe_scores.append({
                         "symbol": sym,
@@ -220,9 +250,16 @@ class ForwardTestEngine:
         active_fwd_allocated = float(res_cap.scalar() or 0.0)
         available_fwd_capital = forward_pool - active_fwd_allocated
 
+        fetcher = DataFetcher()
         live_trades = []
         for stock in universe_scores[:10]:
             p = stock["current_price"]
+            try:
+                live_p = await asyncio.wait_for(fetcher.fetch_current_price(stock["symbol"]), timeout=2.0)
+                if live_p and live_p > 0:
+                    p = live_p
+            except Exception:
+                pass
             qty = max(1, int(slot_capital / p))
             invested = round(qty * p, 2)
             friction = round(invested * FROZEN_DELIVERY_FRICTION_PCT, 2)
@@ -516,11 +553,13 @@ class ForwardTestEngine:
             decision_desc = f"Empirical forward trial active. Pre-registered sunset evaluated strictly after all {k_target} cohorts complete."
         else:
             if ci_lower > 0.0 and mean_delta >= 1.0:
-                decision = "PASS: STATISTICALLY SIGNIFICANT ALPHA CONFIRMED"
+                decision = "PASS (suggestive): ALGORITHMIC EDGE SUGGESTED UNDER OVERLAPPING COHORT ASSUMPTIONS"
                 decision_color = "emerald"
                 decision_desc = (
-                    f"Statistically significant alpha confirmed: 95% CI lower bound (+{ci_lower:.2f}%) strictly cleared 0.0%, "
-                    f"and mean excess return (+{mean_delta:.2f}%) cleared the economic floor (>=1.0% per 90d)."
+                    f"Suggestive algorithmic edge detected: 95% CI lower bound (+{ci_lower:.2f}%) strictly cleared 0.0%, "
+                    f"and mean excess return (+{mean_delta:.2f}%) cleared economic floor (>=1.0% per 90d). "
+                    f"Caveat: Due to 90-day cohort overlap, observations are not strictly independent; "
+                    f"do not allocate large institutional capital solely based on this forward trial."
                 )
             elif mean_delta <= 0.0:
                 decision = "SUNSET: ZERO EMPIRICAL ALPHA (SYSTEM RETIRED)"
@@ -578,7 +617,9 @@ class ForwardTestEngine:
         }
 
     @classmethod
-    async def check_and_freeze_monthly_cohort_if_due(cls, db: AsyncSession) -> Optional[Dict[str, Any]]:
+    async def check_and_freeze_monthly_cohort_if_due(
+        cls, db: AsyncSession, target_date: Optional[date] = None
+    ) -> Optional[Dict[str, Any]]:
         """
         Automated monthly freeze and missed-run catchup logic.
         1. Checks current year and month.
@@ -588,7 +629,7 @@ class ForwardTestEngine:
            - If not, triggers freeze_cohort and logs audit info.
         """
         now = datetime.now()
-        today = now.date()
+        today = target_date if target_date is not None else now.date()
 
         # Cohort 1 starts in November 2026 (Cohort 0 was October Pilot)
         if today < date(2026, 11, 1):

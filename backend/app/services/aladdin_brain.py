@@ -89,22 +89,29 @@ class AladdinBrainEngine:
             self.ml_loaded = False
             logger.error(f"AladdinBrain: Error loading ML model: {e}")
 
-    async def diagnose_stock(self, symbol: str, force_refresh: bool = False) -> Dict[str, Any]:
+    async def diagnose_stock(
+        self,
+        symbol: str,
+        force_refresh: bool = False,
+        as_of_date: Optional[date] = None
+    ) -> Dict[str, Any]:
         """
         Master diagnostic entrypoint.
         Given any NSE symbol, returns the full Aladdin Intelligence Dossier.
+        If as_of_date is provided, strictly filters out any bars on or after as_of_date
+        guaranteeing indicators are built strictly from T-1 EOD data without partial day lookahead.
         """
         clean_symbol = symbol.replace(".NS", "").replace(".BO", "").strip().upper()
 
-        # Check cache
+        # Check cache (only for live/uncapped queries)
         now = datetime.now()
-        if not force_refresh and clean_symbol in self._cache:
+        if not force_refresh and as_of_date is None and clean_symbol in self._cache:
             cached_time, cached_data = self._cache[clean_symbol]
             if (now - cached_time).total_seconds() < self.CACHE_TTL_SECONDS:
                 logger.info(f"Aladdin: Serving cached diagnosis for {clean_symbol}")
                 return cached_data
 
-        logger.info(f"Aladdin: Starting 5-pillar deep diagnostic for {clean_symbol}...")
+        logger.info(f"Aladdin: Starting 5-pillar deep diagnostic for {clean_symbol} (as_of_date={as_of_date})...")
 
         # ── Step 1: Resilient Data Ingestion (Fyers Primary) ──────────────────
         try:
@@ -130,14 +137,22 @@ class AladdinBrainEngine:
                 logger.warning(f"Aladdin: Could not fetch price history for {clean_symbol}")
                 return self._error_response(clean_symbol, f"Unable to fetch historical price data for {clean_symbol}. Verify symbol.")
 
-            # Current price: use latest candle close as baseline, enriched by live quote if available
+            # Strict T-1 Date truncation: Drop any candle on or after as_of_date
+            if as_of_date is not None:
+                df = df[df.index.date < as_of_date]
+                if df.empty:
+                    logger.warning(f"Aladdin: Historical data empty for {clean_symbol} after filtering < {as_of_date}")
+                    return self._error_response(clean_symbol, f"No historical bars before {as_of_date} for {clean_symbol}.")
+
+            # Current price: use latest candle close as baseline (strictly T-1 Close if as_of_date passed)
             current_price = float(df["Close"].iloc[-1])
-            try:
-                live_price = await asyncio.wait_for(self.fetcher.fetch_current_price(clean_symbol), timeout=2.0)
-                if live_price and live_price > 0:
-                    current_price = live_price
-            except Exception:
-                pass
+            if as_of_date is None:
+                try:
+                    live_price = await asyncio.wait_for(self.fetcher.fetch_current_price(clean_symbol), timeout=2.0)
+                    if live_price and live_price > 0:
+                        current_price = live_price
+                except Exception:
+                    pass
 
             # Fetch secondary metadata (fundamentals & macro) with graceful timeouts
             info = {}
