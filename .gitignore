@@ -59,3 +59,4 @@ Kronos/
 data/charts/ 
 backend/database/ 
 scratch/
+backend/models/*.txt

@@ -129,7 +129,14 @@ export default function SettingsPage() {
     setConnecting(true);
     setMessage(null);
     try {
-      await brokerApi.setAuthCode(authCode);
+      let cleanCode = authCode.trim();
+      if (cleanCode.includes("auth_code=")) {
+        const match = cleanCode.match(/[?&]auth_code=([^&]+)/) || cleanCode.match(/auth_code=([^&]+)/);
+        if (match) {
+          cleanCode = decodeURIComponent(match[1]).trim();
+        }
+      }
+      await brokerApi.setAuthCode(cleanCode);
       const res = await brokerApi.getStatus();
       setBrokerStatus(res.data.status);
       setBrokerName(res.data.name || "");

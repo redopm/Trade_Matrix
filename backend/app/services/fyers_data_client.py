@@ -39,11 +39,21 @@ class FyersDataClient:
         )
         return session.generate_authcode()
 
-    def set_auth_code(self, auth_code: str) -> bool:
+    def set_auth_code(self, auth_code: str):
         """Called by the frontend API when user submits the manual auth code."""
         try:
             self.fyers = None
             self.user_name = None
+            
+            clean_code = auth_code.strip()
+            if "auth_code=" in clean_code:
+                import re
+                m = re.search(r"[?&]auth_code=([^&]+)", clean_code) or re.search(r"auth_code=([^&]+)", clean_code)
+                if m:
+                    clean_code = m.group(1).strip()
+            import urllib.parse
+            clean_code = urllib.parse.unquote(clean_code)
+
             session = fyersModel.SessionModel(
                 client_id=self.app_id,
                 secret_key=self.secret_key,
@@ -51,16 +61,17 @@ class FyersDataClient:
                 response_type="code",
                 grant_type="authorization_code"
             )
-            session.set_token(auth_code)
+            session.set_token(clean_code)
             response = session.generate_token()
             if response.get("s") != "ok":
+                msg = response.get("message") or response.get("errMsg") or str(response)
                 logger.error(f"Failed to generate final token: {response}")
-                return False
+                return False, msg
             self._save_token(response["access_token"])
-            return True
+            return True, None
         except Exception as e:
             logger.error(f"Error setting auth code: {e}")
-            return False
+            return False, str(e)
 
     def auto_login(self) -> bool:
         """

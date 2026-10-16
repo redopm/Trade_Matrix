@@ -59,9 +59,10 @@ async def set_auth_code(payload: AuthCodePayload):
     """Submit the auth code from the frontend to generate the token."""
     global _cached_broker_status
     _cached_broker_status = None  # Invalidate cache
-    success = fyers_client.set_auth_code(payload.auth_code)
+    success, err_msg = fyers_client.set_auth_code(payload.auth_code)
     
     if success:
         return {"status": "success", "message": "Fyers authenticated successfully"}
     else:
-        raise HTTPException(status_code=400, detail="Invalid auth code or token generation failed")
+        detail_msg = err_msg if err_msg else "Invalid auth code or token generation failed"
+        raise HTTPException(status_code=400, detail=detail_msg)

@@ -58,6 +58,8 @@ api.interceptors.response.use(
     const endpoint = error.config?.url ? ` on [${error.config?.method?.toUpperCase()} ${error.config.url}]` : "";
     if (status === "network") {
       console.warn(`[API Connection Waiting]${endpoint}: Backend momentarily offline or restarting`);
+    } else if (typeof status === "number" && status >= 400 && status < 500) {
+      console.warn(`[API Client Error] [${status}]${endpoint}: ${message}`);
     } else {
       console.error(`API Error [${status}]${endpoint}: ${message}`);
     }
