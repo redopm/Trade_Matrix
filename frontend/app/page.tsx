@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { dashboardApi, tradesApi, aladdinApi, type PortfolioStats } from "@/lib/api";
+import { dashboardApi, tradesApi, aladdinApi, forwardTestApi, type PortfolioStats } from "@/lib/api";
 import { 
   TrendingUp, 
   Target, 
@@ -17,7 +17,10 @@ import {
   ShieldCheck,
   RefreshCw,
   CheckCircle2,
-  TrendingDown
+  TrendingDown,
+  FlaskConical,
+  Scale,
+  Database
 } from "lucide-react";
 import Link from "next/link";
 
@@ -147,6 +150,8 @@ export default function DashboardPage() {
   const [summary, setSummary] = useState<any>(null);
   const [recentSignals, setRecentSignals] = useState<any[]>([]);
   const [aiPicks, setAiPicks] = useState<any[]>([]);
+  const [scorecard, setScorecard] = useState<any>(null);
+  const [cohorts, setCohorts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshingPicks, setRefreshingPicks] = useState(false);
   const [deployingSymbol, setDeployingSymbol] = useState<string | null>(null);
@@ -155,16 +160,23 @@ export default function DashboardPage() {
 
   const loadData = async (isManualRefresh: boolean = false) => {
     try {
-      const [summaryRes, statsRes, signalsRes, aiPicksRes] = await Promise.all([
+      const [summaryRes, statsRes, signalsRes, aiPicksRes, scorecardRes, cohortsRes] = await Promise.allSettled([
         dashboardApi.getSummary(),
         tradesApi.getStats(),
         dashboardApi.getRecentSignals(8),
         dashboardApi.getAiPicks(isManualRefresh),
+        forwardTestApi.getScorecard(),
+        forwardTestApi.getCohorts(),
       ]);
-      setSummary(summaryRes.data);
-      setStats(statsRes.data);
-      setRecentSignals(signalsRes.data);
-      setAiPicks(aiPicksRes.data || summaryRes.data?.ai_picks || []);
+
+      if (summaryRes.status === "fulfilled") setSummary(summaryRes.value.data);
+      if (statsRes.status === "fulfilled") setStats(statsRes.value.data);
+      if (signalsRes.status === "fulfilled") setRecentSignals(signalsRes.value.data);
+      if (aiPicksRes.status === "fulfilled") {
+        setAiPicks(aiPicksRes.value.data || (summaryRes.status === "fulfilled" ? summaryRes.value.data?.ai_picks : []));
+      }
+      if (scorecardRes.status === "fulfilled") setScorecard(scorecardRes.value);
+      if (cohortsRes.status === "fulfilled") setCohorts(cohortsRes.value || []);
     } catch (e: any) {
       setError(e.message || "Failed to load dashboard");
     } finally {
@@ -259,7 +271,7 @@ export default function DashboardPage() {
                     ? portfolioStats.available_cash
                     : Math.max(
                         0,
-                        (config.capital || portfolioStats?.capital || 500000) +
+                        (config.capital || portfolioStats?.capital || 1000000) +
                           (portfolioStats?.realized_pnl || 0) -
                           (portfolioStats?.total_invested || 0)
                       )
@@ -341,18 +353,18 @@ export default function DashboardPage() {
             <div className="flex items-center gap-2 mb-1.5">
               <span className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-indigo-500/20 border border-indigo-400/30 text-indigo-300 text-xs font-bold uppercase tracking-wider">
                 <BrainCircuit size={14} className="text-indigo-400" />
-                Aladdin AI Brain
+                Ranked Watchlist (Descriptive Algorithm)
               </span>
               <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 text-xs font-semibold border border-emerald-500/30">
-                70k Trained ML Engine
+                Forward Protocol v2.1 Active
               </span>
             </div>
             <h2 className="text-xl sm:text-2xl font-black tracking-tight text-white flex items-center gap-2">
-              High-Conviction Future Winners
+              Ranked Watchlist (Descriptive Algorithm)
               <Sparkles size={20} className="text-amber-400" />
             </h2>
             <p className="text-xs sm:text-sm text-slate-300 mt-1 max-w-2xl">
-              Predictive 5-Pillar intelligence: Price Geometry + Technical Momentum + Forensic Health + F&O Smart Money + Macro Regime.
+              Descriptive 5-Pillar Ranking: Price Geometry + Technical Momentum + Forensic Health + F&O Smart Money + Macro Regime. Pre-registered empirical forward trial in progress.
             </p>
           </div>
 
@@ -532,6 +544,141 @@ export default function DashboardPage() {
               </div>
             );
           })}
+        </div>
+      </div>
+
+      {/* --- Forward Validation Protocol v2.1 (Institutional Pre-Registered Trial) --- */}
+      <div className="bg-white border border-slate-200 rounded-2xl p-6 sm:p-7 shadow-sm">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-6 border-b border-slate-100">
+          <div>
+            <div className="flex flex-wrap items-center gap-2 mb-2">
+              <span className="px-2.5 py-1 rounded-md bg-indigo-50 text-indigo-700 text-xs font-bold border border-indigo-100 flex items-center gap-1.5">
+                <FlaskConical size={14} />
+                Protocol v2.1 Active
+              </span>
+              <span className="px-2.5 py-1 rounded-md bg-emerald-50 text-emerald-700 text-xs font-semibold border border-emerald-100">
+                Pre-Registered Git #1f24309
+              </span>
+              <span className="px-2.5 py-1 rounded-md bg-slate-100 text-slate-700 text-xs font-semibold">
+                Statutory Friction: 0.385%
+              </span>
+              <span className="px-2.5 py-1 rounded-md bg-amber-50 text-amber-800 text-xs font-semibold border border-amber-200">
+                Rigid Pool: ₹10,00,000 (Max 3 Active Cohorts)
+              </span>
+            </div>
+            <h2 className="text-xl font-black text-slate-900 tracking-tight flex items-center gap-2">
+              Empirical Forward Validation Protocol
+              <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">
+                K=9 Target Cohorts
+              </span>
+            </h2>
+            <p className="text-xs sm:text-sm text-slate-500 mt-1 max-w-3xl">
+              Strict empirical testing: Tool Top 10 evaluated against 1,000 pseudo-random 10-stock Monte Carlo baskets from the same Nifty 100 universe. Fixed 90-day holding horizon calculated offline via Ledger A (Shadow Research) with dividend-adjusted returns.
+            </p>
+          </div>
+
+          <div className="flex items-center gap-2 shrink-0">
+            <div className="text-right">
+              <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Evaluation Horizon</div>
+              <div className="text-sm font-bold text-slate-800">12 Months (Oct 2026 – Oct 2027)</div>
+            </div>
+          </div>
+        </div>
+
+        {/* 4 Protocol Stat Cards */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 my-6">
+          <div className="p-4 rounded-xl bg-slate-50 border border-slate-200/80">
+            <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Primary Metric</div>
+            <div className="text-lg font-black text-slate-900">Tool Net − Control Mean</div>
+            <div className="text-xs text-slate-500 mt-1">Evaluated across cohorts against 1,000 random baskets</div>
+          </div>
+
+          <div className="p-4 rounded-xl bg-slate-50 border border-slate-200/80">
+            <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Standard Error & Power</div>
+            <div className="text-lg font-black text-indigo-700">SE = s<sub>Δ</sub> / √K</div>
+            <div className="text-xs text-slate-500 mt-1">Min detectable edge: +3.85% / 90d (~16.2% p.a.)</div>
+          </div>
+
+          <div className="p-4 rounded-xl bg-slate-50 border border-slate-200/80">
+            <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Execution Architecture</div>
+            <div className="text-lg font-black text-slate-900">Dual-Ledger Separation</div>
+            <div className="text-xs text-slate-500 mt-1">Ledger A (Shadow 90d) | Ledger B (Live ATR SL Desk)</div>
+          </div>
+
+          <div className="p-4 rounded-xl bg-slate-50 border border-slate-200/80">
+            <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Pre-Registered Sunset</div>
+            <div className="text-lg font-black text-amber-700">Protected Until K ≥ 9</div>
+            <div className="text-xs text-slate-500 mt-1">≤0.0% shutdown evaluated strictly after 9 full cohorts</div>
+          </div>
+        </div>
+
+        {/* Cohort Summary Table */}
+        <div className="mt-4 pt-4 border-t border-slate-100">
+          <div className="flex items-center justify-between mb-3">
+            <div className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+              <Database size={13} className="text-indigo-600" />
+              Pre-Registered Cohort Ledger ({cohorts.length} Cohort{cohorts.length === 1 ? "" : "s"} Frozen)
+            </div>
+            <div className="text-xs text-slate-500">
+              Next Cohort 1 Freeze: <strong>03 November 2026</strong> (First Trading Day)
+            </div>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs border border-slate-100 rounded-lg overflow-hidden">
+              <thead className="bg-slate-50 text-slate-600 font-semibold border-b border-slate-100">
+                <tr>
+                  <th className="py-2.5 px-3">Batch ID</th>
+                  <th className="py-2.5 px-3">Type</th>
+                  <th className="py-2.5 px-3">Regime</th>
+                  <th className="py-2.5 px-3">Nifty Base</th>
+                  <th className="py-2.5 px-3">Universe</th>
+                  <th className="py-2.5 px-3">Live Invested (Ledger B)</th>
+                  <th className="py-2.5 px-3">Git SHA</th>
+                  <th className="py-2.5 px-3">Status</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {cohorts.map((c: any) => (
+                  <tr key={c.batch_id} className="hover:bg-slate-50/60 transition-colors">
+                    <td className="py-2.5 px-3 font-mono font-bold text-slate-900">{c.batch_id}</td>
+                    <td className="py-2.5 px-3">
+                      <span className={`px-2 py-0.5 rounded font-bold uppercase text-[10px] ${
+                        c.cohort_type === "PILOT" 
+                          ? "bg-amber-100 text-amber-800" 
+                          : "bg-indigo-100 text-indigo-800"
+                      }`}>
+                        {c.cohort_type}
+                      </span>
+                    </td>
+                    <td className="py-2.5 px-3">
+                      <span className={`px-2 py-0.5 rounded font-bold uppercase text-[10px] ${
+                        c.regime === "DEFENSIVE" ? "bg-rose-100 text-rose-800" : "bg-emerald-100 text-emerald-800"
+                      }`}>
+                        {c.regime}
+                      </span>
+                    </td>
+                    <td className="py-2.5 px-3 font-semibold">₹{c.nifty_base_price?.toFixed(2)}</td>
+                    <td className="py-2.5 px-3 text-slate-600">{c.eligible_universe_count} stocks</td>
+                    <td className="py-2.5 px-3 font-bold text-slate-900">₹{c.total_allocated_inr?.toLocaleString("en-IN")}</td>
+                    <td className="py-2.5 px-3 font-mono text-slate-500">{c.scoring_git_hash}</td>
+                    <td className="py-2.5 px-3">
+                      <span className="px-2 py-0.5 rounded bg-blue-50 text-blue-700 font-bold text-[10px] uppercase">
+                        {c.status}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+                {cohorts.length === 0 && (
+                  <tr>
+                    <td colSpan={8} className="py-6 text-center text-slate-400">
+                      Cohort 0 Pilot freeze executing... Refresh to view live ledger.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
 

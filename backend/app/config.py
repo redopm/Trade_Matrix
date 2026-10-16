@@ -134,8 +134,11 @@ class Settings(BaseSettings):
     DATA_INTERVAL: str = "1d"                    # Candle interval
 
     # Paper Trading Defaults
-    DEFAULT_CAPITAL: float = 500_000.0           # ₹5 Lakhs capital
-    DEFAULT_POSITION_SIZE_PCT: float = 0.20      # 20% per trade (₹1 Lakh per position)
+    DEFAULT_CAPITAL: float = 1_000_000.0         # ₹10 Lakhs capital (Rigid pool)
+    DEFAULT_POSITION_SIZE_PCT: float = 0.025     # 2.5% per trade (₹25,000 per slot)
+    FORWARD_TEST_SLOT_CAPITAL: float = 25_000.0  # ₹25,000 fixed slot for forward cohorts
+    FORWARD_TEST_STOCKS_PER_BATCH: int = 10      # 10 stocks per cohort
+    EQUITY_DELIVERY_FRICTION_PCT: float = 0.00385 # 0.385% discount broker equity delivery round-trip
     FIXED_SL_PCT: float = 0.05                   # 5% hard stop loss
     ATR_SL_MULTIPLIER: float = 2.0               # 2×ATR for dynamic SL
     TARGET_RSI_OVERBOUGHT: float = 70.0          # RSI exit threshold

@@ -22,6 +22,7 @@ build/
 database/*.db
 database/*.db-shm
 database/*.db-wal
+database/*.bak*
 
 # Logs
 logs/

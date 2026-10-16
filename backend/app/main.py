@@ -18,7 +18,7 @@ from fastapi.responses import JSONResponse
 from app.config import settings
 from app.database import init_db
 from app.services.scheduler import create_scheduler
-from app.routers import screener, trades, stocks, dashboard, patterns, settings as settings_router, broker, fno, research, backtest, oracle, aladdin
+from app.routers import screener, trades, stocks, dashboard, patterns, settings as settings_router, broker, fno, research, backtest, oracle, aladdin, forward_test
 from app.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -169,5 +169,6 @@ app.include_router(research.router, prefix=API_PREFIX)  # Phase 1 Research Engin
 app.include_router(backtest.router, prefix=API_PREFIX)  # Quantitative Backtesting Engine
 app.include_router(aladdin.router, prefix=API_PREFIX)   # The Aladdin Brain: Universal Stock Intelligence
 app.include_router(oracle.router, prefix=API_PREFIX)    # Legacy route compatibility alias
+app.include_router(forward_test.router, prefix=API_PREFIX)  # Forward Validation Protocol v2.1
 
 logger.info(f"API routes registered at prefix: {API_PREFIX}")

@@ -428,3 +428,15 @@ export interface ChartCandle {
   ema_200?: number;
   rsi?: number;
 }
+
+export const forwardTestApi = {
+  freezeCohort: (cohortType: "PILOT" | "PRIMARY" = "PRIMARY", batchId?: string) =>
+    api.post(`/forward-test/freeze-cohort?cohort_type=${cohortType}${batchId ? `&batch_id=${batchId}` : ""}`).then((r) => r.data),
+  getScorecard: () =>
+    api.get("/forward-test/scorecard").then((r) => r.data),
+  getCohorts: () =>
+    api.get("/forward-test/cohorts").then((r) => r.data),
+  getSnapshot: (batchId: string) =>
+    api.get(`/forward-test/snapshot/${batchId}`).then((r) => r.data),
+};
+
