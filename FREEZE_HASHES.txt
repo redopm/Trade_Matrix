@@ -1,0 +1,25 @@
+# ==============================================================================
+# TradeMatrix Forward Testing Protocol v2.1.1 - Pre-Registered Freeze Hashes
+# Pre-Registered: 16 October 2026, Friday
+# ==============================================================================
+
+PROTOCOL_VERSION: v2.1.1
+SCORING_FORMULA_VERSION: ALADDIN_V2_5PILLAR
+STATUTORY_FRICTION_ROUND_TRIP: 0.00385 (0.385%)
+FORWARD_TEST_CAPITAL_POOL: INR 1,000,000.00
+COHORT_1_SCHEDULED_FREEZE_DATE: 2026-11-02 (Monday, 09:30 AM IST)
+
+SCORING_CRITICAL_FILES (Only these trigger code-dirty checks and define scoring hash):
+  1. backend/app/services/aladdin_brain.py
+  2. backend/app/services/forward_test.py
+  3. backend/app/services/data_fetcher.py
+
+KEY COMMITS:
+  - Base Implementation Commit: a014fdd
+  - Amendment Documentation Commit: 5e00b77
+  - Final Protocol v2.1.1 Lock Commit: (recorded in git log)
+
+AUTHORITATIVE SPECIFICATION:
+  - docs/forward_testing_protocol_v2_1_1_amendment.md (Authoritative over conflicting text)
+  - docs/forward_testing_protocol_v2.md (Complete Operational Specification)
+  - docs/one_page_research_summary.md (Executive Research Summary)

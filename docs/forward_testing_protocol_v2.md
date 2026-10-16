@@ -170,13 +170,13 @@ graph TD
     B -- YES --> C[PASS: Statistically Significant Algorithmic Edge Confirmed]
     B -- NO --> D{Is Mean Net Alpha <= 0.0%?}
     D -- YES --> E[SUNSET: Zero Predictive Edge. System Permanently Retired.]
-    D -- NO --> F[INCONCLUSIVE: 0.0% < Alpha < CI threshold. Decommission Active Desk.]
+    D -- NO --> F["INCONCLUSIVE: 0.0% < Alpha < 1.0% OR CI_lower <= 0.0%"]
 ```
 
 1. **Pass Condition (Validation):**
    - 95% Confidence Interval lower bound is strictly positive: $\text{CI}_{\text{lower}} > 0.0\%$.
    - Cross-cohort mean excess return meets the economic floor: $\overline{\Delta} \ge +1.0\%$ per 90 days.
-2. **Inconclusive Condition ($0.0\% < \overline{\Delta}$ but $\text{CI}_{\text{lower}} \le 0.0\%$ or $\overline{\Delta} < +1.0\%$):**
+2. **Inconclusive Condition ($0.0\% < \overline{\Delta} < +1.0\%$ or $\text{CI}_{\text{lower}} \le 0.0\%$):**
    - The data is insufficient to reject the null hypothesis of luck/noise. The active descriptive desk is decommissioned without commercial claims.
 3. **Sunset Condition ($\overline{\Delta} \le 0.0\%$):**
    - Aladdin composite score underperforms a monkey throwing 10 darts. The active stock selection engine is permanently decommissioned.
@@ -190,31 +190,12 @@ graph TD
 2. **Step 2: Database Migration** $\to$ Added `sector_exposure` and `score_distribution` columns to `forward_batches`. Full 96-stock universe saved in `universe_score_snapshots`.
 3. **Step 3: Ring-Fenced Capital** $\to$ Added `FORWARD_TEST_CAPITAL_POOL = 1_000_000.0` in `backend/app/config.py`.
 4. **Step 4: Implemented Engine Updates** in `backend/app/services/forward_test.py`:
-   - Enforce clean git status and dynamically read HEAD SHA.
+   - Enforce clean git status strictly on scoring-critical files (`aladdin_brain.py`, `forward_test.py`, `data_fetcher.py`).
+   - Missed-run catchup freezes tagged as `CATCHUP_LATE` (quarantined from primary inference).
    - Exact universe net return computation for primary $\Delta$.
    - Control 2 (1,000 sector-matched random baskets).
    - Single decoupled pass rule ($CI_{\text{lower}} > 0$ and $\overline{\Delta} \ge 1.0\%$).
-5. **Step 5: Automated Scheduler & NSE Calendar** $\to$ Added `nse_calendar.py`, weekday 09:30 AM cron, and startup catch-up trigger.
+5. **Step 5: Automated Scheduler & NSE Calendar** $\to$ Added `nse_calendar.py`, weekday 09:30 AM cron, and startup catch-up trigger. 2027 holidays marked provisional.
 6. **Step 6: Cohort 0 (Pilot)** $\to$ Designated `PILOT`, isolated from primary inference. Cohort 1 set to Monday, 02 November 2026.
 7. **Step 7: Reconciled Documentation** $\to$ Protocol v2.1.1 pre-registered.
 8. **Step 8: Verified Tests** $\to$ `dry_run`, `py_compile`, `test_scorecard`, and `tsc --noEmit`.
-
----
-
-## 4. Implementation Roadmap (Backend First $\to$ UI Last)
-
-1. **Step 1: Backup `tradematrix.db`** $\to$ Create physical copy `tradematrix.db.bak_YYYYMMDD`.
-2. **Step 2: Idempotent Database Migration** $\to$
-   - Create table `forward_batches` (with dual-ledger tracking, git hash, regime, seed).
-   - Create table `universe_score_snapshots` (full 100-stock score snapshot).
-   - Add metadata columns to `paper_trades` with `experiment_arm = 'LEGACY_PRE_V2'` for existing 5 trades.
-3. **Step 3: Update `DEFAULT_CAPITAL = 1_000_000.0`** in [backend/app/config.py](file:///c:/project/Trade_matrix/backend/app/config.py).
-4. **Step 4: Implement `ForwardTestEngine`** in `backend/app/services/forward_test.py`:
-   - Full-universe snapshotter ($N \ge 100$).
-   - 1,000-basket Monte Carlo simulator.
-   - Cross-cohort Spearman correlation calculator.
-   - 0.385% real delivery friction calculator.
-5. **Step 5: Offline Dry-Run Script** $\to$ Verify deterministic bootstrap, friction, and snapshot persistence.
-6. **Step 6: Deploy Cohort 0 (Pilot Verification)** $\to$ Tagged `PILOT_COHORT_0`, Nifty base recorded, legacy trades archived.
-7. **Step 7: Reconcile [docs/one_page_research_summary.md](file:///c:/project/Trade_matrix/docs/one_page_research_summary.md)** with Protocol v2.1.
-8. **Step 8: UI Updates (Dashboard)** $\to$ Capital ₹10L display, compliant "Ranked Watchlist (Descriptive Algorithm)" table.

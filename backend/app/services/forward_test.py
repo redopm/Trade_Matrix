@@ -61,40 +61,55 @@ class ForwardTestEngine:
     def get_scoring_git_hash(enforce_clean: bool = True) -> str:
         """
         Extract exact git commit SHA for audit tracking.
-        Enforces a clean git working tree to guarantee 100% code-to-hash reproducibility.
+        Enforces a clean git working tree on scoring-critical files only,
+        preventing accidental refusal due to unrelated workspace files (notes, scratch scripts, docs).
         """
+        scoring_files = [
+            "backend/app/services/aladdin_brain.py",
+            "backend/app/services/forward_test.py",
+            "backend/app/services/data_fetcher.py",
+        ]
         try:
             if enforce_clean:
                 status_res = subprocess.run(
-                    ["git", "status", "--porcelain", "backend/"],
+                    ["git", "status", "--porcelain", "--"] + scoring_files,
                     capture_output=True,
                     text=True,
                     timeout=5
                 )
-                dirty_lines = [
-                    line.strip() for line in status_res.stdout.splitlines()
-                    if line.strip() and not any(ext in line for ext in [".log", ".tmp", ".bak", "tradematrix.db"])
-                ]
+                dirty_lines = [line.strip() for line in status_res.stdout.splitlines() if line.strip()]
                 if dirty_lines:
                     raise RuntimeError(
-                        f"Cohort freeze rejected: Working directory has uncommitted modifications in backend/ ({len(dirty_lines)} files):\n"
-                        + "\n".join(dirty_lines[:5])
-                        + "\nProtocol v2.1.1 requires code changes to be committed before freezing an empirical cohort."
+                        f"Cohort freeze rejected: Scoring logic has uncommitted modifications ({len(dirty_lines)} files):\n"
+                        + "\n".join(dirty_lines)
+                        + "\nProtocol v2.1.1 requires scoring code changes to be committed before freezing an empirical cohort."
                     )
 
+            # Get the commit hash that last touched the scoring logic
             res = subprocess.run(
-                ["git", "rev-parse", "HEAD"],
+                ["git", "log", "-1", "--format=%h", "--"] + scoring_files,
                 capture_output=True,
                 text=True,
                 check=True,
                 timeout=5
             )
-            return res.stdout.strip()[:10]
+            scoring_hash = res.stdout.strip()
+            if not scoring_hash:
+                # Fallback to repo HEAD if git log returned empty
+                head_res = subprocess.run(
+                    ["git", "rev-parse", "--short=10", "HEAD"],
+                    capture_output=True,
+                    text=True,
+                    check=True,
+                    timeout=5
+                )
+                scoring_hash = head_res.stdout.strip()
+            return scoring_hash
         except RuntimeError:
             raise
         except Exception as e:
-            logger.error(f"Failed retrieving git HEAD hash: {e}")
-            raise RuntimeError(f"Scoring git commit hash could not be retrieved from HEAD: {e}")
+            logger.error(f"Failed retrieving scoring git hash: {e}")
+            raise RuntimeError(f"Scoring git commit hash could not be retrieved: {e}")
 
     @staticmethod
     def calculate_delivery_friction(entry_price: float, exit_price: float, qty: int) -> float:
@@ -594,15 +609,25 @@ class ForwardTestEngine:
         if existing:
             return None
 
-        logger.info(
-            f"[FORWARD_TEST_SCHEDULER] Freezing Cohort {cohort_num} for {today.strftime('%Y-%m')} "
-            f"(First trading day was: {first_trading_day})"
-        )
+        is_catchup = (today > first_trading_day)
+        cohort_type = "CATCHUP_LATE" if is_catchup else "PRIMARY"
+
+        if is_catchup:
+            logger.warning(
+                f"[FORWARD_TEST_SCHEDULER] Catch-up freeze detected on {today} (First trading day was {first_trading_day}). "
+                f"Cohort {cohort_num} tagged as '{cohort_type}' (quarantined from primary statistical inference to prevent lookahead/timing distortion)."
+            )
+        else:
+            logger.info(
+                f"[FORWARD_TEST_SCHEDULER] Freezing On-Time Primary Cohort {cohort_num} on {today} (First trading day: {first_trading_day})."
+            )
+
         regime_data = await MarketRegimeDetector.get_current_regime()
         nifty_price = float(regime_data.get("nifty_price") or 25000.0)
         nifty_ema200 = float(regime_data.get("nifty_ema200") or 24500.0)
         regime_tag = "DEFENSIVE" if (nifty_price < nifty_ema200) else "BULLISH"
         
-        batch_id = f"{month_prefix}_{today.strftime('%Y%m%d')}_{regime_tag}"
-        freeze_res = await cls.freeze_cohort(db, cohort_type="PRIMARY", batch_id=batch_id)
+        type_suffix = "LATE" if is_catchup else "PRIMARY"
+        batch_id = f"{month_prefix}_{today.strftime('%Y%m%d')}_{type_suffix}_{regime_tag}"
+        freeze_res = await cls.freeze_cohort(db, cohort_type=cohort_type, batch_id=batch_id)
         return freeze_res

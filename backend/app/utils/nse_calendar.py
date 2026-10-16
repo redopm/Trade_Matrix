@@ -5,9 +5,10 @@ Accurate first-trading-day detection and Day-90 maturity date rolling.
 from datetime import date, timedelta
 from typing import Set, Tuple, List
 
-# NSE Equity Trading Holidays for 2026 and 2027 (Official Exchange Schedule)
-NSE_EQUITY_HOLIDAYS: Set[str] = {
-    # 2026 Holidays
+# NSE Equity Trading Holidays
+# 2026: Official Exchange Master Schedule
+# 2027: PROVISIONAL (Standard Exchange Projections; subject to final annual circular issued by NSE in Nov/Dec 2026)
+NSE_EQUITY_HOLIDAYS_OFFICIAL_2026: Set[str] = {
     "2026-01-26",  # Republic Day
     "2026-02-17",  # Mahashivratri
     "2026-03-03",  # Holi
@@ -24,22 +25,26 @@ NSE_EQUITY_HOLIDAYS: Set[str] = {
     "2026-11-09",  # Diwali Balipratipada
     "2026-11-24",  # Guru Nanak Jayanti
     "2026-12-25",  # Christmas
-    # 2027 Holidays (Projected Standard Exchange Calendar)
-    "2027-01-26",  # Republic Day
-    "2027-03-08",  # Mahashivratri
-    "2027-03-22",  # Holi
-    "2027-03-26",  # Good Friday
-    "2027-04-14",  # Dr. Ambedkar Jayanti
-    "2027-05-01",  # Maharashtra Day (Saturday)
-    "2027-05-17",  # Bakri Id
-    "2027-06-16",  # Muharram
-    "2027-08-15",  # Independence Day (Sunday)
-    "2027-10-02",  # Gandhi Jayanti (Saturday)
-    "2027-10-11",  # Dussehra
-    "2027-10-29",  # Diwali Balipratipada
-    "2027-11-14",  # Guru Nanak Jayanti (Sunday)
-    "2027-12-25",  # Christmas (Saturday)
 }
+
+NSE_EQUITY_HOLIDAYS_PROVISIONAL_2027: Set[str] = {
+    "2027-01-26",  # Republic Day (Provisional)
+    "2027-03-08",  # Mahashivratri (Provisional)
+    "2027-03-22",  # Holi (Provisional)
+    "2027-03-26",  # Good Friday (Provisional)
+    "2027-04-14",  # Dr. Ambedkar Jayanti (Provisional)
+    "2027-05-01",  # Maharashtra Day (Saturday, Provisional)
+    "2027-05-17",  # Bakri Id (Provisional)
+    "2027-06-16",  # Muharram (Provisional)
+    "2027-08-15",  # Independence Day (Sunday, Provisional)
+    "2027-10-02",  # Gandhi Jayanti (Saturday, Provisional)
+    "2027-10-11",  # Dussehra (Provisional)
+    "2027-10-29",  # Diwali Balipratipada (Provisional)
+    "2027-11-14",  # Guru Nanak Jayanti (Sunday, Provisional)
+    "2027-12-25",  # Christmas (Saturday, Provisional)
+}
+
+NSE_EQUITY_HOLIDAYS: Set[str] = NSE_EQUITY_HOLIDAYS_OFFICIAL_2026.union(NSE_EQUITY_HOLIDAYS_PROVISIONAL_2027)
 
 
 class NSETradingCalendar:
