@@ -53,9 +53,10 @@
   - **Frozen Criteria & Frictions:** Score $\ge 65.0$ frozen (Trend 35 pts, Solvency 35 pts, Patterns 30 pts) evaluated after realistic delivery frictions (0.20% STT, ₹40 brokerage, 0.10% slippage).
   - **Independence & Temporal Spread Requirement:** To prevent single-market-cluster co-movement, the target sample of $N = 30$ observations must span at least **6 distinct calendar months** (maximum 5 observations counted in any single calendar month).
   - **Calendar Horizon Limit (Deadline):** A strict **12-month calendar deadline (terminating October 16, 2027)** is pre-committed. If $N = 30$ qualified observations are not achieved by this date (e.g. prolonged defensive regimes), forward evaluation is declared **"INCONCLUSIVE (Underpowered Sample)"** and frozen, preventing endless live observation.
-  - **Two-Sided Decision Rule:**
-    - **Pass Rule:** Excess return $> +2.0\%$ p.a. equivalent over Nifty 50 TRI after 0.20% frictions **AND** the 95% confidence interval lower bound must be strictly positive ($\text{CI}_{lower} > 0.0\%$).
-    - **Sunset Rule:** If average 90-day excess return is $\le 0.0\%$, the descriptive desk is permanently decommissioned.
+  - **Pre-Committed Tri-State Decision Rule:**
+    - **Pass Rule (Validation Threshold):** Excess return $> +2.0\%$ p.a. equivalent over Nifty 50 TRI after 0.20% frictions **AND** the 95% confidence interval lower bound must be strictly positive ($\text{CI}_{lower} > 0.0\%$).
+    - **Marginal / Inconclusive Zone ($0.0\% < \text{Excess Return} \le +2.0\%$ or $\text{CI}_{lower} \le 0.0\%$):** Formally classified as **"INCONCLUSIVE"**; continue observation until the 12-month calendar deadline (October 16, 2027). If by the deadline it fails to clear the $+2.0\%$ hurdle with $\text{CI}_{lower} > 0.0\%$, the descriptive desk is permanently decommissioned (no indefinite extensions).
+    - **Sunset Rule (Immediate Shutdown):** If average 90-day excess return is $\le 0.0\%$ after $N \ge 30$, the descriptive desk is formally declared to possess zero predictive alpha and is permanently decommissioned.
 
 ---
 
