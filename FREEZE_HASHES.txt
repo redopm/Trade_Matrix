@@ -17,7 +17,8 @@ SCORING_CRITICAL_FILES (Only these trigger code-dirty checks and define scoring 
 KEY COMMITS:
   - Base Implementation Commit: a014fdd
   - Amendment Documentation Commit: 5e00b77
-  - Final Protocol v2.1.1 Lock Commit: (recorded in git log)
+  - Protocol v2.1.1 Locked Scoring Commit SHA: e7c2ead
+  - Scoring Logic Specific Hash: e7c2ead (Tracking SCORING_CRITICAL_FILES)
 
 AUTHORITATIVE SPECIFICATION:
   - docs/forward_testing_protocol_v2_1_1_amendment.md (Authoritative over conflicting text)
