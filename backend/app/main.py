@@ -44,6 +44,11 @@ async def lifespan(app: FastAPI):
     scheduler.start()
     logger.info("Scheduler started")
 
+    # Catch up any missed forward cohort freeze on startup (Protocol v2.1.1)
+    from app.services.scheduler import check_forward_test_catchup_on_startup
+    import asyncio
+    asyncio.create_task(check_forward_test_catchup_on_startup())
+
     yield  # Application is running
 
     # ── Shutdown ──────────────────────────────────────────────────────────────

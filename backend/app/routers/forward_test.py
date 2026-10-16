@@ -2,6 +2,7 @@
 Forward Validation Router (Protocol v2.1)
 REST Endpoints for Cohort Freeze, Monte Carlo Bootstrap Evaluation, and Scorecard
 """
+from datetime import date
 from typing import Optional, List, Dict, Any
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -10,10 +11,11 @@ from sqlalchemy import select
 from app.database import get_db
 from app.models.trade import ForwardBatch, UniverseScoreSnapshot, PaperTrade
 from app.services.forward_test import ForwardTestEngine
+from app.utils.nse_calendar import NSETradingCalendar
 from app.utils.logger import get_logger
 
 logger = get_logger(__name__)
-router = APIRouter(prefix="/forward-test", tags=["Forward Validation Protocol v2.1"])
+router = APIRouter(prefix="/forward-test", tags=["Forward Validation Protocol v2.1.1"])
 
 
 @router.post("/freeze-cohort", response_model=Dict[str, Any], status_code=201)
@@ -102,3 +104,22 @@ async def get_universe_snapshot(batch_id: str, db: AsyncSession = Depends(get_db
         }
         for s in snaps
     ]
+
+
+@router.get("/calendar/cohort-schedule", response_model=List[Dict[str, Any]])
+async def get_cohort_schedule():
+    """Returns the pre-registered schedule of all 9 primary cohorts and exit dates."""
+    dates = NSETradingCalendar.get_all_protocol_cohort_dates()
+    today = date.today()
+    return [
+        {
+            "cohort_number": c_num,
+            "entry_trading_day": entry_d.isoformat(),
+            "entry_weekday": entry_d.strftime("%A"),
+            "day90_exit_date": exit_d.isoformat(),
+            "exit_weekday": exit_d.strftime("%A"),
+            "status": "UPCOMING" if today < entry_d else ("ACTIVE" if today <= exit_d else "COMPLETED"),
+        }
+        for c_num, entry_d, exit_d in dates
+    ]
+

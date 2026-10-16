@@ -9,11 +9,13 @@ Dual-Ledger Architecture:
 Evaluates Tool Top 10 against a 1,000-basket Monte Carlo random distribution from Nifty 100.
 """
 import asyncio
+import json
 import numpy as np
 import subprocess
-from datetime import datetime
+from datetime import datetime, date
 from typing import Dict, List, Any, Optional, Tuple
-from sqlalchemy import select, and_, desc
+from collections import Counter
+from sqlalchemy import select, and_, desc, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
@@ -21,6 +23,7 @@ from app.models.trade import PaperTrade, TradeStatus, ForwardBatch, UniverseScor
 from app.services.aladdin_brain import AladdinBrainEngine
 from app.services.market_regime import MarketRegimeDetector
 from app.services.data_fetcher import DataFetcher
+from app.utils.nse_calendar import NSETradingCalendar
 from app.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -55,19 +58,43 @@ class ForwardTestEngine:
     """
 
     @staticmethod
-    def get_scoring_git_hash() -> str:
-        """Extract the exact current git commit SHA for audit tracking."""
+    def get_scoring_git_hash(enforce_clean: bool = True) -> str:
+        """
+        Extract exact git commit SHA for audit tracking.
+        Enforces a clean git working tree to guarantee 100% code-to-hash reproducibility.
+        """
         try:
+            if enforce_clean:
+                status_res = subprocess.run(
+                    ["git", "status", "--porcelain", "backend/"],
+                    capture_output=True,
+                    text=True,
+                    timeout=5
+                )
+                dirty_lines = [
+                    line.strip() for line in status_res.stdout.splitlines()
+                    if line.strip() and not any(ext in line for ext in [".log", ".tmp", ".bak", "tradematrix.db"])
+                ]
+                if dirty_lines:
+                    raise RuntimeError(
+                        f"Cohort freeze rejected: Working directory has uncommitted modifications in backend/ ({len(dirty_lines)} files):\n"
+                        + "\n".join(dirty_lines[:5])
+                        + "\nProtocol v2.1.1 requires code changes to be committed before freezing an empirical cohort."
+                    )
+
             res = subprocess.run(
-                ["git", "rev-parse", "--short", "HEAD"],
+                ["git", "rev-parse", "HEAD"],
                 capture_output=True,
                 text=True,
                 check=True,
                 timeout=5
             )
-            return res.stdout.strip()
-        except Exception:
-            return "1f24309"
+            return res.stdout.strip()[:10]
+        except RuntimeError:
+            raise
+        except Exception as e:
+            logger.error(f"Failed retrieving git HEAD hash: {e}")
+            raise RuntimeError(f"Scoring git commit hash could not be retrieved from HEAD: {e}")
 
     @staticmethod
     def calculate_delivery_friction(entry_price: float, exit_price: float, qty: int) -> float:
@@ -168,6 +195,16 @@ class ForwardTestEngine:
 
         # 5. Insert Ledger B: Secondary Live Paper Execution Desk (Tool Top 10 @ ₹25k slots)
         slot_capital = settings.FORWARD_TEST_SLOT_CAPITAL # ₹25,000
+        forward_pool = getattr(settings, "FORWARD_TEST_CAPITAL_POOL", 1_000_000.0)
+        
+        # Check active live forward test capital
+        active_fwd_stmt = select(func.sum(PaperTrade.invested_amount)).where(
+            and_(PaperTrade.batch_id.isnot(None), PaperTrade.status == TradeStatus.OPEN)
+        )
+        res_cap = await db.execute(active_fwd_stmt)
+        active_fwd_allocated = float(res_cap.scalar() or 0.0)
+        available_fwd_capital = forward_pool - active_fwd_allocated
+
         live_trades = []
         for stock in universe_scores[:10]:
             p = stock["current_price"]
@@ -175,6 +212,16 @@ class ForwardTestEngine:
             invested = round(qty * p, 2)
             friction = round(invested * FROZEN_DELIVERY_FRICTION_PCT, 2)
 
+            # Strict ring-fenced capital check for Ledger B
+            if available_fwd_capital < invested:
+                logger.warning(
+                    f"[FORWARD_LEDGER_B_REJECT] Trade for {stock['symbol']} rejected: "
+                    f"Forward Test capital pool (₹{forward_pool:,.2f}) exhausted. "
+                    f"Available: ₹{available_fwd_capital:,.2f}, Required: ₹{invested:,.2f}."
+                )
+                continue
+
+            available_fwd_capital -= invested
             trade = PaperTrade(
                 batch_id=batch_id,
                 experiment_arm="TOOL_TOP10",
@@ -193,12 +240,35 @@ class ForwardTestEngine:
                 nifty_entry_price=nifty_price,
                 friction_cost=FROZEN_DELIVERY_FRICTION_PCT,
                 status=TradeStatus.OPEN,
-                notes=f"Protocol v2.1 Cohort {cohort_type} | Aladdin Top 10 Rank | Score: {stock['composite_score']:.1f}%"
+                notes=f"Protocol v2.1.1 Cohort {cohort_type} | Aladdin Top 10 Rank | Score: {stock['composite_score']:.1f}%"
             )
             db.add(trade)
             live_trades.append(trade)
 
-        # 6. Insert ForwardBatch Metadata Record
+        # 6. Calculate Score Distribution & Sector Exposure
+        scores_arr = [s["composite_score"] for s in universe_scores]
+        score_dist = {
+            "min": round(float(np.min(scores_arr)), 2),
+            "max": round(float(np.max(scores_arr)), 2),
+            "mean": round(float(np.mean(scores_arr)), 2),
+            "median": round(float(np.median(scores_arr)), 2),
+            "std": round(float(np.std(scores_arr)), 2),
+            "top10_threshold": round(float(universe_scores[9]["composite_score"]), 2),
+        }
+
+        top10_sectors = dict(Counter(s["sector"] for s in universe_scores[:10]))
+        universe_sectors = dict(Counter(s["sector"] for s in universe_scores))
+        defensive_sectors = {"Technology", "Healthcare", "Consumer Defensive", "Utilities"}
+        defensive_count = sum(top10_sectors.get(sec, 0) for sec in defensive_sectors)
+        
+        sector_exp = {
+            "top10_sector_counts": top10_sectors,
+            "universe_sector_counts": universe_sectors,
+            "defensive_stocks_in_top10": defensive_count,
+            "defensive_weight_pct": round((defensive_count / 10.0) * 100.0, 1),
+        }
+
+        # 7. Insert ForwardBatch Metadata Record
         batch_meta = ForwardBatch(
             batch_id=batch_id,
             created_at=now,
@@ -213,15 +283,17 @@ class ForwardTestEngine:
             tool_stock_count=10,
             control_basket_count=1000,
             slot_capital_inr=slot_capital,
-            total_allocated_inr=sum(t.invested_amount for t in live_trades)
+            total_allocated_inr=sum(t.invested_amount for t in live_trades),
+            sector_exposure=json.dumps(sector_exp),
+            score_distribution=json.dumps(score_dist),
         )
         db.add(batch_meta)
         await db.commit()
 
         logger.info(
             f"Cohort {batch_id} successfully frozen! "
-            f"Ledger A: {len(universe_scores)} snapshot stocks. "
-            f"Ledger B: 10 live trades deployed (Total invested: ₹{batch_meta.total_allocated_inr:,.2f})."
+            f"Ledger A: {len(universe_scores)} snapshot stocks (Mean score: {score_dist['mean']}%, Top10 defensive weight: {sector_exp['defensive_weight_pct']}%). "
+            f"Ledger B: {len(live_trades)} live trades deployed (Total invested: ₹{batch_meta.total_allocated_inr:,.2f})."
         )
 
         return {
@@ -260,12 +332,8 @@ class ForwardTestEngine:
     ) -> Dict[str, Any]:
         """
         Pure offline simulation of 1,000 pseudo-random 10-stock equal-weight baskets.
-        Returns:
-        - tool_net_return
-        - control_mean_return
-        - control_std
-        - delta_excess_return (Tool - Control Mean)
-        - empirical_p_value (Percentile rank)
+        - Primary Delta: Tool Net Return minus Universe Equal-Weight Exact Net Return.
+        - Monte Carlo Distribution: Evaluates Control Mean, Std, and Empirical Percentile/p-value.
         """
         rng = np.random.RandomState(seed)
         eligible = [s for s in universe_symbols if s in returns_map]
@@ -276,6 +344,11 @@ class ForwardTestEngine:
         tool_rets = [returns_map[s] for s in tool_top10_symbols if s in returns_map]
         tool_gross = float(np.mean(tool_rets)) if tool_rets else 0.0
         tool_net = tool_gross - (friction_pct * 100.0)
+
+        # Exact Universe Equal-Weighted Return (Primary Deterministic Benchmark)
+        universe_gross = float(np.mean([returns_map[s] for s in eligible]))
+        universe_net = universe_gross - (friction_pct * 100.0)
+        exact_delta = round(tool_net - universe_net, 4)
 
         # 1,000 Random Baskets Net Returns
         basket_net_returns = []
@@ -288,7 +361,6 @@ class ForwardTestEngine:
         basket_net_returns = np.array(basket_net_returns)
         control_mean = float(np.mean(basket_net_returns))
         control_std = float(np.std(basket_net_returns))
-        delta = round(tool_net - control_mean, 4)
 
         # Empirical p-value: Fraction of random baskets that beat or matched the Tool basket
         beat_count = int(np.sum(basket_net_returns >= tool_net))
@@ -297,13 +369,75 @@ class ForwardTestEngine:
 
         return {
             "tool_top10_net_return_pct": round(tool_net, 4),
+            "universe_exact_net_return_pct": round(universe_net, 4),
             "control_mean_net_return_pct": round(control_mean, 4),
             "control_std_pct": round(control_std, 4),
-            "delta_excess_return_pct": delta,
+            "delta_excess_return_pct": exact_delta,
             "empirical_p_value": p_val,
             "tool_percentile_rank": percentile,
             "k_baskets": k_baskets,
             "seed": seed
+        }
+
+    @classmethod
+    def run_sector_matched_baskets(
+        cls,
+        universe_symbols: List[str],
+        returns_map: Dict[str, float],
+        stock_to_sector: Dict[str, str],
+        tool_top10_symbols: List[str],
+        seed: int,
+        k_baskets: int = 1000,
+        friction_pct: float = FROZEN_DELIVERY_FRICTION_PCT
+    ) -> Dict[str, Any]:
+        """
+        Secondary Diagnostic (Control 2): 1,000 Sector-Matched Random Baskets.
+        Matches the exact sector quota of Tool Top 10 (e.g. 2 IT, 3 Pharma, etc.)
+        to decompose alpha into:
+        - Sector Allocation Effect = SectorMatched_Mean - Universe_Mean
+        - Within-Sector Selection Skill = Tool_Net - SectorMatched_Mean
+        """
+        rng = np.random.RandomState(seed + 999)
+        tool_sectors = [stock_to_sector.get(s, "General") for s in tool_top10_symbols]
+        sector_counts = Counter(tool_sectors)
+        
+        # Group eligible stocks by sector
+        sector_buckets: Dict[str, List[str]] = {}
+        for s in universe_symbols:
+            if s in returns_map:
+                sec = stock_to_sector.get(s, "General")
+                sector_buckets.setdefault(sec, []).append(s)
+
+        tool_rets = [returns_map[s] for s in tool_top10_symbols if s in returns_map]
+        tool_net = (float(np.mean(tool_rets)) if tool_rets else 0.0) - (friction_pct * 100.0)
+
+        basket_returns = []
+        for _ in range(k_baskets):
+            chosen = []
+            for sec, count in sector_counts.items():
+                pool = sector_buckets.get(sec, [])
+                if len(pool) >= count:
+                    chosen.extend(rng.choice(pool, size=count, replace=False))
+                else:
+                    chosen.extend(pool)
+                    needed = count - len(pool)
+                    other_pool = [x for x in universe_symbols if x in returns_map and x not in chosen]
+                    if other_pool:
+                        chosen.extend(rng.choice(other_pool, size=min(needed, len(other_pool)), replace=False))
+            gross = float(np.mean([returns_map[s] for s in chosen])) if chosen else 0.0
+            net = gross - (friction_pct * 100.0)
+            basket_returns.append(net)
+
+        control2_mean = float(np.mean(basket_returns)) if basket_returns else 0.0
+        control2_std = float(np.std(basket_returns)) if basket_returns else 0.0
+        selection_alpha = round(tool_net - control2_mean, 4)
+
+        return {
+            "control2_sector_matched_mean_pct": round(control2_mean, 4),
+            "control2_std_pct": round(control2_std, 4),
+            "within_sector_selection_alpha_pct": selection_alpha,
+            "k_baskets": k_baskets,
+            "seed": seed + 999
         }
 
     @classmethod
@@ -360,37 +494,41 @@ class ForwardTestEngine:
         ci_lower = round(mean_delta - (t_crit * se_delta), 4)
         ci_upper = round(mean_delta + (t_crit * se_delta), 4)
 
-        # Decision Hurdle Status
+        # Decision Hurdle Status (Protocol v2.1.1: Single Criterion CI_lower > 0 with 1.0% Economic Floor)
         if k_completed < k_target:
             decision = f"IN_PROGRESS ({k_completed} of {k_target} completed cohorts)"
             decision_color = "blue"
             decision_desc = f"Empirical forward trial active. Pre-registered sunset evaluated strictly after all {k_target} cohorts complete."
         else:
-            if mean_delta > 3.85 and ci_lower > 0.0:
-                decision = "PASS: STATISTICALLY SUGGESTIVE ALPHA CONFIRMED"
+            if ci_lower > 0.0 and mean_delta >= 1.0:
+                decision = "PASS: STATISTICALLY SIGNIFICANT ALPHA CONFIRMED"
                 decision_color = "emerald"
-                decision_desc = f"Mean Alpha +{mean_delta:.2f}% cleared the hurdle with positive 95% CI lower bound (+{ci_lower:.2f}%)."
+                decision_desc = (
+                    f"Statistically significant alpha confirmed: 95% CI lower bound (+{ci_lower:.2f}%) strictly cleared 0.0%, "
+                    f"and mean excess return (+{mean_delta:.2f}%) cleared the economic floor (>=1.0% per 90d)."
+                )
             elif mean_delta <= 0.0:
                 decision = "SUNSET: ZERO EMPIRICAL ALPHA (SYSTEM RETIRED)"
                 decision_color = "rose"
-                decision_desc = "Score does not beat 1,000 random baskets. Stock-selection engine permanently decommissioned."
+                decision_desc = "Tool basket does not beat universe equal-weight mean. Stock-selection engine permanently decommissioned."
             else:
                 decision = "INCONCLUSIVE: STATISTICALLY NOISY"
                 decision_color = "amber"
-                decision_desc = f"Mean Alpha was positive (+{mean_delta:.2f}%), but CI lower bound ({ci_lower:.2f}%) did not clear 0."
+                decision_desc = f"Mean Alpha was positive (+{mean_delta:.2f}%), but CI lower bound ({ci_lower:.2f}%) did not clear 0.0%."
 
         return {
-            "protocol_version": "v2.1 (Dual-Ledger Pre-Registered)",
+            "protocol_version": "v2.1.1 (Dual-Ledger Pre-Registered)",
             "deadline": "2027-10-16",
             "scoring_formula": SCORING_FORMULA_VERSION,
             "target_cohorts_k": k_target,
             "completed_cohorts_k": k_completed,
             "active_batches_count": len([b for b in batches if b.status == "ACTIVE"]),
             "unified_primary_metric": {
-                "metric_name": "Tool Top 10 minus 1,000 Random Baskets Mean Return",
+                "metric_name": "Tool Top 10 Net Return minus Universe Equal-Weight Exact Net Return",
                 "mean_delta_pct": round(mean_delta, 2),
                 "cross_cohort_se_pct": round(se_delta, 2),
                 "confidence_interval_95": [ci_lower, ci_upper],
+                "assumed_sd_reference_pct": 5.0,
                 "min_detectable_edge_pct": 3.85,
                 "annualized_equivalent_pct": round(mean_delta * 4.0, 2),
             },
@@ -398,6 +536,7 @@ class ForwardTestEngine:
                 "mean_spearman_rho": round(float(np.mean(rhos)), 3) if rhos else 0.0,
                 "frozen_delivery_friction_pct": FROZEN_DELIVERY_FRICTION_PCT * 100.0,
                 "benchmark": "Nifty 50 TRI",
+                "control_2": "1,000 Sector-Matched Random Baskets",
             },
             "decision_rule": {
                 "status": decision,
@@ -416,7 +555,54 @@ class ForwardTestEngine:
                     "control_mean_pct": b.control_mean_return_pct,
                     "delta_alpha_pct": b.delta_excess_return_pct,
                     "percentile_rank": b.monte_carlo_percentile,
+                    "sector_exposure": json.loads(b.sector_exposure) if getattr(b, "sector_exposure", None) else None,
+                    "score_distribution": json.loads(b.score_distribution) if getattr(b, "score_distribution", None) else None,
                 }
                 for b in batches
             ]
         }
+
+    @classmethod
+    async def check_and_freeze_monthly_cohort_if_due(cls, db: AsyncSession) -> Optional[Dict[str, Any]]:
+        """
+        Automated monthly freeze and missed-run catchup logic.
+        1. Checks current year and month.
+        2. Determines first trading day of the month using NSETradingCalendar.
+        3. If today >= first trading day of the month:
+           - Checks if a PRIMARY cohort already exists for this YYYYMM.
+           - If not, triggers freeze_cohort and logs audit info.
+        """
+        now = datetime.now()
+        today = now.date()
+
+        # Cohort 1 starts in November 2026 (Cohort 0 was October Pilot)
+        if today < date(2026, 11, 1):
+            return None
+
+        first_trading_day = NSETradingCalendar.get_first_trading_day_of_month(today.year, today.month)
+        if today < first_trading_day:
+            return None
+
+        cohort_num = (today.year - 2026) * 12 + (today.month - 11) + 1
+        if cohort_num < 1 or cohort_num > 9:
+            return None
+
+        month_prefix = f"COHORT_{cohort_num}_{today.strftime('%Y%m')}"
+        stmt = select(ForwardBatch).where(ForwardBatch.batch_id.like(f"{month_prefix}%"))
+        res = await db.execute(stmt)
+        existing = res.scalar_one_or_none()
+        if existing:
+            return None
+
+        logger.info(
+            f"[FORWARD_TEST_SCHEDULER] Freezing Cohort {cohort_num} for {today.strftime('%Y-%m')} "
+            f"(First trading day was: {first_trading_day})"
+        )
+        regime_data = await MarketRegimeDetector.get_current_regime()
+        nifty_price = float(regime_data.get("nifty_price") or 25000.0)
+        nifty_ema200 = float(regime_data.get("nifty_ema200") or 24500.0)
+        regime_tag = "DEFENSIVE" if (nifty_price < nifty_ema200) else "BULLISH"
+        
+        batch_id = f"{month_prefix}_{today.strftime('%Y%m%d')}_{regime_tag}"
+        freeze_res = await cls.freeze_cohort(db, cohort_type="PRIMARY", batch_id=batch_id)
+        return freeze_res

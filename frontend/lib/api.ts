@@ -438,5 +438,7 @@ export const forwardTestApi = {
     api.get("/forward-test/cohorts").then((r) => r.data),
   getSnapshot: (batchId: string) =>
     api.get(`/forward-test/snapshot/${batchId}`).then((r) => r.data),
+  getCohortSchedule: () =>
+    api.get("/forward-test/calendar/cohort-schedule").then((r) => r.data),
 };
 

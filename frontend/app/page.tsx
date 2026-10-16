@@ -557,7 +557,7 @@ export default function DashboardPage() {
                 Protocol v2.1 Active
               </span>
               <span className="px-2.5 py-1 rounded-md bg-emerald-50 text-emerald-700 text-xs font-semibold border border-emerald-100">
-                Pre-Registered Git #1f24309
+                Protocol v2.1.1
               </span>
               <span className="px-2.5 py-1 rounded-md bg-slate-100 text-slate-700 text-xs font-semibold">
                 Statutory Friction: 0.385%
@@ -573,7 +573,7 @@ export default function DashboardPage() {
               </span>
             </h2>
             <p className="text-xs sm:text-sm text-slate-500 mt-1 max-w-3xl">
-              Strict empirical testing: Tool Top 10 evaluated against 1,000 pseudo-random 10-stock Monte Carlo baskets from the same Nifty 100 universe. Fixed 90-day holding horizon calculated offline via Ledger A (Shadow Research) with dividend-adjusted returns.
+              Strict empirical testing: Tool Top 10 evaluated against exact universe equal-weight net return, 1,000 pseudo-random Monte Carlo baskets, and 1,000 sector-matched control baskets from Nifty 100. Fixed 90-day holding horizon calculated offline via Ledger A (Shadow Research) with dividend-adjusted returns.
             </p>
           </div>
 
@@ -589,8 +589,8 @@ export default function DashboardPage() {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 my-6">
           <div className="p-4 rounded-xl bg-slate-50 border border-slate-200/80">
             <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Primary Metric</div>
-            <div className="text-lg font-black text-slate-900">Tool Net − Control Mean</div>
-            <div className="text-xs text-slate-500 mt-1">Evaluated across cohorts against 1,000 random baskets</div>
+            <div className="text-lg font-black text-slate-900">Tool Net − Universe Exact Net (Δ)</div>
+            <div className="text-xs text-slate-500 mt-1">Evaluated across cohorts against exact universe & 1,000 MC baskets</div>
           </div>
 
           <div className="p-4 rounded-xl bg-slate-50 border border-slate-200/80">
@@ -608,7 +608,7 @@ export default function DashboardPage() {
           <div className="p-4 rounded-xl bg-slate-50 border border-slate-200/80">
             <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Pre-Registered Sunset</div>
             <div className="text-lg font-black text-amber-700">Protected Until K ≥ 9</div>
-            <div className="text-xs text-slate-500 mt-1">≤0.0% shutdown evaluated strictly after 9 full cohorts</div>
+            <div className="text-xs text-slate-500 mt-1">Single rule: CI_lower &gt; 0.0% &amp; Mean Δ ≥ +1.0%</div>
           </div>
         </div>
 
@@ -620,7 +620,7 @@ export default function DashboardPage() {
               Pre-Registered Cohort Ledger ({cohorts.length} Cohort{cohorts.length === 1 ? "" : "s"} Frozen)
             </div>
             <div className="text-xs text-slate-500">
-              Next Cohort 1 Freeze: <strong>03 November 2026</strong> (First Trading Day)
+              Next Cohort 1 Freeze: <strong>Monday, 02 November 2026</strong> (NSE Session Open)
             </div>
           </div>
 

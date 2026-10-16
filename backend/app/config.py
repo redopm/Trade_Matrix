@@ -135,6 +135,7 @@ class Settings(BaseSettings):
 
     # Paper Trading Defaults
     DEFAULT_CAPITAL: float = 1_000_000.0         # ₹10 Lakhs capital (Rigid pool)
+    FORWARD_TEST_CAPITAL_POOL: float = 1_000_000.0 # Dedicated ring-fenced ₹10 Lakhs pool for Forward Testing Ledger B
     DEFAULT_POSITION_SIZE_PCT: float = 0.025     # 2.5% per trade (₹25,000 per slot)
     FORWARD_TEST_SLOT_CAPITAL: float = 25_000.0  # ₹25,000 fixed slot for forward cohorts
     FORWARD_TEST_STOCKS_PER_BATCH: int = 10      # 10 stocks per cohort

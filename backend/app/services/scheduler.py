@@ -60,6 +60,24 @@ async def _run_weekly_self_learning() -> None:
             logger.info(f"[Scheduler] Feedback generated: {bool(new_config)}")
 
 
+async def _run_forward_test_monthly_cohort() -> None:
+    """Background job: Run or catch up Forward Validation monthly cohort freeze (Protocol v2.1.1)."""
+    from app.services.forward_test import ForwardTestEngine
+    logger.info(f"[Scheduler] Checking Forward Test monthly cohort status @ {datetime.now(IST).strftime('%H:%M IST')}")
+    try:
+        async with AsyncSessionLocal() as db:
+            res = await ForwardTestEngine.check_and_freeze_monthly_cohort_if_due(db)
+            if res:
+                logger.info(f"[Scheduler] Forward Cohort successfully frozen: {res.get('batch_id')}")
+    except Exception as e:
+        logger.error(f"[Scheduler ALERT] Forward Test monthly freeze check failed: {e}")
+
+
+async def check_forward_test_catchup_on_startup() -> None:
+    """Executes on application startup to catch up any missed monthly freeze if server was offline."""
+    await _run_forward_test_monthly_cohort()
+
+
 def create_scheduler() -> AsyncIOScheduler:
     """Create and configure the APScheduler instance."""
     global _scheduler
@@ -108,7 +126,22 @@ def create_scheduler() -> AsyncIOScheduler:
         misfire_grace_time=3600,
     )
 
-    logger.info("Scheduler configured with 2 jobs")
+    # Forward Test Monthly Cohort Check (Runs every weekday morning at 9:30 AM IST)
+    _scheduler.add_job(
+        _run_forward_test_monthly_cohort,
+        CronTrigger(
+            day_of_week="mon-fri",
+            hour=9,
+            minute=30,
+            timezone=IST,
+        ),
+        id="forward_test_monthly_freeze",
+        name="Forward Test Monthly Cohort Freeze (Protocol v2.1.1)",
+        replace_existing=True,
+        misfire_grace_time=3600,
+    )
+
+    logger.info("Scheduler configured with 4 jobs (including Forward Test Monthly Freeze)")
     return _scheduler
 
 

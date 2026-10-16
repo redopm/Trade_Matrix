@@ -140,6 +140,8 @@ class ForwardBatch(Base):
     nifty_return_pct: Mapped[Optional[float]] = mapped_column(Float, default=0.0)
     spearman_rho: Mapped[Optional[float]] = mapped_column(Float, default=0.0)
     monte_carlo_percentile: Mapped[Optional[float]] = mapped_column(Float, default=0.0)
+    sector_exposure: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    score_distribution: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     completed_at: Mapped[Optional[str]] = mapped_column(String(30), nullable=True)
 
 
