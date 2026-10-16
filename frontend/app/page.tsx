@@ -255,9 +255,14 @@ export default function DashboardPage() {
               Available:{" "}
               <span className="text-slate-900 font-bold">
                 {formatINR(
-                  (config.capital || 100000) +
-                    (portfolioStats?.realized_pnl || 0) -
-                    (portfolioStats?.total_invested || 0)
+                  portfolioStats?.available_cash !== undefined
+                    ? portfolioStats.available_cash
+                    : Math.max(
+                        0,
+                        (config.capital || portfolioStats?.capital || 500000) +
+                          (portfolioStats?.realized_pnl || 0) -
+                          (portfolioStats?.total_invested || 0)
+                      )
                 )}
               </span>
             </div>

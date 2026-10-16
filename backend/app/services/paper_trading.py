@@ -155,8 +155,21 @@ class PaperTradingEngine:
         max_trade_size = min(available_margin, capital * 0.25)
         
         if invested_amount > max_trade_size:
-             quantity = max(1, int(max_trade_size / entry_price))
-             invested_amount = quantity * entry_price
+            quantity = int(max_trade_size / entry_price)
+            if quantity <= 0:
+                logger.warning(
+                    f"Trade rejected: {signal.symbol} - Sized quantity is 0. "
+                    f"Available margin (₹{available_margin:.2f}) is less than single share price (₹{entry_price:.2f})."
+                )
+                return None
+            invested_amount = quantity * entry_price
+
+        # Hard assertion: trade size must never exceed available margin under any circumstance
+        if invested_amount > available_margin:
+            logger.warning(
+                f"Trade rejected: {signal.symbol} - Required fund ₹{invested_amount:.2f} exceeds available margin ₹{available_margin:.2f}."
+            )
+            return None
 
         risk = abs(entry_price - effective_sl)
         reward = abs(target - entry_price)
@@ -468,6 +481,8 @@ class PaperTradingEngine:
             "avg_loss_pct": avg_loss,
             "expectancy": expectancy,
             "profit_factor": profit_factor,
+            "capital": self.cfg.DEFAULT_CAPITAL,
+            "available_cash": round(max(0.0, self.cfg.DEFAULT_CAPITAL + realized_pnl - total_invested), 2),
             "total_invested": round(total_invested, 2),
             "unrealized_pnl": round(unrealized_pnl, 2),
             "realized_pnl": round(realized_pnl, 2),

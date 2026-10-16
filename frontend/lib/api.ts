@@ -403,6 +403,8 @@ export interface PortfolioStats {
   expectancy: number;
   profit_factor?: number;
   total_invested: number;
+  capital?: number;
+  available_cash?: number;
   unrealized_pnl: number;
   realized_pnl: number;
   total_pnl: number;

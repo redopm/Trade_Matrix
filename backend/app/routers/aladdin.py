@@ -69,7 +69,35 @@ async def deploy_aladdin_trade(
     Immediately tracked with live tick updates & dynamic trailing stop loss.
     """
     clean_sym = req.symbol.strip().upper().replace(".NS", "").replace(".BO", "")
-    invested = req.entry_price * req.quantity
+    invested = round(req.entry_price * req.quantity, 2)
+
+    # ── Strict Rigid Capital Enforcement ──
+    from app.config import settings
+    from sqlalchemy import select
+    stmt_open = select(PaperTrade).where(PaperTrade.status == TradeStatus.OPEN)
+    res_open = await db.execute(stmt_open)
+    open_trades = res_open.scalars().all()
+
+    stmt_closed = select(PaperTrade).where(PaperTrade.status != TradeStatus.OPEN)
+    res_closed = await db.execute(stmt_closed)
+    closed_trades = res_closed.scalars().all()
+
+    realized_pnl = sum(t.realized_pnl or 0 for t in closed_trades)
+    total_invested_currently = sum(t.invested_amount for t in open_trades)
+    total_capital = req.capital or settings.DEFAULT_CAPITAL
+    available_cash = total_capital + realized_pnl - total_invested_currently
+
+    if available_cash <= 0:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Rigid Fund Limit: Paper portfolio has ₹0 available cash (Total pool: ₹{total_capital:,.2f}, Invested: ₹{total_invested_currently:,.2f}). Close an open trade before opening a new position."
+        )
+
+    if invested > available_cash:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Rigid Fund Limit: Trade requires ₹{invested:,.2f}, but only ₹{available_cash:,.2f} available cash remains in the ₹{total_capital:,.2f} pool."
+        )
 
     trade = PaperTrade(
         symbol=clean_sym,

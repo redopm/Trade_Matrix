@@ -93,8 +93,37 @@ async def create_custom_trade(
     request: CustomTradeRequest,
     db: AsyncSession = Depends(get_db),
 ):
-    """Create a manual trade without a screener signal (used for F&O Options)."""
     from datetime import date
+    from app.config import settings
+
+    invested = round(request.entry_price * request.quantity, 2)
+
+    # ── Strict Rigid Capital Enforcement ──
+    stmt_open = select(PaperTrade).where(PaperTrade.status == TradeStatus.OPEN)
+    res_open = await db.execute(stmt_open)
+    open_trades = res_open.scalars().all()
+
+    stmt_closed = select(PaperTrade).where(PaperTrade.status != TradeStatus.OPEN)
+    res_closed = await db.execute(stmt_closed)
+    closed_trades = res_closed.scalars().all()
+
+    realized_pnl = sum(t.realized_pnl or 0 for t in closed_trades)
+    total_invested_currently = sum(t.invested_amount for t in open_trades)
+    total_capital = settings.DEFAULT_CAPITAL
+    available_cash = total_capital + realized_pnl - total_invested_currently
+
+    if available_cash <= 0:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Rigid Fund Limit: Paper portfolio has ₹0 available cash (Total pool: ₹{total_capital:,.2f}, Invested: ₹{total_invested_currently:,.2f}). Close an open trade before opening a new position."
+        )
+
+    if invested > available_cash:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Rigid Fund Limit: Trade requires ₹{invested:,.2f}, but only ₹{available_cash:,.2f} available cash remains in the ₹{total_capital:,.2f} pool."
+        )
+
     trade = PaperTrade(
         symbol=request.symbol,
         company_name=request.company_name,
@@ -102,7 +131,7 @@ async def create_custom_trade(
         entry_date=date.today().strftime("%Y-%m-%d"),
         entry_price=request.entry_price,
         quantity=request.quantity,
-        invested_amount=request.entry_price * request.quantity,
+        invested_amount=invested,
         stop_loss=request.stop_loss,
         stop_loss_fixed=request.stop_loss,
         target_price=request.target_price,
@@ -277,6 +306,24 @@ async def update_all_trades(
     return {"message": "P&L update started in background"}
 
 
+@router.delete("/closed/all", status_code=200)
+async def delete_all_closed_trades(db: AsyncSession = Depends(get_db)):
+    """
+    Bulk-delete ALL closed trades (SL hit, Target hit, RSI exit, Manual close).
+    Keeps OPEN trades untouched.
+    """
+    result = await db.execute(
+        select(PaperTrade).where(PaperTrade.status != TradeStatus.OPEN)
+    )
+    closed_trades = result.scalars().all()
+    count = len(closed_trades)
+    for t in closed_trades:
+        await db.delete(t)
+    await db.commit()
+    logger.info(f"Bulk-deleted {count} closed trades.")
+    return {"deleted_count": count}
+
+
 @router.delete("/{trade_id}", status_code=200)
 async def delete_trade(
     trade_id: int,
@@ -312,21 +359,3 @@ async def delete_trade(
     await db.commit()
     logger.info(f"Trade {trade_id} ({trade.symbol}) deleted from database.")
     return {"deleted": trade_id, "symbol": trade.symbol}
-
-
-@router.delete("/closed/all", status_code=200)
-async def delete_all_closed_trades(db: AsyncSession = Depends(get_db)):
-    """
-    Bulk-delete ALL closed trades (SL hit, Target hit, RSI exit, Manual close).
-    Keeps OPEN trades untouched.
-    """
-    result = await db.execute(
-        select(PaperTrade).where(PaperTrade.status != TradeStatus.OPEN)
-    )
-    closed_trades = result.scalars().all()
-    count = len(closed_trades)
-    for t in closed_trades:
-        await db.delete(t)
-    await db.commit()
-    logger.info(f"Bulk-deleted {count} closed trades.")
-    return {"deleted_count": count}
