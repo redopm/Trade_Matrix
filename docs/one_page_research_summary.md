@@ -1,5 +1,5 @@
 # 🏛️ TradeMatrix Institutional Quantitative Research: 1-Page Executive Summary
-*Date: October 16, 2026, Friday | Commit Version: research_v1-final | Compliance: Educational & Algorithmic Research Only*
+*Date: October 16, 2026, Friday | Pre-Registered Protocol: v2.1 | Compliance: Educational & Algorithmic Research Only*
 
 ---
 
@@ -43,20 +43,31 @@
 
 ---
 
-### 5. ❓ Kya Nahi Pata (What Remains Unvalidated & Forward Sunset Protocol)
+### 5. ❓ Kya Nahi Pata (What Remains Unvalidated & Forward Protocol v2.1)
 * **Unvalidated Live Heuristics:**
   - **46-Pattern Deep Learning (CNN):** No long-term historical out-of-sample validation; standalone pattern triggers lost money in friction tests.
   - **F&O Derivatives Flow (OI build-up, PCR, Max Pain):** Proprietary historical tick data is unavailable; zero backtested validation.
   - **Fundamental Solvency (ROCE, D/E, Altman Z):** Point-in-time filing dates are unavailable; testing current figures on historical trades induces lookahead bias.
-* **Pre-Registered Forward Sunset Protocol (Bounded Live Testing):**
-  - **Core Question:** *"Do top-ranked descriptive watchlist stocks (Composite Score $\ge 65.0$) achieve positive active return over Nifty 50 TRI on a 90-calendar-day holding basis during bullish regimes?"*
-  - **Frozen Criteria & Frictions:** Score $\ge 65.0$ frozen (Trend 35 pts, Solvency 35 pts, Patterns 30 pts) evaluated after realistic delivery frictions (0.20% STT, ₹40 brokerage, 0.10% slippage).
-  - **Independence & Temporal Spread Requirement:** To prevent single-market-cluster co-movement, the target sample of $N = 30$ observations must span at least **6 distinct calendar months** (maximum 5 observations counted in any single calendar month).
-  - **Calendar Horizon Limit (Deadline):** A strict **12-month calendar deadline (terminating October 16, 2027)** is pre-committed. If $N = 30$ qualified observations are not achieved by this date (e.g. prolonged defensive regimes), forward evaluation is declared **"INCONCLUSIVE (Underpowered Sample)"** and frozen, preventing endless live observation.
-  - **Pre-Committed Tri-State Decision Rule:**
-    - **Pass Rule (Validation Threshold):** Excess return $> +2.0\%$ p.a. equivalent over Nifty 50 TRI after 0.20% frictions **AND** the 95% confidence interval lower bound must be strictly positive ($\text{CI}_{lower} > 0.0\%$).
-    - **Marginal / Inconclusive Zone ($0.0\% < \text{Excess Return} \le +2.0\%$ or $\text{CI}_{lower} \le 0.0\%$):** Formally classified as **"INCONCLUSIVE"**; continue observation until the 12-month calendar deadline (October 16, 2027). If by the deadline it fails to clear the $+2.0\%$ hurdle with $\text{CI}_{lower} > 0.0\%$, the descriptive desk is permanently decommissioned (no indefinite extensions).
-    - **Sunset Rule (Immediate Shutdown):** If average 90-day excess return is $\le 0.0\%$ after $N \ge 30$, the descriptive desk is formally declared to possess zero predictive alpha and is permanently decommissioned.
+* **Pre-Registered Forward Sunset Protocol v2.1 (Dual-Ledger Empirical Trial):**
+  - **Core Question:** *"Does Aladdin's multi-pillar composite score systematically select 90-day stock portfolios that outperform a 1,000-basket Monte Carlo random distribution from the identical Nifty 100 universe?"*
+  - **Dual-Ledger Separation:**
+    - **Ledger A (Primary Shadow Research):** Fixed 90-calendar-day holding return calculated offline from universe snapshots; fractional %-per-rupee equal weighting (10.0% each); zero stop loss or target truncation; corporate-action dividend-adjusted prices.
+    - **Ledger B (Secondary Live Execution Desk):** Real-world paper execution with integer shares (~₹25k slots), dynamic ATR stops, 12% profit targets, and RSI exits.
+  - **Unified Primary Metric ($\Delta_{\text{Cohort}}$):**
+    $$\Delta_k = R_{\text{Tool Top 10, Net, } k} - \overline{R}_{\text{1000 Random Baskets, Net, } k}$$
+    Evaluated across completed cohorts with a cross-cohort standard error: $SE(\overline{\Delta}) = s_{\Delta} / \sqrt{K}$.
+  - **Cohort Cadence & Calendar Horizon Limit ($K=9$):**
+    - Automated monthly schedule (1st trading day of each month at 09:30 AM IST).
+    - Hard 12-month calendar deadline: **October 16, 2027**.
+    - Only cohorts frozen up to mid-July 2027 complete 90 days before the deadline $\implies$ exactly **$K = 9$ fully completed cohorts** (November 2026 through July 2027).
+    - Oct 16, 2026 manual run is designated **Cohort 0 (Pilot Verification)**, excluded from primary statistical inference. Cohort 1 begins 03 November 2026.
+  - **Frozen Delivery Friction Schedule:** Based on discount broker equity delivery (₹0 brokerage, STT 0.20%, stamp duty, turnover fees, GST, DP charges ₹15.93, slippage 0.10%) $\implies$ frozen at **0.385% round-trip**.
+  - **Statistical Power & Detectable Edge:** Assuming cohort excess return standard deviation $\sigma_{\Delta} \approx 5.0\%$, $SE \approx 1.67\%$. Clearing $\text{CI}_{lower} > 0.0\%$ with $K=9$ requires an edge $\overline{\Delta} > +3.85\%$ per 90 days ($\approx +16.2\%$ annualized). An **"INCONCLUSIVE"** classification is the expected baseline outcome.
+  - **Pre-Committed Tri-State Decision Rule (Evaluated strictly after all $K=9$ cohorts complete):**
+    - **Pass Rule (Validation Threshold):** $\overline{\Delta} > +3.85\%$ per 90 days AND $\text{CI}_{lower} > 0.0\%$.
+    - **Inconclusive Zone ($0.0\% < \overline{\Delta} \le +3.85\%$ or $\text{CI}_{lower} \le 0.0\%$):** Formally classified as **"INCONCLUSIVE"**; active descriptive desk is decommissioned without commercial claims.
+    - **Sunset Rule (Permanent Decommissioning):** If $\overline{\Delta} \le 0.0\%$ after $K \ge 9$ completed cohorts, Aladdin is formally declared to possess zero predictive edge and the stock selection engine is permanently retired. (Premature sunset before $K=9$ is prohibited).
+  - **Secondary Diagnostic Metrics:** Between-cohort Spearman rank correlation ($\rho$), Monte Carlo empirical percentile ($p$-value), and excess return vs Nifty 50 TRI (noting cap-weighted vs equal-weighted structural difference).
 
 ---
 
