@@ -1126,23 +1126,23 @@ class AladdinBrainEngine:
         is_macro_bullish = p5.get("is_macro_bullish", True)
         if not is_macro_bullish:
             verdict = "DEFENSIVE_REGIME"
-            verdict_badge = "Defensive Regime (Nifty 200-day EMA se neeche hai - trend weak)"
+            verdict_badge = "Defensive Regime"
             verdict_color = "rose"
         elif composite_score >= 70.0:
             verdict = "DESCRIPTIVE_BULLISH"
-            verdict_badge = "Descriptive Technical Confluence (Educational Screener)"
+            verdict_badge = "High Confluence"
             verdict_color = "emerald"
         elif composite_score >= 45.0:
             verdict = "DESCRIPTIVE_NEUTRAL"
-            verdict_badge = "Descriptive Neutral Setup (Educational Screener)"
+            verdict_badge = "Neutral Setup"
             verdict_color = "blue"
         elif composite_score >= 30.0:
             verdict = "CAUTION"
-            verdict_badge = "Caution / Weak Descriptive Structure"
+            verdict_badge = "Caution Structure"
             verdict_color = "amber"
         else:
             verdict = "AVOID"
-            verdict_badge = "Avoid / Low Confluence Structure"
+            verdict_badge = "Avoid Structure"
             verdict_color = "rose"
 
         # 4. Determine Current Market Phase (Accumulation, Markup, Distribution, etc.)

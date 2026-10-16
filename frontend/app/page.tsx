@@ -387,85 +387,108 @@ export default function DashboardPage() {
             const score = pick.composite_score || 0;
             const isHighConviction = score >= 75;
             const isMedium = score >= 65 && score < 75;
+            const rawBadge = String(pick.verdict_badge || pick.verdict || "NEUTRAL");
+            const cleanBadge = rawBadge.replace(/\s*\(.*?\)/g, "").trim();
+            const isDefensive = rawBadge.toLowerCase().includes("defensive") || pick.verdict === "DEFENSIVE_REGIME";
 
             return (
               <div
                 key={pick.symbol}
-                className={`bg-slate-800/80 hover:bg-slate-800 border ${
+                className={`bg-slate-800/90 hover:bg-slate-800 border ${
                   isHighConviction 
                     ? "border-emerald-500/50 shadow-emerald-950/20 shadow-xl" 
-                    : "border-slate-700/80"
-                } rounded-xl p-5 transition-all flex flex-col justify-between group shadow-lg`}
+                    : isDefensive
+                      ? "border-rose-900/60 shadow-lg"
+                      : "border-slate-700/80 shadow-lg"
+                } rounded-2xl p-5 transition-all flex flex-col justify-between group`}
               >
                 <div>
-                  <div className="flex items-start justify-between mb-3">
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-lg font-black text-white tracking-wide">{pick.symbol}</span>
-                        <span className="text-[11px] px-2 py-0.5 rounded bg-slate-700 text-slate-300 font-medium">
-                          {pick.sector || "LargeCap"}
-                        </span>
-                      </div>
-                      <div className="text-xs text-slate-400 truncate max-w-[190px] mt-0.5">
-                        {pick.company_name}
-                      </div>
+                  {/* Card Header Row 1: Symbol + Sector & AI Score */}
+                  <div className="flex items-center justify-between gap-2 mb-1.5">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="text-lg font-black text-white tracking-wide shrink-0">{pick.symbol}</span>
+                      <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded bg-slate-700/80 text-slate-300 max-w-[110px] truncate shrink-0">
+                        {pick.sector || "LargeCap"}
+                      </span>
                     </div>
 
                     {/* AI Score Badge */}
-                    <div className="text-right">
-                      <div className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-black ${
-                        isHighConviction 
-                          ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/40" 
-                          : isMedium 
-                            ? "bg-blue-500/20 text-blue-400 border border-blue-500/40" 
-                            : "bg-amber-500/10 text-amber-300 border border-amber-500/30"
-                      }`}>
-                        <Zap size={12} className={isHighConviction ? "text-emerald-400" : isMedium ? "text-blue-400" : "text-amber-400"} />
-                        {score.toFixed(1)}% AI
-                      </div>
-                      <div className={`text-[10px] font-bold uppercase tracking-wider mt-1 ${
-                        isHighConviction ? "text-emerald-400" : "text-slate-400"
-                      }`}>
-                        {pick.verdict_badge || pick.verdict}
-                      </div>
+                    <div className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-black shadow-sm shrink-0 ${
+                      isHighConviction 
+                        ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/40" 
+                        : isMedium 
+                          ? "bg-blue-500/20 text-blue-400 border border-blue-500/40" 
+                          : "bg-amber-500/10 text-amber-300 border border-amber-500/30"
+                    }`}>
+                      <Zap size={12} className={isHighConviction ? "text-emerald-400" : isMedium ? "text-blue-400" : "text-amber-400"} />
+                      {score.toFixed(1)}% AI
                     </div>
+                  </div>
+
+                  {/* Card Header Row 2: Company Name & Setup Badge */}
+                  <div className="flex items-center justify-between gap-2 mb-3 min-w-0">
+                    <div className="text-xs text-slate-400 truncate max-w-[170px]" title={pick.company_name}>
+                      {pick.company_name}
+                    </div>
+                    <span 
+                      className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded shrink-0 ${
+                        isHighConviction 
+                          ? "text-emerald-400 bg-emerald-500/10 border border-emerald-500/20" 
+                          : isMedium 
+                            ? "text-blue-400 bg-blue-500/10 border border-blue-500/20" 
+                            : isDefensive 
+                              ? "text-rose-400 bg-rose-500/10 border border-rose-500/20"
+                              : "text-slate-300 bg-slate-700/60 border border-slate-600/50"
+                      }`}
+                      title={cleanBadge}
+                    >
+                      {cleanBadge}
+                    </span>
                   </div>
 
                   {/* Conviction Hurdle Notice */}
                   {!isHighConviction && (
-                    <div className="mb-3 px-2.5 py-1 rounded-md bg-amber-500/10 border border-amber-500/20 text-[11px] text-amber-300 flex items-center justify-between font-medium">
-                      <span>Wait for 75+ Score Breakout</span>
-                      <span className="font-bold opacity-75">Watchlist Only</span>
+                    <div className={`mb-3.5 px-3 py-1.5 rounded-lg border text-[11px] flex items-center justify-between font-medium gap-2 ${
+                      isDefensive 
+                        ? "bg-rose-500/10 border-rose-500/20 text-rose-300"
+                        : "bg-amber-500/10 border-amber-500/20 text-amber-300"
+                    }`}>
+                      <span className="truncate">
+                        {isDefensive ? "Defensive Regime: Trend Weak" : "Wait for 75+ Score Breakout"}
+                      </span>
+                      <span className="font-bold text-[10px] uppercase tracking-wider shrink-0 px-1.5 py-0.5 rounded bg-white/5 border border-white/10">
+                        {isDefensive ? "Defense" : "Watchlist"}
+                      </span>
                     </div>
                   )}
 
                   {/* Price & Market Stage */}
-                  <div className="flex items-baseline justify-between py-2.5 border-y border-slate-700/60 mb-3.5">
+                  <div className="flex items-center justify-between py-2.5 border-y border-slate-700/60 mb-3.5 gap-2">
                     <div>
-                      <span className="text-xs text-slate-400 font-medium block">Current Price</span>
+                      <span className="text-[11px] text-slate-400 font-medium block">Current Price</span>
                       <span className="text-xl font-bold text-white">₹{pick.current_price?.toFixed(2)}</span>
                     </div>
-                    <div className="text-right">
-                      <span className="text-xs text-slate-400 font-medium block">Market Stage</span>
-                      <span className="text-xs font-bold text-amber-400 px-2 py-0.5 rounded bg-amber-400/10 border border-amber-400/20">
+                    <div className="text-right min-w-0">
+                      <span className="text-[11px] text-slate-400 font-medium block">Market Stage</span>
+                      <span className="text-xs font-bold text-amber-400 px-2 py-0.5 rounded bg-amber-400/10 border border-amber-400/20 inline-block truncate max-w-[130px] align-middle" title={pick.market_phase?.replace(/_/g, " ") || "MARKUP"}>
                         {pick.market_phase?.replace(/_/g, " ") || "MARKUP"}
                       </span>
                     </div>
                   </div>
 
                   {/* Target & Stop Loss Roadmap */}
-                  <div className="grid grid-cols-2 gap-3 mb-4">
-                    <div className="bg-emerald-950/30 border border-emerald-800/40 p-2.5 rounded-lg">
+                  <div className="grid grid-cols-2 gap-3 mb-3.5">
+                    <div className="bg-emerald-950/30 border border-emerald-800/40 p-2.5 rounded-xl">
                       <div className="text-[10px] text-emerald-400 font-bold uppercase tracking-wider flex items-center justify-between">
-                        Target 1
+                        <span>Target 1</span>
                         <span className="text-xs font-bold">+{pick.target_1_pct?.toFixed(1)}%</span>
                       </div>
                       <div className="text-sm font-black text-white mt-0.5">₹{pick.target_1?.toFixed(2)}</div>
                     </div>
 
-                    <div className="bg-rose-950/30 border border-rose-800/40 p-2.5 rounded-lg">
+                    <div className="bg-rose-950/30 border border-rose-800/40 p-2.5 rounded-xl">
                       <div className="text-[10px] text-rose-400 font-bold uppercase tracking-wider flex items-center justify-between">
-                        Stop Loss
+                        <span>Stop Loss</span>
                         <span className="text-xs font-bold">-{pick.stop_loss_pct?.toFixed(1)}%</span>
                       </div>
                       <div className="text-sm font-black text-white mt-0.5">₹{pick.stop_loss?.toFixed(2)}</div>
@@ -474,12 +497,12 @@ export default function DashboardPage() {
 
                   <div className="flex items-center justify-between text-xs text-slate-400 mb-4 px-1">
                     <span>Risk:Reward: <strong className="text-slate-200">{pick.risk_reward_ratio || "1:2.0"}</strong></span>
-                    <span>Horizon: <strong className="text-slate-200">{pick.time_horizon || "5-15 Days"}</strong></span>
+                    <span>Horizon: <strong className="text-slate-200">{String(pick.time_horizon || "5-20 Days").replace(/Trading Days/i, "Days").replace(/to/i, "-")}</strong></span>
                   </div>
                 </div>
 
                 {/* Quick Actions */}
-                <div className="grid grid-cols-2 gap-2 pt-2 border-t border-slate-700/60">
+                <div className="grid grid-cols-2 gap-2 pt-2 border-t border-slate-700/60 mt-auto">
                   <Link
                     href={`/aladdin?symbol=${pick.symbol}`}
                     className="flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg bg-indigo-600/30 hover:bg-indigo-600/50 border border-indigo-500/40 text-xs font-bold text-indigo-200 hover:text-white transition-all text-center"
