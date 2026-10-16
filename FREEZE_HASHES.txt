@@ -9,16 +9,26 @@ STATUTORY_FRICTION_ROUND_TRIP: 0.00385 (0.385%)
 FORWARD_TEST_CAPITAL_POOL: INR 1,000,000.00
 COHORT_1_SCHEDULED_FREEZE_DATE: 2026-11-02 (Monday, 09:30 AM IST)
 
-SCORING_CRITICAL_FILES (Only these trigger code-dirty checks and define scoring hash):
+SCORING_CRITICAL_CODE_FILES (Only these trigger code-dirty checks and define scoring code hash):
   1. backend/app/services/aladdin_brain.py
-  2. backend/app/services/forward_test.py
-  3. backend/app/services/data_fetcher.py
+  2. backend/app/services/technical.py
+  3. backend/app/services/fundamental.py
+  4. backend/app/services/fibonacci.py
+  5. backend/app/services/market_regime.py
+  6. backend/app/services/data_fetcher.py
 
-KEY COMMITS:
+SCORING_WEIGHTS_FILES (Tracked via SHA256 content hash):
+  1. backend/models/aladdin_classifier.pkl
+  2. backend/models/aladdin_regressor.pkl
+  3. backend/models/aladdin_feature_names.json
+  4. backend/models/expert_model_weights.pth
+
+LOCKED_COMMITS:
   - Base Implementation Commit: a014fdd
-  - Amendment Documentation Commit: 5e00b77
-  - Protocol v2.1.1 Locked Scoring Commit SHA: e7c2ead
-  - Scoring Logic Specific Hash: e7c2ead (Tracking SCORING_CRITICAL_FILES)
+  - Protocol v2.1.1 Locked Scoring Code Commit: 50f7c60
+  - Scoring Code Hash: 50f7c60
+  - Scoring Weights SHA256: 34f27003
+  - Combined Scoring Fingerprint: 50f7c60+34f27003
 
 AUTHORITATIVE SPECIFICATION:
   - docs/forward_testing_protocol_v2_1_1_amendment.md (Authoritative over conflicting text)

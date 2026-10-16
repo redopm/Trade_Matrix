@@ -75,6 +75,33 @@ class AlertManager:
             logger.error(f"Failed to send Telegram alert: {e}")
             return False
 
+    async def send_message(self, message: str) -> bool:
+        """
+        Sends a general text notification to Telegram (markdown supported).
+        """
+        if not self.enabled or not self.bot_token or not self.chat_id:
+            logger.debug("Telegram alerts are disabled or missing config.")
+            return False
+
+        try:
+            url = f"https://api.telegram.org/bot{self.bot_token}/sendMessage"
+            payload = {
+                "chat_id": self.chat_id,
+                "text": message,
+                "parse_mode": "Markdown"
+            }
+            async with aiohttp.ClientSession() as session:
+                async with session.post(url, json=payload) as response:
+                    result = await response.json()
+                    if not result.get("ok"):
+                        logger.error(f"Telegram error: {result}")
+                        return False
+            logger.info("Telegram notification sent successfully.")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to send Telegram notification: {e}")
+            return False
+
     async def send_test_alert(self, bot_token: str, chat_id: str) -> bool:
         """Test the connection."""
         try:

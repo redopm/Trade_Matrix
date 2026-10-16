@@ -63,14 +63,34 @@ async def _run_weekly_self_learning() -> None:
 async def _run_forward_test_monthly_cohort() -> None:
     """Background job: Run or catch up Forward Validation monthly cohort freeze (Protocol v2.1.1)."""
     from app.services.forward_test import ForwardTestEngine
+    from app.services.alert_manager import AlertManager
+
     logger.info(f"[Scheduler] Checking Forward Test monthly cohort status @ {datetime.now(IST).strftime('%H:%M IST')}")
     try:
         async with AsyncSessionLocal() as db:
             res = await ForwardTestEngine.check_and_freeze_monthly_cohort_if_due(db)
             if res:
                 logger.info(f"[Scheduler] Forward Cohort successfully frozen: {res.get('batch_id')}")
+                try:
+                    alert_mgr = AlertManager()
+                    await alert_mgr.send_message(
+                        f"🎯 **[TradeMatrix] Forward Cohort Frozen**\n\n"
+                        f"• Batch: `{res.get('batch_id')}`\n"
+                        f"• Cohort Type: `{res.get('cohort_type')}`\n"
+                        f"• Market Regime: `{res.get('regime')}`\n"
+                        f"• Scored Universe: `{res.get('eligible_universe_count')}` scrips\n"
+                        f"• Capital Deployed: ₹{res.get('total_invested_inr', 0):,.2f}"
+                    )
+                except Exception as alert_err:
+                    logger.warning(f"Could not dispatch success alert to Telegram: {alert_err}")
     except Exception as e:
+        err_msg = f"🚨 **[TradeMatrix ALERT] Forward Test Freeze Failed**\n\nError: `{e}`"
         logger.error(f"[Scheduler ALERT] Forward Test monthly freeze check failed: {e}")
+        try:
+            alert_mgr = AlertManager()
+            await alert_mgr.send_message(err_msg)
+        except Exception as alert_err:
+            logger.warning(f"Could not dispatch failure alert to Telegram: {alert_err}")
 
 
 async def check_forward_test_catchup_on_startup() -> None:

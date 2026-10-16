@@ -23,15 +23,23 @@
   *(Prevents an arbitrary 3.85% mean hurdle from blocking genuine alpha if true dispersion $s_{\Delta}$ is smaller than assumed).*
 - **Inconclusive Zone Definition:** Formally defined as **$0.0\% < \overline{\Delta} < +1.0\%$ OR $\text{CI}_{\text{lower}} \le 0.0\%$**.
 
-### 3. Scoring-Specific Clean Tree Check & Dedicated Hash
+### 3. Scoring-Specific Clean Tree Check & Full Fingerprint
 - **Previous Risk:** A dirty check on the whole repository (`git status --porcelain`) would cause any stray note, scratch script, or untracked test file to reject Cohort 1 on Nov 2 with `RuntimeError`.
 - **Amended (v2.1.1):**
-  - Dirty check is **strictly restricted to scoring-critical files**:
+  - Dirty check is **strictly restricted to scoring-critical code files**:
     - `backend/app/services/aladdin_brain.py`
-    - `backend/app/services/forward_test.py`
+    - `backend/app/services/technical.py`
+    - `backend/app/services/fundamental.py`
+    - `backend/app/services/fibonacci.py`
+    - `backend/app/services/market_regime.py`
     - `backend/app/services/data_fetcher.py`
+  - In addition, ML model weights are tracked via SHA256 content hash:
+    - `backend/models/aladdin_classifier.pkl`
+    - `backend/models/aladdin_regressor.pkl`
+    - `backend/models/aladdin_feature_names.json`
+    - `backend/models/expert_model_weights.pth`
+  - `forward_test.py` harness is excluded so display/logging tweaks do not alter the scoring algorithm fingerprint.
   - Unrelated edits in `scratch/`, `docs/`, or `frontend/` will **NEVER block cohort freeze**.
-  - `scoring_git_hash` specifically tracks the commit history of the scoring logic (`git log -1 --format=%h -- [scoring_files]`), while repo HEAD is logged separately for general audit.
 - Removed outdated mock commit `40404d2` from all documentation.
 
 ### 4. Scheduler Automation & Catch-Up Quarantine Rule
@@ -47,11 +55,11 @@
 - **2026 Holidays:** Verified against official NSE Master Holiday Circular.
 - **2027 Holidays:** Explicitly annotated in code and docs as **PROVISIONAL** (standard exchange projections; subject to final annual circular issued by NSE in Nov/Dec 2026).
 
-### 6. Ledger A Pre-Registered Execution Timings
-- **Scoring Data:** Sourced strictly from EOD data up to Day $T-1$ Close. Zero lookahead into Day $T$ pricing.
+### 6. Ledger A Pre-Registered Execution Timings & Strict T-1 Truncation
+- **Scoring Data:** Sourced strictly from EOD data up to Day $T-1$ Close. Enforced via `as_of_date` parameter in `AladdinBrainEngine.diagnose_stock(sym, as_of_date=now.date())` which explicitly strips any partial day-of-freeze candle.
 - **Entry Price:** Official Day $T$ Open (NSE 09:15–09:30 print) on freeze morning.
 - **Exit Price:** Day $T+90$ Close (rolled forward to next active NSE session if holiday/weekend).
-- **Dividends & Corporate Actions:** Corporate-action dividend-adjusted prices sourced.
+- **Dividends & Corporate Actions:** Adjusted price series applied.
 
 ### 7. Capital Pool Ring-Fencing
 - Dedicated capital pool: `FORWARD_TEST_CAPITAL_POOL = ₹10,00,000.0` in [backend/app/config.py](file:///c:/project/Trade_matrix/backend/app/config.py).
@@ -64,6 +72,11 @@
 - **Full Universe Distribution Logged:** All 96 stock scores logged (`min: 44.5, max: 69.6, mean: 59.1, median: 59.4, std: 5.3`).
 - **Control 2 Added:** 1,000 Sector-Matched Random Baskets (`run_sector_matched_baskets`) to decompose excess return into Stock Selection Skill vs Sector Allocation Beta.
 - **Exact Universe Mean:** Primary $\Delta$ calculated directly against exact universe equal-weight net return $\overline{R}_{\text{Universe}}$ (zero Monte Carlo noise), using 1,000 MC baskets for empirical percentile rank and $p$-value.
+
+### 9. Overlapping Cohort Autocorrelation Limitation & "PASS (suggestive)" Label
+- Monthly cohorts with 90-day holding horizons overlap for 60 and 30 days respectively, inducing cross-cohort return autocorrelation.
+- The standard error formula ($SE = s_{\Delta} / \sqrt{K}$) assumes independent draws, so the resulting Confidence Interval is narrower than true cross-correlation would yield.
+- Therefore, if the empirical hurdle is cleared, the status is pre-committed strictly as **`PASS (suggestive): Algorithmic Edge Suggested Under Overlapping Cohort Assumptions`**, and capital allocation must remain conservative without risking large real institutional money.
 
 ---
 
@@ -98,3 +111,79 @@
    - **Output:** 194 issues reported (126 errors, 68 warnings).
    - **Root Cause Audit:** 100% of reported issues are pre-existing `@typescript-eslint/no-explicit-any` usages in legacy UI files (e.g. `api.ts`, `training/page.tsx`, `settings/page.tsx`).
    - **Zero Lint Regressions:** The modifications made for Protocol v2.1.1 (`page.tsx` and `api.ts` cohort methods) introduced **zero** lint errors.
+
+---
+
+## 3. Operational Readiness & Pre-November 2 Execution Checklist
+
+Before Cohort 1 executes on **Monday, 02 November 2026 at 09:30 AM IST**, 4 operational safeguards are permanently enforced and tested:
+
+### Check 1: Comprehensive Scoring Files & Model Weights Fingerprint
+- **Audit Findings:** The initial hash monitored only 3 files (`aladdin_brain.py`, `forward_test.py`, `data_fetcher.py`).
+- **Resolution:**
+  - Expanded code cleanliness checking to all 6 modules that determine composite scores:
+    1. `backend/app/services/aladdin_brain.py` (composite formula & weights)
+    2. `backend/app/services/technical.py` (technical indicators)
+    3. `backend/app/services/fundamental.py` (Piotroski & Alt-Z scoring)
+    4. `backend/app/services/fibonacci.py` (harmonic & golden ratio confluence)
+    5. `backend/app/services/market_regime.py` (VIX & sector defensive rotation)
+    6. `backend/app/services/data_fetcher.py` (market data feed normalization)
+  - Explicitly excluded `forward_test.py` harness so display formatting or reporting tweaks cannot corrupt the algorithm fingerprint.
+  - Added SHA256 content hashing for binary ML models:
+    - `backend/models/aladdin_classifier.pkl`
+    - `backend/models/aladdin_regressor.pkl`
+    - `backend/models/aladdin_feature_names.json`
+    - `backend/models/expert_model_weights.pth`
+  - Combined scoring fingerprint: `<git_commit_sha>+<weights_sha256>`. Any uncommitted change in the 6 scoring files halts freeze with `RuntimeError`.
+
+### Check 2: Strict T-1 EOD Data Truncation (Zero Partial Bar Leakage)
+- **Audit Findings:** Running freeze at 09:30 AM morning or after market close risks including an incomplete or lookahead daily candle.
+- **Resolution:**
+  - Added `as_of_date: Optional[date] = None` to `AladdinBrainEngine.diagnose_stock`.
+  - When `as_of_date` is provided, all dataframe bars where `df.index.date >= as_of_date` are strictly dropped:
+    ```python
+    if as_of_date is not None:
+        df = df[df.index.date < as_of_date].copy()
+    ```
+  - Indicators (RSI, EMAs, ATR, SuperTrend, Volume) and composite score are calculated strictly from completed EOD bars up to Day $T-1$ Close.
+  - Entry price is sourced from Day $T$ live quote / Open at 09:30 AM.
+
+### Check 3: Fyers Token Expiration, Machine Availability & Alerts
+- **Token Lifecycle:**
+  - Fyers access tokens expire daily.
+  - `DataFetcher` has a tested automatic fallback: if Fyers token is absent or expired, `yfinance` seamlessly provides daily EOD historical bars and quotes.
+  - The scoring pipeline will NOT crash if Fyers token is expired on Nov 2 morning.
+- **Machine Availability & Quarantine:**
+  - If the machine is powered off or backend is offline at 09:30 AM on Nov 2:
+    - Upon machine restart, `check_and_freeze_monthly_cohort_if_due` automatically detects the missed session.
+    - Because the date is after Day $T$ 09:30 AM, it automatically tags the batch as `CATCHUP_LATE`.
+    - `CATCHUP_LATE` cohorts are permanently quarantined from the Primary Trial ($K=9$), preserving empirical integrity.
+- **Execution Environment Recommendation:**
+  - For zero downtime, run the backend on an always-on VM or GCP instance.
+  - If running locally, power on laptop by 09:15 AM on Monday, 02 Nov 2026.
+
+### Check 4: End-to-End Scheduled Pipeline Dry-Run
+- **Simulation:** Cloned `database/tradematrix.db` to `tradematrix_e2e_test.db` and simulated execution of `check_and_freeze_monthly_cohort_if_due(session, target_date=date(2026, 11, 2))`.
+- **Results:**
+  - Triggered cohort freeze on Monday, 02 Nov 2026 (first trading day of month).
+  - Calculated 5-pillar diagnostics with $T-1$ truncation across entire universe.
+  - Saved 96 universe score snapshots in Ledger A and 10 paper trades in Ledger B.
+  - Idempotency test confirmed: second invocation returned `None` with zero duplicate rows.
+
+### Honest Statistical Limitation: "PASS (suggestive)"
+- **Overlapping Cohort Autocorrelation:** The standard error $s_{\Delta} / \sqrt{9}$ assumes independent trials. However, adjacent 90-day cohorts overlap for 60 and 30 days respectively, inducing cross-cohort return correlation and understating true uncertainty.
+- **Binding Verdict:** If the primary evaluation clears all hurdle criteria ($CI_{\text{lower}} > 0.0\%$ and $\overline{\Delta} \ge +1.0\%$), the verdict is strictly pre-registered as:
+  **`PASS (suggestive): Algorithmic Edge Suggested Under Overlapping Cohort Assumptions`**.
+  This label reminds all stakeholders that paper forward edge is suggestive and does not warrant unhedged institutional capital allocation.
+
+---
+
+## 4. Operational Calendar & Next Action Items
+
+| Date & Time | Milestone / Action | Primary Objective |
+| :--- | :--- | :--- |
+| **02 Nov 2026, 09:45 AM IST** | **Cohort 1 Verification** | Confirm Cohort 1 was generated with `PRIMARY` tag (not `CATCHUP_LATE`), 96 scrips scored in Ledger A, and 10 trades deployed in Ledger B. |
+| **Nov 2026 – Oct 2027** | **Monthly 15-Minute Audit** | Once a month, review dashboard for 15 minutes to confirm active batch generation. Zero code or doc edits. |
+| **~14 Jan 2027** | **Cohort 0 Pipeline Dry-Run** | Cohort 0 (Pilot) completes 90-day holding horizon. Execute shadow return, Monte Carlo percentile rank, and Spearman correlation pipeline to validate evaluation math before Cohort 1 matures (~01 Feb 2027). |
+| **October 2027** | **Final Trial Scorecard** | Compute definitive primary trial metrics across 9 primary cohorts ($K=9$). |
+

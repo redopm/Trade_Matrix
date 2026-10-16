@@ -115,6 +115,11 @@ To eliminate multi-hypothesis testing ($p$-hacking) and structural weighting dis
   - **The Pre-Registered Pass Rule is decoupled to two sound conditions:**
     1. **Statistical Significance:** $\text{CI}_{\text{lower}} > 0.0\%$ (the 95% confidence interval lower bound is strictly positive).
     2. **Economic Significance Floor:** $\overline{\Delta} \ge +1.0\%$ per 90 days (ensuring the edge is non-trivial after all execution realities).
+* **Methodological Limitation Notice (Overlapping Cohort Autocorrelation):**
+  - The cross-cohort standard error formula ($SE = s_{\Delta} / \sqrt{K}$) assumes $K=9$ statistically independent observations.
+  - However, because monthly cohorts hold for 90 days, adjacent cohorts share market exposure for 60 and 30 days respectively.
+  - This cross-cohort autocorrelation causes the calculated standard error to be understated and the Confidence Interval to be artificially narrow.
+  - Therefore, clearing the pass hurdle yields a classification of **"PASS (suggestive)"**, NOT proof of persistent alpha. Real institutional capital must NEVER be allocated solely based on this forward trial.
 
 ---
 
@@ -152,9 +157,9 @@ To eliminate multi-hypothesis testing ($p$-hacking) and structural weighting dis
   - On backend startup, an automatic catch-up check verifies if the current session is the first trading day of the calendar month and no cohort has been frozen yet.
 * **NSE Trading Calendar Utility:**
   - Trading days, holidays, and 90-day exit rollover dates are computed dynamically via official NSE holiday calendar rules ([backend/app/utils/nse_calendar.py](file:///c:/project/Trade_matrix/backend/app/utils/nse_calendar.py)).
-* **Strict Git Tree Cleanliness Enforcement:**
-  - Freeze script dynamically reads Git HEAD commit SHA.
-  - **Refuses freeze if working tree is dirty (`git status --porcelain` check)**. Prevents uncommitted code execution.
+* **Strict Git Tree Cleanliness Enforcement (Scoring Logic Only):**
+  - Freeze script dynamically reads Git HEAD commit SHA and model weights SHA256.
+  - **Refuses freeze if any of the 6 scoring-critical code files have uncommitted changes** (`aladdin_brain.py`, `technical.py`, `fundamental.py`, `fibonacci.py`, `market_regime.py`, `data_fetcher.py`). Prevents uncommitted algorithmic logic drift while allowing UI/docs work.
 * **Deterministic Random Seed:**
   - Deterministic seed $\text{Seed} = \text{int}(YYYYMMDD)$ guarantees 100% independent offline auditability.
 
@@ -167,15 +172,17 @@ Evaluated strictly after the completion of all **$K = 9$ monthly cohorts** (Octo
 ```mermaid
 graph TD
     A[Evaluate K=9 Completed Cohorts on Oct 16, 2027] --> B{Is CI_lower > 0.0% AND Mean Net Alpha >= +1.0%?}
-    B -- YES --> C[PASS: Statistically Significant Algorithmic Edge Confirmed]
+    B -- YES --> C["PASS (suggestive): Algorithmic Edge Suggested Under Overlapping Assumptions"]
     B -- NO --> D{Is Mean Net Alpha <= 0.0%?}
     D -- YES --> E[SUNSET: Zero Predictive Edge. System Permanently Retired.]
     D -- NO --> F["INCONCLUSIVE: 0.0% < Alpha < 1.0% OR CI_lower <= 0.0%"]
 ```
 
 1. **Pass Condition (Validation):**
+   - Labeled strictly as: **`PASS (suggestive)`** (due to overlapping cohort autocorrelation).
    - 95% Confidence Interval lower bound is strictly positive: $\text{CI}_{\text{lower}} > 0.0\%$.
    - Cross-cohort mean excess return meets the economic floor: $\overline{\Delta} \ge +1.0\%$ per 90 days.
+   - **Prudence Warning:** Do not commit large real capital based solely on this suggestive forward test.
 2. **Inconclusive Condition ($0.0\% < \overline{\Delta} < +1.0\%$ or $\text{CI}_{\text{lower}} \le 0.0\%$):**
    - The data is insufficient to reject the null hypothesis of luck/noise. The active descriptive desk is decommissioned without commercial claims.
 3. **Sunset Condition ($\overline{\Delta} \le 0.0\%$):**
@@ -190,7 +197,7 @@ graph TD
 2. **Step 2: Database Migration** $\to$ Added `sector_exposure` and `score_distribution` columns to `forward_batches`. Full 96-stock universe saved in `universe_score_snapshots`.
 3. **Step 3: Ring-Fenced Capital** $\to$ Added `FORWARD_TEST_CAPITAL_POOL = 1_000_000.0` in `backend/app/config.py`.
 4. **Step 4: Implemented Engine Updates** in `backend/app/services/forward_test.py`:
-   - Enforce clean git status strictly on scoring-critical files (`aladdin_brain.py`, `forward_test.py`, `data_fetcher.py`).
+   - Enforce clean git status strictly on scoring-critical files (`aladdin_brain.py`, `technical.py`, `fundamental.py`, `fibonacci.py`, `market_regime.py`, `data_fetcher.py`) and SHA256 of ML model weights.
    - Missed-run catchup freezes tagged as `CATCHUP_LATE` (quarantined from primary inference).
    - Exact universe net return computation for primary $\Delta$.
    - Control 2 (1,000 sector-matched random baskets).
