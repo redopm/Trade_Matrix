@@ -1,5 +1,5 @@
 # 🏛️ TradeMatrix Institutional Quantitative Research: 1-Page Executive Summary
-*Date: October 15, 2026 | Commit Version: research_v1-final | Compliance: Educational & Algorithmic Research Only*
+*Date: October 16, 2026, Friday | Commit Version: research_v1-final | Compliance: Educational & Algorithmic Research Only*
 
 ---
 
@@ -15,41 +15,57 @@
 
 ---
 
-### 3. ❌ Kya Fail Hua (What Empirically Failed & Why)
+### 3. ❌ Kya Fail Hua (What Empirically Failed in the Tested Formulations)
 * **Active Swing Stock-Picking Engine (Trial 8):** **FAILED 5 OF 6 PRE-COMMITTED CRITERIA.**
   - Delivered negative expectancy ($EV = -₹24.9$ per trade), net loss of -₹9,018, Calmar ratio of 0.01, and annualized CAGR of **-0.31% (closed) / +0.44% (MTM)** vs Nifty Buy & Hold **+14.49%**.
 * **Binary 200 EMA Index Trend-Following (Trial 9):** **FAILED 3 OF 4 PRE-COMMITTED CRITERIA.**
-  - Under 2024 law: Strategy generated **3.98% to 5.35% CAGR** vs Nifty TRI Buy & Hold **8.30% CAGR** (wealth lag of -₹2.19L to -₹3.06L).
-  - Under 2007–15 law: Strategy generated **4.50% to 5.71% CAGR** vs Nifty TRI Buy & Hold **9.19% CAGR** (wealth lag of -₹2.72L to -₹3.51L).
-* **Root-Cause Breakdown of the Performance Lag:**
-  1. **Gross Whipsaw Drag (2.75% p.a. / 63.7% of lag):** 42 of 44 switches were short whipsaws in sideways choppy markets (2011–2014; median holding period: 8.0 calendar days), repeatedly buying tops and selling bottoms.
-  2. **Annual Tax Drag (1.57% p.a. / 36.3% of lag):** Frequent annual realizations permanently deplete capital from the compounding pool, whereas Buy & Hold allows 100% of the corpus to compound undisturbed.
-* **Operational Action:** **The active short-term swing engine and automated market-timing execution models are PERMANENTLY RETIRED.**
+  - **Under 2024 Law:** Strategy generated **3.98% to 5.35% CAGR** vs Nifty TRI Buy & Hold **8.30% CAGR** (wealth lag of -₹2.19L to -₹3.06L).
+    *(Note: 3.98% is the conservative base run with all trades taxed as STCG and zero loss carry-forward; 5.35% incorporates proper 13.0% LTCG on the 2 trades held > 365 days plus full loss carry-forward).*
+  - **Under 2007–15 Law:** Strategy generated **4.50% to 5.71% CAGR** vs Nifty TRI Buy & Hold **9.19% CAGR** (wealth lag of -₹2.72L to -₹3.51L, where B&H was 100% tax-free under Sec 10(38)).
+* **Root-Cause Breakdown of the Performance Lag (2007–2015 Diagnostic Decomposition):**
+  1. **Whipsaw + Time-Out-of-Market Drag (2.75% p.a. / 63.7% of 2007–15 lag):** In sideways choppy markets (2011–2014), **32 of 44 round-trips lasted less than 30 days** (median holding: **8.0 calendar days**), repeatedly entering near local tops and exiting near local bottoms. (Note: 42 of 44 round-trips lasted $< 365$ days, determining their STCG tax status). This drag also includes cash drag (missing rapid rally rebounds like portions of 2009–10), ETF tracking error, and slippage.
+  2. **Annual Tax Drag (1.57% p.a. / 36.3% of 2007–15 lag):** Frequent annual realizations permanently deplete capital from the compounding pool, whereas Buy & Hold allows 100% of the corpus to compound undisturbed.
+* **Operational Action:** **The active short-term swing engine and automated market-timing execution models are PERMANENTLY RETIRED in these specific formulations.**
 
 ---
 
 ### 4. 🛡️ Kya Bacha (What Survived: Macro Regime Indicator)
-* **The 200-Day EMA Filter:** Across both historical eras, the 200-day EMA demonstrated dependable **downside crash containment**:
-  - Reduced 2016–21 stock strategy Max Drawdown from **53.90% to 37.04%** (held 100% cash during the March 2020 COVID crash).
-  - Reduced 2007–15 index crash Max Drawdown from **59.53% to 39.05% pre-tax (40.28% post-tax)**.
+* **The 200-Day EMA Filter:** Across the two historical eras tested (the 2008 GFC and 2020 COVID crashes), the 200-day EMA demonstrated downside crash containment:
+  - **Cleanest Evidence (Control 2: Trend-Gated Nifty 50, 2016–2021):** Cut index Maximum Drawdown from **38.44% to 14.14%** (a 63.2% relative reduction) while retaining **13.42% CAGR** (vs Buy & Hold 14.49%, only ~1.1% return lag), achieving a Calmar ratio of **0.95 vs 0.38**.
+  - **Crisis Defense:** Held 100% cash during the March 2020 COVID crash; in 2007–15, reduced crash drawdown from **59.53% to 39.05% pre-tax (40.28% post-tax)**.
 * **The Essential Nuance ("Kam Dard, Kam Return"):**
-  - Pre-tax Calmar ratios are virtually identical (**0.16 Strategy vs 0.15 Buy & Hold**).
-  - The 200 EMA gate is **NOT an alpha generator**. It is an **insurance trade-off** that purchases downside drawdown reduction at the cost of an annual performance drag of **~1.1% (pre-tax) to 4.0%–4.7% (post-tax)**.
+  - In 2007–15 pre-tax terms, Calmar ratios are virtually identical (**0.16 Strategy vs 0.15 Buy & Hold**).
+  - The 200 EMA gate is **NOT an alpha generator**. It is an **insurance trade-off** that purchases downside drawdown reduction at the cost of an annual performance drag that varied by era:
+    - **2016–2021 (pre-tax, Control 2):** ~1.1% p.a. (13.42% vs 14.49%)
+    - **2007–2015 (pre-tax, Trial 9):** 2.75% p.a. (6.44% vs 9.19%)
+    - **2007–2015 (post-tax, Trial 9):** ~3.4% to 4.7% p.a. depending on tax model and carry-forward.
 * **Software Implementation:** Retained strictly as an objective, **descriptive macro regime indicator** (`BULLISH REGIME` vs `DEFENSIVE REGIME` banner) with educational SEBI disclaimers. It emits zero trade tips or buy recommendations.
 
 ---
 
-### 5. ❓ Kya Nahi Pata (What Remains Unvalidated & Forward Sunset)
+### 5. ❓ Kya Nahi Pata (What Remains Unvalidated & Forward Sunset Protocol)
 * **Unvalidated Live Heuristics:**
   - **46-Pattern Deep Learning (CNN):** No long-term historical out-of-sample validation; standalone pattern triggers lost money in friction tests.
   - **F&O Derivatives Flow (OI build-up, PCR, Max Pain):** Proprietary historical tick data is unavailable; zero backtested validation.
   - **Fundamental Solvency (ROCE, D/E, Altman Z):** Point-in-time filing dates are unavailable; testing current figures on historical trades induces lookahead bias.
-* **Pre-Registered Forward Sunset Protocol:**
-  - **Single Pre-Registered Question:** *"Do top-ranked descriptive watchlist stocks (Score $\ge 65$) outperform Nifty 50 TRI on a 90-calendar-day holding basis during bullish regimes?"*
-  - **Sample Power:** Target sample size $N = 30$ completed prospective paper observations.
-  - **Stopping Rule:** If average 90-day excess return over Nifty 50 TRI is $\le 0.0\%$, the descriptive scoring desk will be **permanently decommissioned** to prevent endless curve-fitting.
+* **Pre-Registered Forward Sunset Protocol (Bounded Live Testing):**
+  - **Core Question:** *"Do top-ranked descriptive watchlist stocks (Composite Score $\ge 65.0$) achieve positive active return over Nifty 50 TRI on a 90-calendar-day holding basis during bullish regimes?"*
+  - **Frozen Criteria & Frictions:** Score $\ge 65.0$ frozen (Trend 35 pts, Solvency 35 pts, Patterns 30 pts) evaluated after realistic delivery frictions (0.20% STT, ₹40 brokerage, 0.10% slippage).
+  - **Independence & Temporal Spread Requirement:** To prevent single-market-cluster co-movement, the target sample of $N = 30$ observations must span at least **6 distinct calendar months** (maximum 5 observations counted in any single calendar month).
+  - **Calendar Horizon Limit (Deadline):** A strict **12-month calendar deadline (terminating October 16, 2027)** is pre-committed. If $N = 30$ qualified observations are not achieved by this date (e.g. prolonged defensive regimes), forward evaluation is declared **"INCONCLUSIVE (Underpowered Sample)"** and frozen, preventing endless live observation.
+  - **Two-Sided Decision Rule:**
+    - **Pass Rule:** Excess return $> +2.0\%$ p.a. equivalent over Nifty 50 TRI after 0.20% frictions **AND** the 95% confidence interval lower bound must be strictly positive ($\text{CI}_{lower} > 0.0\%$).
+    - **Sunset Rule:** If average 90-day excess return is $\le 0.0\%$, the descriptive desk is permanently decommissioned.
 
 ---
 
-### 6. 📌 Bottom-Line Operational Rule
-> **Passive compounding remains the dominant compounding vehicle in Indian equities. Tactical market-timing incurs significant friction and tax penalties. TradeMatrix Aladdin operates exclusively as an honest, compliant research platform that objectively describes market regimes rather than speculating on trading tips.**
+### 6. ⚠️ Methodological Limitations & Caveats
+1. **Survivorship Bias:** The 46-stock universe is based on recent large-cap constituents, creating an upward survivorship bias on historical stock backtests.
+2. **Execution Timing Deviation:** Trial 9 was executed at Day $N$ Close (+0.05% slippage) instead of Day $N+1$ Open due to official NSE TRI archive data format.
+3. **Cross-Study Non-Comparability:** The three studies (Ablations 2023–26, Trial 8 2016–21, Trial 9 2007–15) utilized differing tax regimes, cash yield assumptions, and data sources; results cannot be directly cross-compared.
+4. **Past Results Non-Guarantee:** Crash defense observed in historical crises (2008 GFC, 2020 COVID) reflects past market dynamics and offers no guarantee against future drawdowns.
+
+---
+
+### 7. 📌 Bottom-Line Operational Rule
+> **In the specific algorithmic formulations tested across 13 trials, passive index compounding remained superior to active market-timing and stock-picking after statutory delivery frictions and taxes. Tactical market-timing incurred substantial whipsaw and tax drag. TradeMatrix Aladdin operates exclusively as an honest, compliant research platform that objectively describes market regimes rather than speculating on trading tips.**
