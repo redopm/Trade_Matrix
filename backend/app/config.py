@@ -151,7 +151,7 @@ class Settings(BaseSettings):
     EARNINGS_BLACKOUT_DAYS: int = 3              # ±3 days event risk block
 
     # Live Alerts (Phase 3)
-    LIVE_ALERTS_ENABLED: bool = True
+    LIVE_ALERTS_ENABLED: bool = False
     TELEGRAM_BOT_TOKEN: str = ""
     TELEGRAM_CHAT_ID: str = ""
 
