@@ -1,0 +1,27 @@
+{
+    email opmaury001@gmail.com
+}
+
+# Redirect raw HTTP IP to secure HTTPS domain
+http://34.68.221.238 {
+    redir https://34.68.221.238.sslip.io{uri} permanent
+}
+
+# Secure HTTPS domain with automatic Let's Encrypt certificate
+34.68.221.238.sslip.io {
+    handle /api/* {
+        reverse_proxy tradematrix_backend:8000
+    }
+    handle /health {
+        reverse_proxy tradematrix_backend:8000
+    }
+    handle /docs* {
+        reverse_proxy tradematrix_backend:8000
+    }
+    handle /openapi.json {
+        reverse_proxy tradematrix_backend:8000
+    }
+    handle {
+        reverse_proxy tradematrix_frontend:3000
+    }
+}
