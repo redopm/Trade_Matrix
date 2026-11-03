@@ -74,9 +74,9 @@ function TradeRow({
   onConfirmDelete: (id: number) => void;
   onCancelDelete: () => void;
 }) {
-  const pnl = trade.unrealized_pnl ?? trade.realized_pnl;
-  const pnlPct = trade.unrealized_pnl_pct ?? trade.realized_pnl_pct;
   const isOpen = trade.status === "OPEN";
+  const pnl = isOpen ? trade.unrealized_pnl : (trade.realized_pnl ?? trade.unrealized_pnl);
+  const pnlPct = isOpen ? trade.unrealized_pnl_pct : (trade.realized_pnl_pct ?? trade.unrealized_pnl_pct);
   const isConfirmingClose = closingId === trade.id;
   const isConfirmingDelete = deletingId === trade.id;
 
