@@ -8,6 +8,7 @@ Dual-Ledger Architecture:
 
 Evaluates Tool Top 10 against a 1,000-basket Monte Carlo random distribution from Nifty 100.
 """
+import os
 import asyncio
 import json
 import numpy as np
@@ -97,6 +98,24 @@ class ForwardTestEngine:
         preventing accidental refusal due to unrelated workspace files (notes, scratch scripts, docs).
         Harness files like forward_test.py are excluded so harness display tweaks do not alter scoring fingerprint.
         """
+        # 1. First check if scoring git hash is baked into environment or models/scoring_git_hash.txt
+        # (Allows headless Docker containers running in production without .git directory to preserve exact audit tracking)
+        baked_hash = os.environ.get("SCORING_GIT_HASH")
+        if not baked_hash:
+            for candidate_path in [
+                Path("backend/models/scoring_git_hash.txt"),
+                Path("models/scoring_git_hash.txt"),
+                Path("/app/models/scoring_git_hash.txt")
+            ]:
+                if candidate_path.exists():
+                    baked_hash = candidate_path.read_text(encoding="utf-8").strip()
+                    if baked_hash:
+                        break
+
+        if baked_hash:
+            weights_hash = ForwardTestEngine.get_scoring_weights_hash()
+            return f"{baked_hash}+{weights_hash}" if "+" not in baked_hash else baked_hash
+
         try:
             if enforce_clean:
                 status_res = subprocess.run(

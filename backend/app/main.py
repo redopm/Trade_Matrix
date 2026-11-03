@@ -49,6 +49,14 @@ async def lifespan(app: FastAPI):
     import asyncio
     asyncio.create_task(check_forward_test_catchup_on_startup())
 
+    # Auto-connect Fyers on startup (24x7 background session)
+    try:
+        from app.services.fyers_data_client import FyersDataClient
+        fyers = FyersDataClient()
+        asyncio.create_task(asyncio.to_thread(fyers.connect))
+    except Exception as e:
+        logger.warning(f"Startup Fyers auto-connect scheduled: {e}")
+
     yield  # Application is running
 
     # ── Shutdown ──────────────────────────────────────────────────────────────
@@ -99,6 +107,7 @@ Phase 1 — The Alpha Screener API
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.CORS_ORIGINS,
+    allow_origin_regex=r"^https?://.*",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

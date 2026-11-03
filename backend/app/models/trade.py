@@ -18,6 +18,7 @@ class TradeStatus(str, PyEnum):
     CLOSED_SL = "CLOSED_SL"            # Stop loss hit
     CLOSED_MANUAL = "CLOSED_MANUAL"    # Manually closed
     CANCELLED = "CANCELLED"            # Never entered (e.g., gap up)
+    VOID_DATA_ERROR = "VOID_DATA_ERROR" # Voided due to vendor feed anomaly (audit preserved)
 
 
 class TradeDirection(str, PyEnum):

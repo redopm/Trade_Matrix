@@ -636,6 +636,10 @@ class DataFetcher:
     )
     def _fetch_price_sync(symbol: str) -> Optional[float]:
         try:
+            # Guarantee Indian exchange suffix (.NS) for non-index symbols to prevent US ticker collision
+            if not symbol.startswith('^') and not symbol.endswith('.NS') and not symbol.endswith('.BO'):
+                clean = symbol.replace('NSE:', '').replace('BSE:', '').replace('-EQ', '')
+                symbol = f'{clean}.NS'
             ticker = yf.Ticker(symbol)
             # Primary: fast_info last_price (real-time, low latency)
             try:
@@ -677,6 +681,9 @@ class DataFetcher:
     )
     def _fetch_earnings_dates_sync(symbol: str) -> list[datetime]:
         try:
+            if not symbol.startswith('^') and not symbol.endswith('.NS') and not symbol.endswith('.BO'):
+                clean = symbol.replace('NSE:', '').replace('BSE:', '').replace('-EQ', '')
+                symbol = f'{clean}.NS'
             ticker = yf.Ticker(symbol)
             cal = ticker.calendar
             if cal is None or cal.empty:

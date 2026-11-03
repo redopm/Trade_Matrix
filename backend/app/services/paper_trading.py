@@ -265,6 +265,32 @@ class PaperTradingEngine:
             logger.warning(f"Could not fetch price for {symbol}")
             return
 
+        # Anomaly / Circuit Filter Guard:
+        # Detect corrupted data feed or foreign ticker collision (e.g. HAL -> Halliburton $34.61 vs ₹4947).
+        # In Indian markets, daily circuit limits are 5-20%. A single-day drop > 40% on an asset > ₹100
+        # is virtually always a data glitch, not a real price move. Do not execute false exits on glitches!
+        if trade.entry_price > 100 and current_price < (trade.entry_price * 0.40):
+            logger.error(
+                f"DATA ANOMALY BLOCKED for {symbol}: current_price ₹{current_price} is >60% below "
+                f"entry ₹{trade.entry_price}. Tagging trade DATA_SUSPECT and alerting admin."
+            )
+            if "DATA_SUSPECT" not in (trade.notes or ""):
+                trade.notes = f"{trade.notes or ''} | [DATA_SUSPECT: tick ₹{current_price} rejected (>60% drop)]".strip(" |")
+            try:
+                from app.services.alert_manager import AlertManager
+                alert_mgr = AlertManager()
+                await alert_mgr.send_message(
+                    f"⚠️ **[TradeMatrix ALERT] DATA_SUSPECT Detected**\n\n"
+                    f"• Symbol: `{symbol}`\n"
+                    f"• Entry: ₹{trade.entry_price:,.2f}\n"
+                    f"• Rejected Tick: ₹{current_price:,.2f}\n"
+                    f"• Drop: {((current_price / trade.entry_price) - 1) * 100:.1f}%\n"
+                    f"• Reason: Circuit-breaker violation (>40% drop). False SL prevented."
+                )
+            except Exception as e_alert:
+                logger.warning(f"Could not dispatch DATA_SUSPECT alert to Telegram: {e_alert}")
+            return
+
         # Update price tracking
         trade.current_price = current_price
         trade.highest_price = max(trade.highest_price or 0, current_price)
@@ -321,11 +347,12 @@ class PaperTradingEngine:
             (trade.direction == "SHORT" and current_price >= trade.stop_loss)
         )
         if sl_hit:
+            fill_price = trade.stop_loss
             await self._close_trade(
-                db, trade, current_price, TradeStatus.CLOSED_SL, "Stop loss hit"
+                db, trade, fill_price, TradeStatus.CLOSED_SL, "Stop loss hit"
             )
             summary["sl_hits"] += 1
-            logger.info(f"SL HIT: {symbol} @ ₹{current_price:.2f} (SL: ₹{trade.stop_loss:.2f})")
+            logger.info(f"SL HIT: {symbol} filled @ limit ₹{fill_price:.2f} (market tick: ₹{current_price:.2f})")
             return
 
         # ── Exit Condition 2: Target Price Hit ────────────────────────────────
@@ -334,11 +361,12 @@ class PaperTradingEngine:
             (trade.direction == "SHORT" and current_price <= trade.target_price)
         )
         if target_hit:
+            fill_price = trade.target_price
             await self._close_trade(
-                db, trade, current_price, TradeStatus.CLOSED_TARGET, "Target reached"
+                db, trade, fill_price, TradeStatus.CLOSED_TARGET, "Target reached"
             )
             summary["target_hits"] += 1
-            logger.info(f"TARGET HIT: {symbol} @ ₹{current_price:.2f}")
+            logger.info(f"TARGET HIT: {symbol} filled @ limit ₹{fill_price:.2f} (market tick: ₹{current_price:.2f})")
             return
 
         # ── Exit Condition 3: RSI Extremes ──────────────────────────

@@ -61,3 +61,4 @@ data/charts/
 backend/database/ 
 scratch/
 backend/models/*.txt
+!backend/models/scoring_git_hash.txt

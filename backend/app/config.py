@@ -124,6 +124,10 @@ class Settings(BaseSettings):
         "http://localhost:3000",
         "http://127.0.0.1:3000",
         "http://localhost:3001",
+        "http://34.68.221.238",
+        "http://34.68.221.238:3000",
+        "http://34.68.221.238:8000",
+        "https://34.68.221.238",
     ]
 
     # Screener Settings

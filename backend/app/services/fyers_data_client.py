@@ -24,7 +24,17 @@ class FyersDataClient:
         self.secret_key = settings.FYERS_SECRET_ID
         self.redirect_uri = settings.FYERS_REDIRECT_URI
 
-        self.token_file = Path(BASE_DIR) / "backend" / "models" / "fyers_token.txt"
+        # Robust path resolution for local dev and Docker container
+        if Path("/app/models").is_dir():
+            models_dir = Path("/app/models")
+        elif (Path(BASE_DIR) / "backend" / "models").is_dir():
+            models_dir = Path(BASE_DIR) / "backend" / "models"
+        elif (Path(BASE_DIR) / "models").is_dir():
+            models_dir = Path(BASE_DIR) / "models"
+        else:
+            models_dir = Path(BASE_DIR) / "backend" / "models"
+
+        self.token_file = models_dir / "fyers_token.txt"
         self.fyers: Optional[fyersModel.FyersModel] = None
         self.user_name: Optional[str] = None
 
@@ -88,69 +98,96 @@ class FyersDataClient:
             return False
 
         try:
+            import base64
+            from urllib.parse import parse_qs, urlparse
             import pyotp
             import requests as req
 
-            headers = {"Accept": "application/json", "Content-Type": "application/json"}
+            def encode_input(s):
+                return base64.b64encode(str(s).encode("ascii")).decode("ascii")
 
-            # Step 1: Send client_id to get request_key
-            # app_id for vagator is the numeric suffix of FYERS_APP_ID
-            # e.g. "7UKGQH1LWE-100" -> "100"
-            vagator_app_id = self.app_id.split("-")[-1] if "-" in self.app_id else "2"
+            session = req.Session()
+            session.headers.update({"Accept": "application/json", "Content-Type": "application/json"})
 
-            r1 = req.post(
+            # Step 1: Send client_id (Base64) to get request_key
+            r1 = session.post(
                 "https://api-t2.fyers.in/vagator/v2/send_login_otp_v2",
-                json={"fy_id": client_id, "app_id": vagator_app_id},
-                headers=headers, timeout=15
-            )
-            d1 = r1.json()
-            if d1.get("s") != "ok":
-                logger.error(f"Fyers Step1 (send_login_otp) failed: {d1}")
+                json={"fy_id": encode_input(client_id), "app_id": "2"},
+                timeout=15
+            ).json()
+            if r1.get("s") != "ok":
+                logger.error(f"Fyers Step1 (send_login_otp) failed: {r1}")
                 return False
-            request_key = d1["request_key"]
+            request_key_1 = r1["request_key"]
             time.sleep(1)
 
             # Step 2: Verify TOTP code
             totp_code = pyotp.TOTP(totp_key).now()
-            r2 = req.post(
+            r2 = session.post(
                 "https://api-t2.fyers.in/vagator/v2/verify_otp",
-                json={"request_key": request_key, "otp": totp_code},
-                headers=headers, timeout=15
-            )
-            d2 = r2.json()
-            if d2.get("s") != "ok":
-                logger.error(f"Fyers Step2 (verify_otp) failed: {d2}")
+                json={"request_key": request_key_1, "otp": totp_code},
+                timeout=15
+            ).json()
+            if r2.get("s") != "ok":
+                logger.error(f"Fyers Step2 (verify_otp) failed: {r2}")
                 return False
-            request_key2 = d2["request_key"]
+            request_key_2 = r2["request_key"]
 
-            # Step 3: Verify PIN
-            r3 = req.post(
+            # Step 3: Verify PIN (Base64)
+            r3 = session.post(
                 "https://api-t2.fyers.in/vagator/v2/verify_pin_v2",
-                json={"request_key": request_key2, "identity_type": "pin", "identifier": pin},
-                headers=headers, timeout=15
-            )
-            d3 = r3.json()
-            if d3.get("s") != "ok":
-                logger.error(f"Fyers Step3 (verify_pin) failed: {d3}")
+                json={"request_key": request_key_2, "identity_type": "pin", "identifier": encode_input(pin)},
+                timeout=15
+            ).json()
+            if r3.get("s") != "ok":
+                logger.error(f"Fyers Step3 (verify_pin) failed: {r3}")
                 return False
-            access_token_v3 = d3["data"]["access_token"]
+            access_token_v2 = r3["data"]["access_token"]
+            session.headers.update({"authorization": f"Bearer {access_token_v2}"})
 
-            # Step 4: Exchange for OAuth access_token
-            session = fyersModel.SessionModel(
+            # Step 4: Request OAuth Authorization Code
+            base_app_id = self.app_id.split("-")[0] if "-" in self.app_id else self.app_id
+            payload_token = {
+                "fyers_id": client_id,
+                "app_id": base_app_id,
+                "redirect_uri": self.redirect_uri,
+                "appType": "100",
+                "code_challenge": "",
+                "state": "None",
+                "scope": "",
+                "nonce": "",
+                "response_type": "code",
+                "create_cookie": True
+            }
+            r4 = session.post("https://api-t1.fyers.in/api/v3/token", json=payload_token, timeout=15).json()
+            if r4.get("s") != "ok":
+                logger.error(f"Fyers Step4 (get authorization code) failed: {r4}")
+                return False
+
+            auth_url = r4.get("Url")
+            parsed_url = urlparse(auth_url)
+            query_params = parse_qs(parsed_url.query)
+            if "auth_code" not in query_params:
+                logger.error(f"Fyers Step4 auth_code missing in URL: {auth_url}")
+                return False
+            auth_code = query_params["auth_code"][0]
+
+            # Step 5: Exchange Auth Code for Final API Access Token
+            grant_session = fyersModel.SessionModel(
                 client_id=self.app_id,
                 secret_key=self.secret_key,
                 redirect_uri=self.redirect_uri,
                 response_type="code",
                 grant_type="authorization_code"
             )
-            session.set_token(access_token_v3)
-            token_resp = session.generate_token()
-            if token_resp.get("s") != "ok":
-                logger.error(f"Fyers Step4 (generate_token) failed: {token_resp}")
+            grant_session.set_token(auth_code)
+            response_final = grant_session.generate_token()
+            if response_final.get("s") != "ok":
+                logger.error(f"Fyers Step5 (generate final token) failed: {response_final}")
                 return False
 
-            self._save_token(token_resp["access_token"])
-            logger.info(f"Fyers auto-login successful for {client_id}")
+            self._save_token(response_final["access_token"])
+            logger.info(f"Fyers 24x7 auto-login successful for {client_id}")
             return True
 
         except Exception as e:

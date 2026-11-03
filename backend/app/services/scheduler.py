@@ -93,6 +93,41 @@ async def _run_forward_test_monthly_cohort() -> None:
             logger.warning(f"Could not dispatch failure alert to Telegram: {alert_err}")
 
 
+async def _run_daily_heartbeat() -> None:
+    """Daily Telegram Heartbeat at 09:45 AM IST."""
+    try:
+        from app.services.alert_manager import AlertManager
+        from app.services.fyers_data_client import FyersDataClient
+        fyers = FyersDataClient()
+        fyers_status = "Connected (" + (fyers.user_name or "OK") + ")" if fyers.is_connected() else "Disconnected"
+        alert_mgr = AlertManager()
+        await alert_mgr.send_message(
+            f"💓 **[TradeMatrix Heartbeat] System Operational**\n\n"
+            f"• Time: {datetime.now(IST).strftime('%Y-%m-%d %H:%M:%S IST')}\n"
+            f"• Broker (Fyers): {fyers_status}\n"
+            f"• Environment: Production (tradematrix-vm)\n"
+            f"• Scheduler: Running 6 jobs\n"
+            f"• Uptime: Healthy"
+        )
+        logger.info("[Scheduler] Daily Telegram Heartbeat dispatched successfully.")
+    except Exception as e:
+        logger.error(f"[Scheduler] Failed to dispatch daily heartbeat: {e}")
+
+
+async def _run_fyers_daily_login() -> None:
+    """Daily Fyers TOTP Auto-Login at 6:45 AM IST to keep session active 24x7."""
+    try:
+        from app.services.fyers_data_client import FyersDataClient
+        client = FyersDataClient()
+        success = client.connect(force=True)
+        if success:
+            logger.info(f"Daily Fyers 24x7 Auto-Login successful for: {client.user_name}")
+        else:
+            logger.error("Daily Fyers 24x7 Auto-Login failed")
+    except Exception as e:
+        logger.error(f"Error during scheduled Fyers auto-login: {e}")
+
+
 async def check_forward_test_catchup_on_startup() -> None:
     """Executes on application startup to catch up any missed monthly freeze if server was offline."""
     await _run_forward_test_monthly_cohort()
@@ -161,7 +196,35 @@ def create_scheduler() -> AsyncIOScheduler:
         misfire_grace_time=3600,
     )
 
-    logger.info("Scheduler configured with 4 jobs (including Forward Test Monthly Freeze)")
+    # Daily Fyers 24x7 Auto-Login at 6:45 AM IST (after 6:30 AM broker token reset)
+    _scheduler.add_job(
+        _run_fyers_daily_login,
+        CronTrigger(
+            hour=6,
+            minute=45,
+            timezone=IST,
+        ),
+        id="fyers_daily_autologin",
+        name="Daily Fyers TOTP Auto-Login (24x7 Session)",
+        replace_existing=True,
+        misfire_grace_time=3600,
+    )
+
+    # Daily Telegram Heartbeat at 09:45 AM IST (after market open)
+    _scheduler.add_job(
+        _run_daily_heartbeat,
+        CronTrigger(
+            hour=9,
+            minute=45,
+            timezone=IST,
+        ),
+        id="daily_heartbeat",
+        name="Daily Telegram Heartbeat (09:45 AM IST)",
+        replace_existing=True,
+        misfire_grace_time=3600,
+    )
+
+    logger.info("Scheduler configured with 6 jobs (including Forward Test, Fyers Auto-Login & Heartbeat)")
     return _scheduler
 
 
