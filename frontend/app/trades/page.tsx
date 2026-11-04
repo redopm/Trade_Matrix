@@ -475,16 +475,16 @@ export default function TradesPage() {
   const openCount = trades.filter((t) => t.status === "OPEN").length;
 
   return (
-    <div className="p-8 flex flex-col gap-8 bg-slate-50/80 min-h-screen">
+    <div className="p-3.5 sm:p-6 lg:p-8 flex flex-col gap-5 sm:gap-8 bg-slate-50/80 min-h-screen">
       {/* Toast Notification Banner */}
       {notification && (
-        <div className={`p-4 rounded-xl border flex items-center justify-between shadow-sm animate-in fade-in slide-in-from-top-2 duration-200 ${
+        <div className={`p-3.5 sm:p-4 rounded-xl border flex items-center justify-between shadow-sm animate-in fade-in slide-in-from-top-2 duration-200 ${
           notification.type === "success" 
             ? "bg-emerald-50 border-emerald-200 text-emerald-800" 
             : "bg-rose-50 border-rose-200 text-rose-800"
         }`}>
-          <div className="flex items-center gap-2.5 font-semibold text-sm">
-            {notification.type === "success" ? <CheckCircle2 size={18} /> : <AlertCircle size={18} />}
+          <div className="flex items-center gap-2 sm:gap-2.5 font-semibold text-xs sm:text-sm">
+            {notification.type === "success" ? <CheckCircle2 size={16} /> : <AlertCircle size={16} />}
             <span>{notification.message}</span>
           </div>
           <button 
@@ -497,37 +497,37 @@ export default function TradesPage() {
       )}
 
       {/* Header */}
-      <div className="flex items-center justify-between flex-wrap gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <div className="flex items-center gap-3">
-            <h1 className="text-3xl font-extrabold tracking-tight text-slate-900">
+          <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
+            <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-slate-900">
               Paper Trading Desk
             </h1>
             {openCount > 0 && (
-              <span className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
+              <span className="flex items-center gap-1.5 px-2.5 py-0.5 sm:px-3 sm:py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
                 <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
                 {openCount} Active {openCount === 1 ? "Position" : "Positions"}
               </span>
             )}
           </div>
-          <p className="text-sm mt-1 text-slate-500 font-medium">
+          <p className="text-xs sm:text-sm mt-1 text-slate-500 font-medium">
             Live tick tracking &bull; Dynamic ATR Stop Loss &bull; RSI Overbought Exit
           </p>
         </div>
 
         {/* Live Controls Bar */}
-        <div className="flex items-center gap-3 flex-wrap">
+        <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
           {/* Auto Refresh Toggle */}
-          <div className="flex items-center gap-2 bg-white px-3.5 py-2 rounded-xl border border-slate-200 shadow-sm text-xs font-bold text-slate-700">
+          <div className="flex items-center gap-2 bg-white px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-xl border border-slate-200 shadow-sm text-xs font-bold text-slate-700">
             <div className="flex items-center gap-1.5">
               <span className={`w-2.5 h-2.5 rounded-full ${!isMarketActive() ? "bg-amber-400" : autoRefresh ? "bg-emerald-500 animate-pulse" : "bg-slate-300"}`} />
-              <span>
-                {!isMarketActive() ? "Market Closed (Idle > 4 PM)" : "Live Tick Sync (10s)"}
+              <span className="text-[11px] sm:text-xs">
+                {!isMarketActive() ? "Market Closed" : "Live Sync"}
               </span>
             </div>
             <button
               onClick={() => setAutoRefresh(!autoRefresh)}
-              className={`px-2 py-0.5 rounded text-[11px] font-extrabold transition-colors ${
+              className={`px-2 py-0.5 rounded text-[10px] sm:text-[11px] font-extrabold transition-colors ${
                 !isMarketActive()
                   ? "bg-amber-50 text-amber-700 border border-amber-200"
                   : autoRefresh 
@@ -536,7 +536,7 @@ export default function TradesPage() {
               }`}
               title={!isMarketActive() ? "Auto-sync paused after 4:00 PM IST market close" : "Toggle 10s auto tick refresh"}
             >
-              {!isMarketActive() ? "PAUSED (>4PM)" : autoRefresh ? "ON" : "PAUSED"}
+              {!isMarketActive() ? "PAUSED" : autoRefresh ? "ON" : "OFF"}
             </button>
           </div>
 
@@ -544,10 +544,10 @@ export default function TradesPage() {
           {closedCount > 0 && (
             <button
               onClick={handleDeleteAllClosed}
-              className="flex items-center gap-1.5 bg-white border border-rose-200 text-rose-600 hover:bg-rose-50 px-3.5 py-2 rounded-xl text-xs font-bold transition-colors shadow-sm"
+              className="flex items-center gap-1.5 bg-white border border-rose-200 text-rose-600 hover:bg-rose-50 px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-xl text-xs font-bold transition-colors shadow-sm"
             >
-              <Trash2 size={14} />
-              Clear {closedCount} Closed
+              <Trash2 size={13} />
+              Clear {closedCount}
             </button>
           )}
 
@@ -555,72 +555,72 @@ export default function TradesPage() {
           <button
             onClick={handleUpdateAll}
             disabled={updating}
-            className="flex items-center gap-2 bg-slate-900 hover:bg-slate-800 text-white px-4 py-2 rounded-xl text-xs font-bold shadow-sm transition-all disabled:opacity-50"
+            className="flex items-center gap-1.5 bg-slate-900 hover:bg-slate-800 text-white px-3.5 py-1.5 sm:px-4 sm:py-2 rounded-xl text-xs font-bold shadow-sm transition-all disabled:opacity-50"
           >
-            <RefreshCw size={14} className={updating ? "animate-spin" : ""} />
-            <span>{updating ? "Updating Live..." : "Refresh P&L"}</span>
+            <RefreshCw size={13} className={updating ? "animate-spin" : ""} />
+            <span>{updating ? "Updating..." : "Refresh P&L"}</span>
           </button>
         </div>
       </div>
 
       {/* Portfolio Stats */}
       {stats && (
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-5">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-5">
           {/* Realized P&L */}
-          <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm relative overflow-hidden">
-            <div className="absolute top-0 right-0 p-4 opacity-5 text-emerald-600">
-              <TrendingUp size={64} />
+          <div className="bg-white p-3.5 sm:p-5 rounded-xl sm:rounded-2xl border border-slate-200 shadow-sm relative overflow-hidden">
+            <div className="absolute top-0 right-0 p-3 sm:p-4 opacity-5 text-emerald-600">
+              <TrendingUp size={52} />
             </div>
-            <div className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1.5 relative z-10">Realized P&amp;L</div>
-            <div className={`text-2xl font-black mb-1 relative z-10 ${(stats.realized_pnl ?? 0) >= 0 ? "text-emerald-600" : "text-rose-600"}`}>
+            <div className="text-[11px] sm:text-xs font-bold text-slate-400 uppercase tracking-wider mb-1 relative z-10">Realized P&amp;L</div>
+            <div className={`text-xl sm:text-2xl font-black mb-0.5 sm:mb-1 relative z-10 ${(stats.realized_pnl ?? 0) >= 0 ? "text-emerald-600" : "text-rose-600"}`}>
               {formatINR(stats.realized_pnl)}
             </div>
-            <div className="text-xs font-medium text-slate-400 relative z-10">
+            <div className="text-[11px] sm:text-xs font-medium text-slate-400 relative z-10">
               {stats.closed_trades} closed positions
             </div>
           </div>
           
           {/* Unrealized P&L */}
-          <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm relative overflow-hidden">
-            <div className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1.5">Unrealized P&amp;L (Live)</div>
-            <div className={`text-2xl font-black mb-1 ${(stats.unrealized_pnl ?? 0) >= 0 ? "text-emerald-600" : "text-rose-600"}`}>
+          <div className="bg-white p-3.5 sm:p-5 rounded-xl sm:rounded-2xl border border-slate-200 shadow-sm relative overflow-hidden">
+            <div className="text-[11px] sm:text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Unrealized P&amp;L (Live)</div>
+            <div className={`text-xl sm:text-2xl font-black mb-0.5 sm:mb-1 ${(stats.unrealized_pnl ?? 0) >= 0 ? "text-emerald-600" : "text-rose-600"}`}>
               {formatINR(stats.unrealized_pnl)}
             </div>
-            <div className="text-xs font-medium text-slate-400">
+            <div className="text-[11px] sm:text-xs font-medium text-slate-400">
               {stats.open_trades} active {stats.open_trades === 1 ? "position" : "positions"}
             </div>
           </div>
           
           {/* Win Rate */}
-          <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
-            <div className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1.5">Win Rate</div>
-            <div className={`text-2xl font-black mb-1 ${(stats.win_rate ?? 0) >= 50 ? "text-emerald-600" : "text-slate-800"}`}>
+          <div className="bg-white p-3.5 sm:p-5 rounded-xl sm:rounded-2xl border border-slate-200 shadow-sm">
+            <div className="text-[11px] sm:text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Win Rate</div>
+            <div className={`text-xl sm:text-2xl font-black mb-0.5 sm:mb-1 ${(stats.win_rate ?? 0) >= 50 ? "text-emerald-600" : "text-slate-800"}`}>
               {stats.win_rate?.toFixed(1)}%
             </div>
-            <div className="text-xs font-medium text-slate-400">
+            <div className="text-[11px] sm:text-xs font-medium text-slate-400">
               {stats.winning_trades}W &bull; {stats.losing_trades}L
             </div>
           </div>
           
           {/* Expectancy */}
-          <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
-            <div className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1.5">Trade Expectancy</div>
-            <div className={`text-2xl font-black mb-1 ${(stats.expectancy ?? 0) >= 0 ? "text-emerald-600" : "text-rose-600"}`}>
+          <div className="bg-white p-3.5 sm:p-5 rounded-xl sm:rounded-2xl border border-slate-200 shadow-sm">
+            <div className="text-[11px] sm:text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Trade Expectancy</div>
+            <div className={`text-xl sm:text-2xl font-black mb-0.5 sm:mb-1 ${(stats.expectancy ?? 0) >= 0 ? "text-emerald-600" : "text-rose-600"}`}>
               {stats.expectancy != null ? `${stats.expectancy >= 0 ? "+" : ""}${stats.expectancy.toFixed(2)}%` : "-"}
             </div>
-            <div className="text-xs font-medium text-slate-400">Expected return per trade</div>
+            <div className="text-[11px] sm:text-xs font-medium text-slate-400">Expected return per trade</div>
           </div>
         </div>
       )}
 
       {/* Filter and Count */}
-      <div className="flex items-center justify-between flex-wrap gap-4">
-        <div className="flex items-center gap-2 bg-white p-1.5 rounded-xl border border-slate-200 shadow-sm w-fit">
+      <div className="flex items-center justify-between flex-wrap gap-2.5 sm:gap-4">
+        <div className="flex items-center gap-1.5 sm:gap-2 bg-white p-1 sm:p-1.5 rounded-xl border border-slate-200 shadow-sm w-fit">
           {(["ALL", "OPEN", "CLOSED"] as const).map((f) => (
             <button
               key={f}
               onClick={() => setFilter(f)}
-              className={`px-4 py-1.5 text-xs font-bold rounded-lg transition-all ${
+              className={`px-3 sm:px-4 py-1 sm:py-1.5 text-xs font-bold rounded-lg transition-all ${
                 filter === f 
                   ? "bg-slate-900 text-white shadow-sm" 
                   : "bg-transparent text-slate-600 hover:bg-slate-100"
@@ -630,13 +630,13 @@ export default function TradesPage() {
             </button>
           ))}
           <div className="w-px h-5 bg-slate-200 mx-1" />
-          <span className="text-xs font-bold text-slate-400 px-2">
+          <span className="text-[11px] sm:text-xs font-bold text-slate-400 px-1 sm:px-2">
             Showing {filtered.length}
           </span>
         </div>
 
         {/* Sync Timestamp */}
-        <div className="text-xs text-slate-400 flex items-center gap-1.5 font-medium">
+        <div className="text-[11px] sm:text-xs text-slate-400 flex items-center gap-1.5 font-medium">
           <Clock size={13} />
           <span suppressHydrationWarning>
             Last sync: {mounted && lastSync ? lastSync.toLocaleTimeString("en-IN") : "--:--:--"}
@@ -646,13 +646,13 @@ export default function TradesPage() {
 
       {/* Trades Table */}
       {loading ? (
-        <div className="bg-white border border-slate-200 rounded-2xl p-8 shadow-sm">
+        <div className="bg-white border border-slate-200 rounded-xl sm:rounded-2xl p-6 sm:p-8 shadow-sm">
           {[...Array(3)].map((_, i) => (
             <div key={i} className="h-16 bg-slate-100 rounded-xl mb-3 animate-pulse" />
           ))}
         </div>
       ) : filtered.length === 0 ? (
-        <div className="bg-white border border-slate-200 rounded-2xl p-16 flex flex-col items-center justify-center text-center shadow-sm">
+        <div className="bg-white border border-slate-200 rounded-xl sm:rounded-2xl p-10 sm:p-16 flex flex-col items-center justify-center text-center shadow-sm">
           <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mb-4">
             <Briefcase className="text-slate-400" size={32} />
           </div>
@@ -665,9 +665,14 @@ export default function TradesPage() {
           </Link>
         </div>
       ) : (
-        <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
+        <div className="bg-white border border-slate-200 rounded-xl sm:rounded-2xl shadow-sm overflow-hidden">
+          {/* Mobile Swipe Hint */}
+          <div className="sm:hidden px-3.5 py-1.5 bg-slate-50 border-b border-slate-100 flex items-center justify-between text-[11px] text-slate-400">
+            <span>&larr; Swipe table horizontally &rarr;</span>
+            <span className="font-semibold text-slate-600">{filtered.length} trades</span>
+          </div>
           <div className="overflow-x-auto">
-            <table className="w-full text-left whitespace-nowrap">
+            <table className="w-full text-left whitespace-nowrap min-w-[720px]">
               <thead>
                 <tr className="bg-slate-50/80 border-b border-slate-100">
                   <th className="py-3.5 px-4 text-xs font-bold uppercase tracking-wider text-slate-500">Symbol</th>

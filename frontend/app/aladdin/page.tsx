@@ -147,7 +147,7 @@ export default function AladdinPage() {
   const scoreTheme = diagnosis ? getScoreTheme(diagnosis.composite_score) : null;
 
   return (
-    <div className="p-8 flex flex-col gap-8 bg-slate-50/70 min-h-screen">
+    <div className="p-3.5 sm:p-6 lg:p-8 flex flex-col gap-8 bg-slate-50/70 min-h-screen">
       {/* Header Banner */}
       <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 rounded-3xl p-8 text-white shadow-xl relative overflow-hidden border border-slate-800">
         <div className="absolute top-0 right-0 p-8 opacity-10 pointer-events-none">

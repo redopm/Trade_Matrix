@@ -134,7 +134,7 @@ export default function FnoDashboard() {
   }
 
   return (
-    <div className="p-8 max-w-7xl mx-auto text-gray-100 min-h-screen">
+    <div className="p-3.5 sm:p-6 lg:p-8 max-w-7xl mx-auto text-gray-100 min-h-screen">
       <div className="flex justify-between items-center mb-8">
         <div>
           <h1 className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-purple-500">

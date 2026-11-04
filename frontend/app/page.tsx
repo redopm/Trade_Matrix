@@ -221,9 +221,9 @@ export default function DashboardPage() {
 
   if (loading) {
     return (
-      <div className="p-8 flex flex-col gap-8 animate-pulse">
+      <div className="p-3.5 sm:p-6 lg:p-8 flex flex-col gap-5 sm:gap-8 animate-pulse">
         <div className="h-10 bg-slate-200 w-64 rounded-xl" />
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-6">
           {[...Array(4)].map((_, i) => (
             <div key={i} className="h-32 bg-slate-200 rounded-2xl" />
           ))}
@@ -239,11 +239,11 @@ export default function DashboardPage() {
   const config = summary?.config || {};
 
   return (
-    <div className="p-8 flex flex-col gap-8 bg-slate-50 min-h-screen">
+    <div className="p-3.5 sm:p-6 lg:p-8 flex flex-col gap-5 sm:gap-8 bg-slate-50 min-h-screen">
       {/* Header */}
-      <div className="flex items-end justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-3 sm:gap-4">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight text-slate-900">
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900">
             Dashboard
           </h1>
           <p className="text-sm mt-1 text-slate-500 font-medium">
@@ -255,7 +255,7 @@ export default function DashboardPage() {
             })}
           </p>
         </div>
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-2 sm:gap-4 flex-wrap">
           <div className="flex items-center gap-2 bg-emerald-50 border border-emerald-100 px-3 py-1.5 rounded-full">
             <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
             <span className="text-xs font-bold text-emerald-700 uppercase tracking-wide">
@@ -305,7 +305,7 @@ export default function DashboardPage() {
         <div className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-4 px-1">
           Portfolio Performance
         </div>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-6">
           <StatCard
             label="Total P&L"
             value={formatINR(portfolioStats?.total_pnl ?? 0)}
@@ -344,7 +344,7 @@ export default function DashboardPage() {
       </div>
 
       {/* --- Aladdin AI High-Conviction Future Setups --- */}
-      <div className="bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 border border-indigo-900/60 rounded-2xl p-6 sm:p-7 shadow-xl text-white relative overflow-hidden">
+      <div className="bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 border border-indigo-900/60 rounded-xl sm:rounded-2xl p-4 sm:p-6 lg:p-7 shadow-xl text-white relative overflow-hidden">
         {/* Ambient Glow */}
         <div className="absolute top-0 right-0 w-96 h-96 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none -mr-20 -mt-20" />
         

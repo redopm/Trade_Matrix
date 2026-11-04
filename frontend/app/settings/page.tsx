@@ -154,7 +154,7 @@ export default function SettingsPage() {
 
   if (loading) {
     return (
-      <div className="flex flex-col gap-6 animate-slide-in max-w-3xl">
+      <div className="p-3.5 sm:p-6 lg:p-8 flex flex-col gap-6 animate-slide-in max-w-3xl">
         <div className="skeleton h-10 w-64 rounded-xl" />
         <div className="skeleton h-64 rounded-xl" />
       </div>
@@ -162,7 +162,7 @@ export default function SettingsPage() {
   }
 
   return (
-    <div className="flex flex-col gap-6 animate-slide-in max-w-3xl">
+    <div className="p-3.5 sm:p-6 lg:p-8 flex flex-col gap-6 animate-slide-in max-w-3xl">
       {/* Header */}
       <div>
         <h1 className="text-3xl font-black tracking-tight" style={{ color: "var(--text-bright)" }}>

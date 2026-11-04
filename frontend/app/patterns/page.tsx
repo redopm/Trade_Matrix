@@ -293,7 +293,7 @@ export default function PatternsPage() {
   const patternCount = results.filter((r) => r.pattern_name && r.pattern_name !== "no_pattern").length;
 
   return (
-    <div className="p-8 flex flex-col gap-8 bg-slate-50 min-h-screen">
+    <div className="p-3.5 sm:p-6 lg:p-8 flex flex-col gap-8 bg-slate-50 min-h-screen">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>

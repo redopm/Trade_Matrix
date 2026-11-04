@@ -482,7 +482,7 @@ export default function ScreenerPage() {
     : universe?.total_stocks;
 
   return (
-    <div className="p-8 flex flex-col gap-6 bg-slate-50 min-h-screen">
+    <div className="p-3.5 sm:p-6 lg:p-8 flex flex-col gap-6 bg-slate-50 min-h-screen">
 
       {/* ── Header ── */}
       <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">

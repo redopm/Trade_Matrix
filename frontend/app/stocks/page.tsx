@@ -96,7 +96,7 @@ export default function StocksPage() {
   const tech = stockData?.technicals || {};
 
   return (
-    <div className="p-8 flex flex-col gap-8 bg-slate-50 min-h-screen">
+    <div className="p-3.5 sm:p-6 lg:p-8 flex flex-col gap-8 bg-slate-50 min-h-screen">
       <div>
         <h1 className="text-3xl font-bold tracking-tight text-slate-900">
           Stock Lookup
