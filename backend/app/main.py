@@ -57,6 +57,23 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"Startup Fyers auto-connect scheduled: {e}")
 
+    # Auto-resume Nifty 500 + Indices local daily store if incomplete after restart
+    async def _auto_resume_daily_store():
+        await asyncio.sleep(20)
+        try:
+            from app.services.daily_history_store import DailyHistoryStore
+            st = DailyHistoryStore.get_store_status()
+            if st["stored_symbols"] < st["target_universe_size"] and not st["sync_job"].get("is_running"):
+                logger.info(
+                    f"Startup DailyStore auto-resume triggered: "
+                    f"{st['stored_symbols']}/{st['target_universe_size']} symbols cached."
+                )
+                await DailyHistoryStore.sync_full_universe(force_full=False)
+        except Exception as e:
+            logger.warning(f"Startup DailyStore auto-resume check failed: {e}")
+
+    asyncio.create_task(_auto_resume_daily_store())
+
     yield  # Application is running
 
     # ── Shutdown ──────────────────────────────────────────────────────────────

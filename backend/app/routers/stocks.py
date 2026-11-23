@@ -87,6 +87,29 @@ async def trigger_data_store_sync(
     return {"message": "Nifty 500 2-year daily OHLCV sync started in background", **status}
 
 
+@router.post("/data-store/backfill-20y")
+async def trigger_deep_backfill(
+    background_tasks: BackgroundTasks,
+    years: int = Query(20, ge=3, le=25, description="Historical depth in years (up to 20Y NSE data)"),
+    sync: bool = Query(False),
+    max_symbols: Optional[int] = Query(None),
+):
+    """Backfill 10-20 years of split-adjusted NSE daily history into daily_ohlcv_store.db."""
+    from app.services.daily_history_store import DailyHistoryStore
+    status = DailyHistoryStore.get_store_status()
+    if status["sync_job"].get("is_running"):
+        return {"message": "Data store job already running", **status}
+
+    if sync:
+        return await DailyHistoryStore.backfill_deep_history(years=years, max_symbols=max_symbols)
+
+    async def _bg_deep():
+        await DailyHistoryStore.backfill_deep_history(years=years, max_symbols=max_symbols)
+
+    background_tasks.add_task(_bg_deep)
+    return {"message": f"Nifty 500 {years}-year NSE deep historical backfill started in background", **status}
+
+
 @router.get("/{symbol}")
 async def get_stock_snapshot(symbol: str):
     """

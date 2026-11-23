@@ -1,14 +1,14 @@
 """
-Local Nifty 500 + NSE Indices 2-Year Daily OHLCV Data Store (SQLite WAL).
+Local Nifty 500 + NSE Indices 2-to-20 Year Daily OHLCV Data Store (SQLite WAL).
 
 Architecture:
-- Persists 2 years (~729 calendar days / ~500 trading sessions) of daily candles
-  at BASE_DIR / "database" / "daily_ohlcv_store.db".
-- Fast Path: Returns a timezone-aware (Asia/Kolkata) DataFrame in ~1 ms directly
+- Persists 2-year Fyers official NSE candles + up to 20-year corporate-action-adjusted
+  NSE historical candles (~5,000 sessions per stock) at _BACKEND_DIR/database/daily_ohlcv_store.db.
+- Fast Path: Returns a timezone-aware (Asia/Kolkata) DataFrame in ~1-3 ms directly
   from disk when already synced up to the latest NSE session.
-- Delta Path: Fetches ONLY missing recent candles starting from the last stored
-  date (overlapping 1 day to automatically detect stock splits/bonuses).
-- Auto EOD Sync: Runs daily at 15:38 IST (Mon-Fri) to append that day's candle.
+- Delta Path: Fetches ONLY missing recent candles starting from max_dt
+  (overlapping 1 day to automatically detect stock splits/bonuses).
+- Auto EOD Sync: Runs daily Mon-Fri at 15:38 IST and auto-resumes incomplete syncs on startup.
 """
 import asyncio
 import sqlite3
@@ -20,6 +20,7 @@ from typing import Any, Dict, List, Optional
 
 import pandas as pd
 import pytz
+import yfinance as yf
 
 from app.config import _BACKEND_DIR
 from app.utils.logger import get_logger
@@ -31,7 +32,7 @@ DB_DIR = Path(_BACKEND_DIR) / "database"
 DB_DIR.mkdir(parents=True, exist_ok=True)
 STORE_DB_PATH = DB_DIR / "daily_ohlcv_store.db"
 
-FULL_SEED_DAYS = 729  # Fyers daily limit is ~729 calendar days (2 years)
+FULL_SEED_DAYS = 729  # Fyers daily history window (~2 years)
 
 CORE_INDEX_SYMBOLS: List[str] = [
     "NSE:NIFTY50-INDEX",
@@ -40,12 +41,39 @@ CORE_INDEX_SYMBOLS: List[str] = [
     "NSE:MIDCPNIFTY-INDEX",
 ]
 
+# Handle common NSE ticker renames / Fyers vs Yahoo Finance symbol differences
+_SYMBOL_ALIASES: Dict[str, str] = {
+    "NSE:ZOMATO-EQ": "ETERNAL",
+    "NSE:TATAMOTORS-EQ": "TATAMOTORS",
+    "NSE:MCDOWELL-N-EQ": "UNITDSPR",
+    "NSE:AMBUJACEMENT-EQ": "AMBUJACEM",
+    "NSE:TVSMOTORS-EQ": "TVSMOTOR",
+    "NSE:ADANITRANS-EQ": "ADANIENSOL",
+    "NSE:AMARAJABAT-EQ": "ARE&M",
+    "NSE:GMRINFRA-EQ": "GMRAIRPORT",
+    "NSE:KALPATARPOWER-EQ": "KPIL",
+    "NSE:ADANIWILMAR-EQ": "AWL",
+    "NSE:SUNCLAYLTD-EQ": "SUNDRMFAST",
+    "NSE:WELSPUN-EQ": "WELSPUNLIV",
+    "NSE:BAJAJ-AUTO-EQ": "BAJAJ-AUTO",
+    "NSE:M&M-EQ": "M&M",
+    "NSE:M&MFIN-EQ": "M&MFIN",
+}
+
+_YF_INDEX_MAP: Dict[str, str] = {
+    "NSE:NIFTY50-INDEX": "^NSEI",
+    "NSE:NIFTYBANK-INDEX": "^NSEBANK",
+    "NSE:FINNIFTY-INDEX": "NIFTY_FIN_SERVICE.NS",
+    "NSE:MIDCPNIFTY-INDEX": "NIFTY_MIDCAP_100.NS",
+}
+
 
 class DailyHistoryStore:
     _db_lock = threading.RLock()
     _initialized = False
     _sync_status: Dict[str, Any] = {
         "is_running": False,
+        "mode": "2Y_EOD",
         "total_symbols": 0,
         "completed_symbols": 0,
         "updated_symbols": 0,
@@ -103,20 +131,76 @@ class DailyHistoryStore:
                 conn.close()
 
     @staticmethod
+    def _to_yf_symbol(fyers_sym: str) -> str:
+        if fyers_sym in _YF_INDEX_MAP:
+            return _YF_INDEX_MAP[fyers_sym]
+        if fyers_sym in _SYMBOL_ALIASES:
+            return f"{_SYMBOL_ALIASES[fyers_sym]}.NS"
+        clean = fyers_sym.replace("NSE:", "").replace("BSE:", "").replace("-EQ", "").strip()
+        return f"{clean}.NS"
+
+    @classmethod
+    def _fetch_yf_nse_daily_df(cls, fyers_sym: str, start_date: date, end_date: date) -> pd.DataFrame:
+        """
+        Fetch corporate-action-adjusted NSE daily history via Yahoo Finance (.NS / ^NSEI).
+        Used automatically for 3Y–20Y deep historical backfills and zero-fail Fyers fallback.
+        """
+        candidates = [cls._to_yf_symbol(fyers_sym)]
+        raw_clean = fyers_sym.replace("NSE:", "").replace("-EQ", "").strip()
+        if fyers_sym not in _YF_INDEX_MAP and f"{raw_clean}.NS" not in candidates:
+            candidates.append(f"{raw_clean}.NS")
+
+        end_plus = (end_date + timedelta(days=1)).strftime("%Y-%m-%d")
+        start_s = start_date.strftime("%Y-%m-%d")
+
+        for yf_sym in candidates:
+            try:
+                df = yf.download(
+                    tickers=yf_sym,
+                    start=start_s,
+                    end=end_plus,
+                    interval="1d",
+                    auto_adjust=True,
+                    progress=False,
+                    threads=False,
+                )
+                if df is not None and not df.empty:
+                    if isinstance(df.columns, pd.MultiIndex):
+                        df.columns = df.columns.get_level_values(0)
+                    df.columns = [str(c).title() for c in df.columns]
+                    for col in ["Open", "High", "Low", "Close", "Volume"]:
+                        if col not in df.columns:
+                            df = pd.DataFrame()
+                            break
+                    if df.empty:
+                        continue
+                    df = df[["Open", "High", "Low", "Close", "Volume"]].dropna(subset=["Open", "High", "Low", "Close"])
+                    idx = pd.to_datetime(df.index)
+                    if idx.tz is None:
+                        idx = idx.tz_localize(IST)
+                    else:
+                        idx = idx.tz_convert(IST)
+                    df.index = idx
+                    df.index.name = "datetime"
+                    df = df.sort_index()
+                    df = df[~df.index.duplicated(keep="last")]
+                    return df
+            except Exception as e:
+                logger.debug(f"YF fallback failed for {yf_sym}: {e}")
+        return pd.DataFrame()
+
+    @staticmethod
     def _latest_closed_trading_date(now_ist: Optional[datetime] = None) -> date:
-        """Return latest expected EOD daily candle date according to IST market hours."""
         now_ist = now_ist or datetime.now(IST)
         wd = now_ist.weekday()
         mins = now_ist.hour * 60 + now_ist.minute
-        if wd == 5:  # Saturday -> Friday
+        if wd == 5:
             return now_ist.date() - timedelta(days=1)
-        if wd == 6:  # Sunday -> Friday
+        if wd == 6:
             return now_ist.date() - timedelta(days=2)
-        # Weekday
         if mins >= (15 * 60 + 35):
             return now_ist.date()
-        # Before 15:35 IST on a weekday: expect previous weekday
-        if wd == 0:  # Monday -> Friday
+        if wd == 0:
             return now_ist.date() - timedelta(days=3)
         return now_ist.date() - timedelta(days=1)
 
@@ -136,9 +220,11 @@ class DailyHistoryStore:
         if not min_dt_s or not max_dt_s or (rows_cnt or 0) < 30:
             return False
 
-        # Ensure stored history actually covers start_date (with 20-day holiday/listing grace)
-        grace_start = (start_date + timedelta(days=20)).strftime("%Y-%m-%d")
-        if min_dt_s > grace_start and (rows_cnt or 0) < 420:
+        # Only trigger deep fetch if caller asks for older history and symbol isn't already deep-synced
+        grace_start = (start_date + timedelta(days=30)).strftime("%Y-%m-%d")
+        if min_dt_s > grace_start and start_date >= (now_ist.date() - timedelta(days=760)) and (rows_cnt or 0) < 420:
+            return False
+        if min_dt_s > grace_start and start_date < (now_ist.date() - timedelta(days=800)) and (rows_cnt or 0) < 1500:
             return False
 
         last_synced_dt = None
@@ -151,14 +237,11 @@ class DailyHistoryStore:
                 last_synced_dt = None
 
         target_eod_str = target_eod.strftime("%Y-%m-%d")
-
         if cls._is_market_open_ist(now_ist):
-            # During live session, refresh at most once every 60 minutes per symbol
             if last_synced_dt and (now_ist - last_synced_dt).total_seconds() < 3600:
                 return True
             return False
 
-        # After hours / weekends: if max_dt reaches target_eod OR we already synced after target_eod 15:35 IST (covers NSE holidays)
         if max_dt_s >= target_eod_str:
             return True
         if last_synced_dt:
@@ -198,7 +281,13 @@ class DailyHistoryStore:
         return df
 
     @classmethod
-    def _upsert_df(cls, fyers_sym: str, df: pd.DataFrame, replace_all: bool = False) -> int:
+    def _upsert_df(
+        cls,
+        fyers_sym: str,
+        df: pd.DataFrame,
+        replace_all: bool = False,
+        ignore_existing: bool = False,
+    ) -> int:
         if df is None or df.empty:
             return 0
         cls._ensure_schema()
@@ -225,19 +314,18 @@ class DailyHistoryStore:
                 )
             )
 
+        sql_stmt = (
+            "INSERT OR IGNORE INTO daily_candles (fyers_sym, dt, epoch, open, high, low, close, volume) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
+            if ignore_existing
+            else "INSERT OR REPLACE INTO daily_candles (fyers_sym, dt, epoch, open, high, low, close, volume) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
+        )
+
         with cls._db_lock:
             conn = cls._connect()
             try:
                 if replace_all:
                     conn.execute("DELETE FROM daily_candles WHERE fyers_sym = ?", (fyers_sym,))
-                conn.executemany(
-                    """
-                    INSERT OR REPLACE INTO daily_candles
-                    (fyers_sym, dt, epoch, open, high, low, close, volume)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                    """,
-                    records,
-                )
+                conn.executemany(sql_stmt, records)
                 stats = conn.execute(
                     "SELECT MIN(dt), MAX(dt), COUNT(*) FROM daily_candles WHERE fyers_sym = ?",
                     (fyers_sym,),
@@ -272,7 +360,7 @@ class DailyHistoryStore:
                 conn.close()
 
     @classmethod
-    def _get_meta_and_overlap_close(cls, fyers_sym: str) -> tuple[Optional[tuple], Optional[float]]:
+    def _get_meta_and_overlap_close(cls, fyers_sym: str) -> tuple[Optional[tuple], Optional[float], Optional[float]]:
         cls._ensure_schema()
         with cls._db_lock:
             conn = cls._connect()
@@ -281,17 +369,38 @@ class DailyHistoryStore:
                     "SELECT min_dt, max_dt, rows_count, last_synced_at FROM symbol_sync_meta WHERE fyers_sym = ?",
                     (fyers_sym,),
                 ).fetchone()
-                overlap_close = None
+                max_close = None
+                min_close = None
                 if meta and meta[1]:
-                    row = conn.execute(
+                    r1 = conn.execute(
                         "SELECT close FROM daily_candles WHERE fyers_sym = ? AND dt = ?",
                         (fyers_sym, meta[1]),
                     ).fetchone()
-                    if row:
-                        overlap_close = float(row[0])
-                return meta, overlap_close
+                    if r1:
+                        max_close = float(r1[0])
+                if meta and meta[0]:
+                    r2 = conn.execute(
+                        "SELECT close FROM daily_candles WHERE fyers_sym = ? AND dt = ?",
+                        (fyers_sym, meta[0]),
+                    ).fetchone()
+                    if r2:
+                        min_close = float(r2[0])
+                return meta, max_close, min_close
             finally:
                 conn.close()
+
+    @classmethod
+    def _fetch_fyers_with_alias(cls, fyers_client: Any, fyers_sym: str, start_dt: date, end_dt: date) -> pd.DataFrame:
+        df = fyers_client._fetch_raw_historical_df(fyers_sym, "D", start_dt, end_dt)
+        if df is not None and not df.empty:
+            return df
+        alias_clean = _SYMBOL_ALIASES.get(fyers_sym)
+        if alias_clean:
+            alt_fyers = f"NSE:{alias_clean}-EQ"
+            df_alt = fyers_client._fetch_raw_historical_df(alt_fyers, "D", start_dt, end_dt)
+            if df_alt is not None and not df_alt.empty:
+                return df_alt
+        return pd.DataFrame()
 
     @classmethod
     def get_or_sync_daily_df(
@@ -304,13 +413,13 @@ class DailyHistoryStore:
     ) -> pd.DataFrame:
         """
         Return daily OHLCV DataFrame for fyers_sym across [start_date, end_date].
-        Reads from local SQLite when fresh; otherwise fetches only missing delta candles
-        (or seeds full 2-year history for cold symbols) with corporate-action split guard.
+        Uses local SQLite first; fetches missing recent candles from Fyers (with .NS fallback),
+        or fetches deep >2Y history smoothly via adjusted .NS NSE history.
         """
         cls._ensure_schema()
         now_ist = datetime.now(IST)
         target_eod = cls._latest_closed_trading_date(now_ist)
-        meta, stored_max_close = cls._get_meta_and_overlap_close(fyers_sym)
+        meta, stored_max_close, stored_min_close = cls._get_meta_and_overlap_close(fyers_sym)
 
         if not force_refresh and cls._is_fresh(meta, start_date, target_eod, now_ist):
             df_local = cls._read_df(fyers_sym, start_date, end_date)
@@ -320,21 +429,38 @@ class DailyHistoryStore:
         today_dt = now_ist.date()
         two_yr_start = today_dt - timedelta(days=FULL_SEED_DAYS)
 
-        # Decide whether to do incremental delta fetch or full 2-year seed
+        # If caller needs older history (>2Y) than Fyers provides and symbol isn't deep-synced yet
+        if start_date < (two_yr_start - timedelta(days=30)) and (not meta or (meta[2] or 0) < 1500):
+            if not meta or not meta[0] or meta[0] > (start_date + timedelta(days=45)).strftime("%Y-%m-%d"):
+                yf_deep = cls._fetch_yf_nse_daily_df(fyers_sym, start_date, today_dt)
+                if yf_deep is not None and not yf_deep.empty:
+                    if meta and meta[0] and stored_min_close:
+                        try:
+                            seam = yf_deep[yf_deep.index.strftime("%Y-%m-%d") == meta[0]]
+                            if not seam.empty and float(seam["Close"].iloc[-1]) > 0:
+                                ratio = stored_min_close / float(seam["Close"].iloc[-1])
+                                if 0.90 <= ratio <= 1.25:
+                                    for c in ["Open", "High", "Low", "Close"]:
+                                        yf_deep[c] = yf_deep[c] * ratio
+                        except Exception:
+                            pass
+                    cls._upsert_df(fyers_sym, yf_deep, replace_all=False, ignore_existing=True)
+                    meta, stored_max_close, stored_min_close = cls._get_meta_and_overlap_close(fyers_sym)
+
         can_incremental = (
             not force_refresh
             and meta is not None
             and (meta[2] or 0) >= 100
-            and meta[0] is not None
             and meta[1] is not None
-            and meta[0] <= (max(start_date, two_yr_start) + timedelta(days=20)).strftime("%Y-%m-%d")
         )
 
         if can_incremental:
             overlap_start = datetime.strptime(meta[1], "%Y-%m-%d").date()
-            delta_df = fyers_client._fetch_raw_historical_df(fyers_sym, "D", overlap_start, today_dt)
+            delta_df = cls._fetch_fyers_with_alias(fyers_client, fyers_sym, overlap_start, today_dt)
+            if delta_df.empty:
+                delta_df = cls._fetch_yf_nse_daily_df(fyers_sym, overlap_start, today_dt)
+
             if delta_df is not None and not delta_df.empty:
-                # Corporate Action (Split / Bonus) Detection on overlapping max_dt
                 split_detected = False
                 if stored_max_close and stored_max_close > 0:
                     try:
@@ -345,24 +471,27 @@ class DailyHistoryStore:
                                 split_detected = True
                                 logger.info(
                                     f"[DailyStore] Corporate action detected on {fyers_sym} "
-                                    f"({meta[1]}: {stored_max_close} -> {new_close}). Re-seeding full 2Y."
+                                    f"({meta[1]}: {stored_max_close} -> {new_close}). Refreshing recent 2Y."
                                 )
                     except Exception:
                         pass
 
                 if split_detected:
-                    full_df = fyers_client._fetch_raw_historical_df(fyers_sym, "D", two_yr_start, today_dt)
-                    if full_df is not None and not full_df.empty:
-                        cls._upsert_df(fyers_sym, full_df, replace_all=True)
+                    full_df = cls._fetch_fyers_with_alias(fyers_client, fyers_sym, two_yr_start, today_dt)
+                    if not full_df.empty:
+                        cls._upsert_df(fyers_sym, full_df, replace_all=False, ignore_existing=False)
                 else:
-                    cls._upsert_df(fyers_sym, delta_df, replace_all=False)
+                    cls._upsert_df(fyers_sym, delta_df, replace_all=False, ignore_existing=False)
             else:
                 cls._touch_meta_synced_at(fyers_sym)
         else:
             seed_start = min(start_date, two_yr_start)
-            full_df = fyers_client._fetch_raw_historical_df(fyers_sym, "D", seed_start, max(end_date, today_dt))
+            full_df = cls._fetch_fyers_with_alias(fyers_client, fyers_sym, seed_start, max(end_date, today_dt))
+            if full_df.empty:
+                # Zero-fail fallback: fetch official .NS daily history directly
+                full_df = cls._fetch_yf_nse_daily_df(fyers_sym, seed_start, max(end_date, today_dt))
             if full_df is not None and not full_df.empty:
-                cls._upsert_df(fyers_sym, full_df, replace_all=force_refresh)
+                cls._upsert_df(fyers_sym, full_df, replace_all=force_refresh, ignore_existing=False)
 
         return cls._read_df(fyers_sym, start_date, end_date)
 
@@ -389,6 +518,7 @@ class DailyHistoryStore:
             try:
                 sym_count = conn.execute("SELECT COUNT(*) FROM symbol_sync_meta").fetchone()[0]
                 row_count = conn.execute("SELECT COUNT(*) FROM daily_candles").fetchone()[0]
+                deep_count = conn.execute("SELECT COUNT(*) FROM symbol_sync_meta WHERE rows_count >= 1500").fetchone()[0]
                 bounds = conn.execute("SELECT MIN(min_dt), MAX(max_dt) FROM symbol_sync_meta").fetchone()
             finally:
                 conn.close()
@@ -398,6 +528,7 @@ class DailyHistoryStore:
             "db_path": str(STORE_DB_PATH),
             "db_size_mb": db_size_mb,
             "stored_symbols": int(sym_count or 0),
+            "deep_10_20y_symbols": int(deep_count or 0),
             "target_universe_size": len(cls.get_all_tracked_fyers_symbols()),
             "total_daily_candles": int(row_count or 0),
             "min_date": bounds[0] if bounds else None,
@@ -411,10 +542,7 @@ class DailyHistoryStore:
         force_full: bool = False,
         max_symbols: Optional[int] = None,
     ) -> Dict[str, Any]:
-        """
-        Synchronizes 2-year daily OHLCV candles across Nifty 500 + core NSE Indices
-        with safe Fyers pacing so Option Trading / live endpoints are never starved.
-        """
+        """Synchronizes 2-year Fyers daily candles (with .NS fallback) across Nifty 500 + Indices."""
         if cls._sync_status["is_running"]:
             return {"status": "ALREADY_RUNNING", **cls.get_store_status()}
 
@@ -426,6 +554,7 @@ class DailyHistoryStore:
 
         cls._sync_status = {
             "is_running": True,
+            "mode": "2Y_EOD",
             "total_symbols": len(symbols),
             "completed_symbols": 0,
             "updated_symbols": 0,
@@ -439,11 +568,7 @@ class DailyHistoryStore:
 
         def _sync_worker() -> None:
             fyers = FyersDataClient()
-            if not fyers.connect():
-                cls._sync_status["last_error"] = "Fyers connection failed"
-                cls._sync_status["is_running"] = False
-                cls._sync_status["finished_at"] = datetime.now(IST).isoformat()
-                return
+            fyers.connect()
 
             now_ist = datetime.now(IST)
             target_eod = cls._latest_closed_trading_date(now_ist)
@@ -453,7 +578,7 @@ class DailyHistoryStore:
             for fsym in symbols:
                 cls._sync_status["current_symbol"] = fsym
                 try:
-                    meta, _ = cls._get_meta_and_overlap_close(fsym)
+                    meta, _, _ = cls._get_meta_and_overlap_close(fsym)
                     if not force_full and cls._is_fresh(meta, start_dt, target_eod, now_ist):
                         cls._sync_status["cached_skipped"] += 1
                     else:
@@ -464,18 +589,8 @@ class DailyHistoryStore:
                         if df is not None and not df.empty:
                             cls._sync_status["updated_symbols"] += 1
                         else:
-                            # Brief 15s cooldown in case Fyers 50 req/min limit was approached, then retry once
-                            time.sleep(15.0)
-                            df_retry = cls.get_or_sync_daily_df(
-                                fyers, fsym, start_dt, today_dt, force_refresh=force_full
-                            )
-                            if df_retry is not None and not df_retry.empty:
-                                cls._sync_status["updated_symbols"] += 1
-                            else:
-                                cls._sync_status["failed_symbols"] += 1
-                        # Fyers Standard plan cap is 50 req/min (~1.2s/req):
-                        # 2-year download uses 2 chunks (~2.8s); incremental delta uses 1 chunk (~1.4s).
-                        time.sleep(2.8 if is_cold else 1.4)
+                            cls._sync_status["failed_symbols"] += 1
+                        time.sleep(2.6 if is_cold else 1.35)
                 except Exception as exc:
                     cls._sync_status["failed_symbols"] += 1
                     cls._sync_status["last_error"] = f"{fsym}: {exc}"
@@ -487,4 +602,79 @@ class DailyHistoryStore:
             cls._sync_status["finished_at"] = datetime.now(IST).isoformat()
 
         await asyncio.to_thread(_sync_worker)
+        return {"status": "COMPLETED", **cls.get_store_status()}
+
+    @classmethod
+    async def backfill_deep_history(
+        cls,
+        years: int = 20,
+        max_symbols: Optional[int] = None,
+    ) -> Dict[str, Any]:
+        """
+        Backfills up to 20 years (~5,000 daily NSE sessions per stock) into daily_ohlcv_store.db
+        using adjusted NSE .NS history stitched cleanly onto Fyers live recent candles.
+        """
+        if cls._sync_status["is_running"]:
+            return {"status": "ALREADY_RUNNING", **cls.get_store_status()}
+
+        symbols = cls.get_all_tracked_fyers_symbols()
+        if max_symbols and max_symbols > 0:
+            symbols = symbols[:max_symbols]
+
+        cls._sync_status = {
+            "is_running": True,
+            "mode": f"DEEP_{years}Y_BACKFILL",
+            "total_symbols": len(symbols),
+            "completed_symbols": 0,
+            "updated_symbols": 0,
+            "cached_skipped": 0,
+            "failed_symbols": 0,
+            "current_symbol": "",
+            "started_at": datetime.now(IST).isoformat(),
+            "finished_at": None,
+            "last_error": None,
+        }
+
+        def _backfill_worker() -> None:
+            now_ist = datetime.now(IST)
+            today_dt = now_ist.date()
+            deep_start = today_dt - timedelta(days=int(years * 365))
+            cutoff_str = (deep_start + timedelta(days=90)).strftime("%Y-%m-%d")
+
+            for fsym in symbols:
+                cls._sync_status["current_symbol"] = fsym
+                try:
+                    meta, _, stored_min_close = cls._get_meta_and_overlap_close(fsym)
+                    if meta and meta[0] and meta[0] <= cutoff_str and (meta[2] or 0) >= 1500:
+                        cls._sync_status["cached_skipped"] += 1
+                    else:
+                        yf_df = cls._fetch_yf_nse_daily_df(fsym, deep_start, today_dt)
+                        if yf_df is not None and not yf_df.empty:
+                            # Align .NS dividend-adjusted history smoothly to Fyers boundary if stored
+                            if meta and meta[0] and stored_min_close and stored_min_close > 0:
+                                try:
+                                    seam = yf_df[yf_df.index.strftime("%Y-%m-%d") == meta[0]]
+                                    if not seam.empty and float(seam["Close"].iloc[-1]) > 0:
+                                        ratio = stored_min_close / float(seam["Close"].iloc[-1])
+                                        if 0.90 <= ratio <= 1.25:
+                                            for c in ["Open", "High", "Low", "Close"]:
+                                                yf_df[c] = yf_df[c] * ratio
+                                except Exception:
+                                    pass
+                            cls._upsert_df(fyers_sym=fsym, df=yf_df, replace_all=False, ignore_existing=True)
+                            cls._sync_status["updated_symbols"] += 1
+                        else:
+                            cls._sync_status["failed_symbols"] += 1
+                        time.sleep(0.25)
+                except Exception as exc:
+                    cls._sync_status["failed_symbols"] += 1
+                    cls._sync_status["last_error"] = f"{fsym}: {exc}"
+                finally:
+                    cls._sync_status["completed_symbols"] += 1
+
+            cls._sync_status["current_symbol"] = ""
+            cls._sync_status["is_running"] = False
+            cls._sync_status["finished_at"] = datetime.now(IST).isoformat()
+
+        await asyncio.to_thread(_backfill_worker)
         return {"status": "COMPLETED", **cls.get_store_status()}

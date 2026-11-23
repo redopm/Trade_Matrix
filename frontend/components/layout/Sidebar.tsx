@@ -50,43 +50,24 @@ const navSections: NavSection[] = [
     title: "Core Trading Desk",
     items: [
       { href: "/", label: "Dashboard", icon: <LayoutDashboard size={18} />, description: "Market Mood & Overview" },
-      { href: "/screener", label: "Market Screener", icon: <Activity size={18} />, description: "Scan 500 Stocks & Setups", badge: "Live" },
-      { href: "/aladdin", label: "Aladdin AI", icon: <BrainCircuit size={18} />, description: "5-Pillar DNA & ML Brain", badge: "27% CAGR" },
+      { href: "/aladdin", label: "Aladdin AI", icon: <BrainCircuit size={18} />, description: "5-Pillar DNA & Stock Lookup", badge: "30.1% CAGR" },
+      { href: "/fno", label: "F&O Options Desk", icon: <Activity size={18} />, description: "Nifty & BankNifty Options Brain", badge: "Live" },
       { href: "/trades", label: "Trading Desk", icon: <Briefcase size={18} />, description: "Active Positions & Auto-SL" },
     ]
   },
   {
-    title: "Derivatives & Quant",
+    title: "Scanners & Backtest",
     items: [
-      { 
-        href: "/fno", 
-        label: "F&O Dashboard", 
-        icon: <Activity size={18} />, 
-        description: "Options Chain & Greeks", 
-        subItems: [
-          { href: "/fno", label: "Option Chain", icon: <Activity size={15} /> },
-          { href: "/fno/strategy-builder", label: "Strategy Builder", icon: <FlaskConical size={15} /> },
-          { href: "/fno/oi-analysis", label: "Open Interest", icon: <BarChart2 size={15} /> },
-          { href: "/fno/pcr-analysis", label: "PCR & Volatility", icon: <TrendingDown size={15} /> },
-          { href: "/fno/option-analysis", label: "Option Analysis", icon: <FileSearch size={15} /> },
-          { href: "/fno/fii-dii", label: "FII / DII Data", icon: <Building2 size={15} /> },
-        ]
-      },
-      { href: "/backtest", label: "Backtest Proof", icon: <BarChart2 size={18} />, description: "5.7Y Performance Audit" },
-    ]
-  },
-  {
-    title: "Advanced Labs",
-    items: [
-      { href: "/research", label: "Deep Research", icon: <Zap size={18} />, description: "Institutional Scanner" },
+      { href: "/screener", label: "Market Screener", icon: <BarChart2 size={18} />, description: "Scan 500 Stocks & Setups" },
+      { href: "/research", label: "Deep Research", icon: <Zap size={18} />, description: "Institutional Multi-Factor Scan" },
       { href: "/patterns", label: "Pattern Scanner", icon: <Eye size={18} />, description: "Chart Patterns" },
-      { href: "/training", label: "ML Training", icon: <FlaskConical size={18} />, description: "Model Pipeline (Offline)" },
-      { href: "/stocks", label: "Stock Lookup", icon: <Search size={18} />, description: "Symbol Snapshot" },
+      { href: "/backtest", label: "Backtest Proof", icon: <FileSearch size={18} />, description: "5.7Y Performance Audit" },
     ]
   },
   {
-    title: "System",
+    title: "System & AI Pipeline",
     items: [
+      { href: "/training", label: "ML Training & Data", icon: <FlaskConical size={18} />, description: "Model Pipeline & Data Store" },
       { href: "/settings", label: "Settings", icon: <Settings size={18} />, description: "Fyers API & Risk Config" },
     ]
   }
@@ -344,7 +325,7 @@ export function Sidebar() {
                                   <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold ${
                                     item.badge === "Live"
                                       ? "bg-emerald-100 text-emerald-700 border border-emerald-200"
-                                      : item.badge === "27% CAGR"
+                                      : item.badge?.includes("CAGR")
                                       ? "bg-amber-100 text-amber-800 border border-amber-200"
                                       : "bg-blue-100 text-blue-700"
                                   }`}>
@@ -453,7 +434,7 @@ export function Sidebar() {
                                   <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold ${
                                     item.badge === "Live"
                                       ? "bg-emerald-100 text-emerald-700 border border-emerald-200"
-                                      : item.badge === "27% CAGR"
+                                      : item.badge?.includes("CAGR")
                                       ? "bg-amber-100 text-amber-800 border border-amber-200"
                                       : "bg-blue-100 text-blue-700"
                                   }`}>
