@@ -103,8 +103,26 @@ To prevent distorted performance metrics from anomalous market ticks, latency, o
   5. **Fundamental Earnings Acceleration & Ownership (`fundamental.py` + `aladdin_brain.py`):** Wired insider/promoter & institutional ownership metrics (`heldPercentInsiders`, `heldPercentInstitutions`), earnings/revenue acceleration, and operating margin quality.
   6. **Refined F&O Max Pain & Cash Accumulation Proxy:** Gated Max Pain magnet points to the `+0.5%` to `+4.5%` pin window (`-10.0` above `6.0%`), and replaced flat non-F&O cash score (`55.0`) with dynamic OHLCV accumulation (`45.0–72.0`).
   7. **Fusion Weighting, Risk-Parity Sizing & Ledger B Runner/Sector Rules (`aladdin_brain.py` + `forward_test.py`):** Balanced composite fusion to `60% Structural + 40% ML`, applied slot risk-parity sizing, and enforced duplicate-symbol runner trailing + max 3 stocks/sector concentration cap in Ledger B.
-- **Locked Primary Series Fingerprint:**
+- **Locked Primary Series Fingerprint (Superseded Pre-Dec-1):**
   - **Scoring Formula Version:** `ALADDIN_V2_2_INSTITUTIONAL_UPGRADE`
   - **Scoring Code Hash:** `1960773` (includes `data_fetcher.py` 2Y Fyers feed + thread-safe Fyers session lock)
   - **Scoring Weights SHA256:** `e381b6b4`
   - **Combined Fingerprint:** **`1960773+e381b6b4`**
+
+---
+
+### 2.7 Pre-Dec-1 V3 Cross-Sectional Ranker & Execution Architecture Upgrade (23 November 2026)
+- **Empirical Audit Findings Leading to V3:**
+  - Cohort 1 (`COHORT_1_202611_20261103_LATE_DEFENSIVE`) lagged (`-0.29%` delta vs Monte Carlo Control, Spearman $\rho = -0.1212$) due to four root causes: (1) `yfinance.Ticker.info` timeouts dropping Banks/NBFCs/Cyclicals (`PNB`, `LODHA`, `CHOLAFIN`, `MARICO`) into `"General"` (`-7pt` penalty); (2) legacy `aladdin_classifier.pkl` assigning ~27.7% importance to daily constant market indicators; (3) Pillar 2 chasing short-term `20D` / `VCP` factors while giving `0` points to `60 < RSI <= 68`; and (4) tight `3.5%/6.0%` Ledger B trailing SL stopping out recovering leaders prematurely.
+- **V3 Institutional Upgrades Locked Prior to Primary Cohort 2 (`2026-12-01`):**
+  1. **Cross-Sectional 50/50 Rank Blend (`forward_test.py` + `train_aladdin_xs_model.py`):** Trained `aladdin_xs_classifier.pkl` across `115,103` cross-sectional cohort rows (`305` cohorts from `2008-01-01 to 2026-08-05`, `496` NSE symbols in local SQLite `DailyHistoryStore`) on 9 cohort-percentile features (`pct_mom_ex_1m`, `pct_dist_l52`, `pct_r10`, `pct_r20`, `pct_atr_pct`, `pct_dist_ema_200`, `pct_ema200_slope`, `pct_rsi_14`, `pct_dist_h52`).
+     - **Purged Blind Holdout (`2024-01-15 to 2026-08-05`, `43` cohorts, `21,134` rows):** OOS ROC-AUC `0.5325` (`1.24%` overfit accuracy gap), OOS XGBoost Mean Spearman $\rho = +0.0671$, 50/50 Blend Top-10 `+5.40%` vs `+2.17%` universe (**`+3.23%` quarterly excess alpha, `67.4%` beat rate**).
+     - `ForwardTestEngine._apply_cross_sectional_v3_blend` combines `85%` cross-sectional 50/50 blend (`50%` Structural factor percentile + `50%` XS XGBoost rank) + `15%` 5-pillar tie-break (`-8.0` Altman distress guard for non-banks).
+  2. **Pillar & Sector Fixes (`aladdin_brain.py`, `technical.py`, `fundamental.py`):** Added NSE sector lookup fallback (`_infer_nse_sector`) with Banking parity on `.info` timeouts, 12M-1M momentum (`mom_ex_1m`), 10D pullback timing, `45–68` RSI markup band, fixed inverted `PCR < 0.70` penalty, and `55%` Pillar + `45%` Standalone 18Y Empirical V3 blend (`15%` legacy ML weight).
+  3. **Positional Disaster-Stop & Chandelier Trailing (`paper_trading.py`, `aladdin_brain.py`):** Replaced tight short-term stops on positional equities with `-11.0% to -14.5%` SL clamp (`3.5 * ATR`), `EOD-confirmed` SL check (`>= 15:15 IST`), `-15.0%` catastrophic intraday crash guard, `BE +12.0%`, `Trail +18.0%` (`2.8 * ATR` / `55%` peak lock), and `T1 >= +14%` / `T2 >= +32%`. (F&O Options rules untouched.)
+  4. **Causal Walk-Forward Verification (`aladdin_backtest_report.json`):** Zero-lookahead expanding yearly simulation (`2021-01-04 to 2026-11-23`, `₹1,00,000 -> ₹4,67,547.64`, `+367.55%` net return after `0.385%` delivery friction, `30.57%` 1Y CAGR, `2.47` Profit Factor, `60.42%` Win Rate, **6/6 profitable calendar years** `2021–2026`).
+  5. **Operational Hardening & Zero Automated Alerts (`alert_manager.py`, `scheduler.py`, `screener.py`, `aladdin.py`, `advanced_dataset_generator.py`, `training/page.tsx`):** Disabled automated Telegram alerts (`AUTOMATED_ALERTS_DISABLED = True`), fixed Docker `/app/models/` report lookup paths in `aladdin.py`, and bounded empirical pattern benchmarks to `<= 80–120` symbols / `5–10Y` with `gc.collect()`.
+- **Authoritative Pre-Dec-1 Primary Series Fingerprint (`ALADDIN_V3_0_INSTITUTIONAL_PRE_DEC1`):**
+  - **Scoring Code Hash:** `42b2e7f`
+  - **Scoring Weights SHA256:** `cbf965df`
+  - **Combined Fingerprint:** **`42b2e7f+cbf965df`**

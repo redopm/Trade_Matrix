@@ -4,7 +4,7 @@
 # ==============================================================================
 
 PROTOCOL_VERSION: v2.1.2
-SCORING_FORMULA_VERSION: ALADDIN_V2_2_INSTITUTIONAL_UPGRADE
+SCORING_FORMULA_VERSION: ALADDIN_V3_0_INSTITUTIONAL_PRE_DEC1
 STATUTORY_FRICTION_ROUND_TRIP: 0.00385 (0.385%)
 FORWARD_TEST_CAPITAL_POOL: INR 1,000,000.00
 COHORT_1_SCHEDULED_FREEZE_DATE: 2026-11-02 (Monday, 09:30 AM IST)
@@ -22,15 +22,18 @@ SCORING_WEIGHTS_FILES (Tracked via SHA256 content hash):
   1. backend/models/aladdin_classifier.pkl
   2. backend/models/aladdin_regressor.pkl
   3. backend/models/aladdin_feature_names.json
-  4. backend/models/expert_model_weights.pth
+  4. backend/models/aladdin_xs_classifier.pkl
+  5. backend/models/aladdin_xs_features.json
+  6. backend/models/expert_model_weights.pth
 
 LOCKED_COMMITS:
   - Base Implementation Commit: a014fdd
   - Protocol v2.1.1 Prior Locked Scoring Code Commit: 50f7c60 (Fingerprint: 50f7c60+34f27003)
-  - Protocol v2.1.2 Route A Pre-Dec-1 Upgraded Scoring Commit: 45077c2 (DataFetcher 2Y Fyers Update: 1960773)
-  - Scoring Code Hash: 1960773
-  - Scoring Weights SHA256: e381b6b4
-  - Combined Scoring Fingerprint: 1960773+e381b6b4
+  - Protocol v2.1.2 Route A Upgraded Scoring Commit: 45077c2 (DataFetcher 2Y Fyers Update: 1960773+e381b6b4)
+  - Protocol v2.1.2 Pre-Dec-1 V3 Cross-Sectional Upgrade Commit: 42b2e7f
+  - Scoring Code Hash: 42b2e7f
+  - Scoring Weights SHA256: cbf965df
+  - Combined Scoring Fingerprint: 42b2e7f+cbf965df
 
 AUTHORITATIVE SPECIFICATION:
   - docs/forward_testing_protocol_v2_1_1_amendment.md (Authoritative over conflicting text)
