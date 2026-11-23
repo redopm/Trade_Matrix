@@ -259,8 +259,9 @@ class PaperTradingEngine:
         """Update a single trade with current market data and check exits."""
         symbol = trade.symbol
 
-        # Fetch current price and technical data
-        current_price = await self.fetcher.fetch_current_price(symbol)
+        # Fetch current OHLC quote (Fyers intraday Open/High/Low/LTP)
+        quote_ohlc = await self.fetcher.fetch_quote_ohlc(symbol)
+        current_price = quote_ohlc["lp"] if quote_ohlc else None
         if current_price is None or current_price <= 0:
             logger.warning(f"Could not fetch price for {symbol}")
             return
@@ -291,9 +292,24 @@ class PaperTradingEngine:
                 logger.warning(f"Could not dispatch DATA_SUSPECT alert to Telegram: {e_alert}")
             return
 
+        # Use full intraday Open/High/Low only for trades entered prior to today
+        # (prevents pre-entry morning lows/highs on entry day from triggering false exits)
+        is_prior_day_trade = bool(trade.entry_date and trade.entry_date < date.today().strftime("%Y-%m-%d"))
+        if is_prior_day_trade and quote_ohlc:
+            day_high = max(current_price, float(quote_ohlc.get("high") or current_price))
+            raw_low = float(quote_ohlc.get("low") or current_price)
+            if raw_low <= 0 or (trade.entry_price > 100 and raw_low < trade.entry_price * 0.40):
+                raw_low = current_price
+            day_low = min(current_price, raw_low)
+            day_open = float(quote_ohlc.get("open") or current_price)
+        else:
+            day_high = current_price
+            day_low = current_price
+            day_open = current_price
+
         # Update price tracking
         trade.current_price = current_price
-        trade.highest_price = max(trade.highest_price or 0, current_price)
+        trade.highest_price = max(trade.highest_price or 0, day_high)
 
         # Calculate P&L based on direction
         if trade.direction == "LONG":
@@ -343,22 +359,28 @@ class PaperTradingEngine:
 
         # ── Exit Condition 1: Stop Loss Hit ───────────────────────────────────
         sl_hit = (
-            (trade.direction == "LONG" and current_price <= trade.stop_loss) or
-            (trade.direction == "SHORT" and current_price >= trade.stop_loss)
+            (trade.direction == "LONG" and day_low <= trade.stop_loss) or
+            (trade.direction == "SHORT" and day_high >= trade.stop_loss)
         )
         if sl_hit:
-            fill_price = trade.stop_loss
+            if is_prior_day_trade and (
+                (trade.direction == "LONG" and day_open < trade.stop_loss)
+                or (trade.direction == "SHORT" and day_open > trade.stop_loss)
+            ):
+                fill_price = round(day_open, 2)
+            else:
+                fill_price = trade.stop_loss
             await self._close_trade(
                 db, trade, fill_price, TradeStatus.CLOSED_SL, "Stop loss hit"
             )
             summary["sl_hits"] += 1
-            logger.info(f"SL HIT: {symbol} filled @ limit ₹{fill_price:.2f} (market tick: ₹{current_price:.2f})")
+            logger.info(f"SL HIT: {symbol} filled @ ₹{fill_price:.2f} (intraday low/high checked, tick: ₹{current_price:.2f})")
             return
 
         # ── Exit Condition 2: Target Price Hit ────────────────────────────────
         target_hit = (
-            (trade.direction == "LONG" and current_price >= trade.target_price) or
-            (trade.direction == "SHORT" and current_price <= trade.target_price)
+            (trade.direction == "LONG" and day_high >= trade.target_price) or
+            (trade.direction == "SHORT" and day_low <= trade.target_price)
         )
         if target_hit:
             fill_price = trade.target_price
@@ -366,7 +388,7 @@ class PaperTradingEngine:
                 db, trade, fill_price, TradeStatus.CLOSED_TARGET, "Target reached"
             )
             summary["target_hits"] += 1
-            logger.info(f"TARGET HIT: {symbol} filled @ limit ₹{fill_price:.2f} (market tick: ₹{current_price:.2f})")
+            logger.info(f"TARGET HIT: {symbol} filled @ limit ₹{fill_price:.2f} (day high: ₹{day_high:.2f}, tick: ₹{current_price:.2f})")
             return
 
         # ── Exit Condition 3: RSI Extremes ──────────────────────────
@@ -450,8 +472,15 @@ class PaperTradingEngine:
         if not all_trades:
             return self._empty_stats()
 
+        excluded_statuses = {
+            TradeStatus.VOID_DATA_ERROR,
+            TradeStatus.CANCELLED,
+            "VOID_DATA_ERROR",
+            "CANCELLED",
+        }
         open_trades = [t for t in all_trades if t.is_open]
-        closed_trades = [t for t in all_trades if not t.is_open]
+        closed_trades = [t for t in all_trades if not t.is_open and t.status not in excluded_statuses]
+        void_or_cancelled = sum(1 for t in all_trades if t.status in excluded_statuses)
         winning_trades = [t for t in closed_trades if (t.realized_pnl or 0) > 0]
         losing_trades = [t for t in closed_trades if (t.realized_pnl or 0) <= 0]
 
@@ -502,6 +531,7 @@ class PaperTradingEngine:
             "total_trades": len(all_trades),
             "open_trades": len(open_trades),
             "closed_trades": len(closed_trades),
+            "void_or_cancelled_trades": void_or_cancelled,
             "winning_trades": len(winning_trades),
             "losing_trades": len(losing_trades),
             "win_rate": win_rate,

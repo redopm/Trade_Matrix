@@ -4,6 +4,7 @@ Handles authentication and high-quality historical data fetching.
 Supports TOTP auto-login so no manual Fyers website visit is needed daily.
 """
 import time
+import threading
 from datetime import datetime, date, timedelta
 from pathlib import Path
 from typing import Optional
@@ -18,6 +19,11 @@ logger = get_logger(__name__)
 
 
 class FyersDataClient:
+    _login_lock = threading.Lock()
+    _shared_fyers: Optional[fyersModel.FyersModel] = None
+    _shared_user_name: Optional[str] = None
+    _shared_token_date: Optional[date] = None
+
     def __init__(self):
         self.client_id = settings.FYERS_CLIENT_ID
         self.app_id = settings.FYERS_APP_ID
@@ -54,6 +60,9 @@ class FyersDataClient:
         try:
             self.fyers = None
             self.user_name = None
+            FyersDataClient._shared_fyers = None
+            FyersDataClient._shared_user_name = None
+            FyersDataClient._shared_token_date = None
             
             clean_code = auth_code.strip()
             if "auth_code=" in clean_code:
@@ -196,54 +205,75 @@ class FyersDataClient:
 
     def connect(self, force: bool = False) -> bool:
         """
-        Connect to Fyers API.
-        1. Reuse existing active session if available (0ms fast path).
-        2. Reuse today's saved token.
-        3. TOTP auto-login to get fresh token.
-        4. Error if all fail.
+        Connect to Fyers API (thread-safe singleton session cache).
+        1. Reuse shared active session if valid for today (0ms fast path).
+        2. Acquire _login_lock so concurrent threads don't fire duplicate TOTP logins.
+        3. Reuse today's saved token or perform TOTP auto-login.
         """
-        if not force and self.fyers is not None and self.user_name is not None:
+        today = date.today()
+        if (
+            not force
+            and FyersDataClient._shared_fyers is not None
+            and FyersDataClient._shared_user_name is not None
+            and FyersDataClient._shared_token_date == today
+        ):
+            self.fyers = FyersDataClient._shared_fyers
+            self.user_name = FyersDataClient._shared_user_name
             return True
 
-        access_token = self._load_todays_token()
+        with FyersDataClient._login_lock:
+            if (
+                not force
+                and FyersDataClient._shared_fyers is not None
+                and FyersDataClient._shared_user_name is not None
+                and FyersDataClient._shared_token_date == today
+            ):
+                self.fyers = FyersDataClient._shared_fyers
+                self.user_name = FyersDataClient._shared_user_name
+                return True
 
-        if not access_token:
-            logger.info("No valid today token. Attempting TOTP auto-login...")
-            if self.auto_login():
-                access_token = self._load_todays_token()
+            access_token = self._load_todays_token()
+
             if not access_token:
-                logger.error("Fyers auto-login failed. Authenticate via Settings > Broker Connection.")
-                return False
+                logger.info("No valid today token. Attempting TOTP auto-login...")
+                if self.auto_login():
+                    access_token = self._load_todays_token()
+                if not access_token:
+                    logger.error("Fyers auto-login failed. Authenticate via Settings > Broker Connection.")
+                    return False
 
-        self.fyers = fyersModel.FyersModel(
-            client_id=self.app_id,
-            is_async=False,
-            token=access_token,
-            log_path=str(Path(BASE_DIR) / "backend" / "logs")
-        )
+            self.fyers = fyersModel.FyersModel(
+                client_id=self.app_id,
+                is_async=False,
+                token=access_token,
+                log_path=str(Path(BASE_DIR) / "backend" / "logs")
+            )
 
-        profile = self.fyers.get_profile()
-        if profile.get("s") == "error":
-            logger.warning("Saved token invalid. Trying fresh auto-login...")
-            if self.auto_login():
-                access_token = self._load_todays_token()
-                if access_token:
-                    self.fyers = fyersModel.FyersModel(
-                        client_id=self.app_id, is_async=False,
-                        token=access_token,
-                        log_path=str(Path(BASE_DIR) / "backend" / "logs")
-                    )
-                    profile = self.fyers.get_profile()
-                    if profile.get("s") == "error":
-                        logger.error("Fyers connection failed after fresh auto-login.")
-                        return False
-            else:
-                return False
+            profile = self.fyers.get_profile()
+            if profile.get("s") == "error":
+                logger.warning("Saved token invalid. Trying fresh auto-login...")
+                if self.auto_login():
+                    access_token = self._load_todays_token()
+                    if access_token:
+                        self.fyers = fyersModel.FyersModel(
+                            client_id=self.app_id, is_async=False,
+                            token=access_token,
+                            log_path=str(Path(BASE_DIR) / "backend" / "logs")
+                        )
+                        profile = self.fyers.get_profile()
+                        if profile.get("s") == "error":
+                            logger.error("Fyers connection failed after fresh auto-login.")
+                            return False
+                else:
+                    return False
 
-        name = profile.get("data", {}).get("name", self.client_id)
-        self.user_name = name
-        logger.info(f"Fyers connected: {name}")
-        return True
+            name = profile.get("data", {}).get("name", self.client_id)
+            self.user_name = name
+            FyersDataClient._shared_fyers = self.fyers
+            FyersDataClient._shared_user_name = name
+            FyersDataClient._shared_token_date = today
+            logger.info(f"Fyers connected: {name}")
+            return True
 
     def _save_token(self, token: str) -> None:
         self.token_file.parent.mkdir(parents=True, exist_ok=True)

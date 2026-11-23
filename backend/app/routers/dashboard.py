@@ -12,10 +12,11 @@ from fastapi import APIRouter, Depends
 from sqlalchemy import select, func, and_
 from sqlalchemy.ext.asyncio import AsyncSession
 
+import asyncio
 import time
 from typing import Optional, List, Dict, Any
-from app.database import get_db
-from app.models.trade import PaperTrade, TradeStatus
+from app.database import get_db, AsyncSessionLocal
+from app.models.trade import PaperTrade, TradeStatus, UniverseScoreSnapshot
 from app.models.signal import ScreenerSignal
 from app.services.paper_trading import PaperTradingEngine
 from app.services.scheduler import get_scheduled_jobs
@@ -28,7 +29,7 @@ router = APIRouter(prefix="/dashboard", tags=["Dashboard"])
 
 # ── Aladdin AI Top Picks Cache ────────────────────────────────────────────────
 _AI_PICKS_CACHE: Dict[str, Any] = {
-    "timestamp": time.time(),
+    "timestamp": 0.0,
     "data": [
         {
             "symbol": "PERSISTENT",
@@ -152,8 +153,11 @@ _MONITORED_ALPHA_BASKET = [
 
 async def get_or_compute_ai_picks(force_refresh: bool = False) -> List[Dict[str, Any]]:
     """
-    Returns Aladdin AI Top High-Conviction Picks.
-    Uses in-memory cache (TTL: 15 minutes) for sub-millisecond response.
+    Returns Aladdin AI Top High-Conviction Picks dynamically across:
+    - Monitored Alpha Basket
+    - Recent Screener passed signals
+    - Latest Active Forward Cohort top ranked stocks
+    Uses in-memory cache (TTL: 15 minutes) and concurrent Semaphore(5) diagnostics.
     """
     global _AI_PICKS_CACHE
     now = time.time()
@@ -161,42 +165,85 @@ async def get_or_compute_ai_picks(force_refresh: bool = False) -> List[Dict[str,
         return _AI_PICKS_CACHE["data"]
 
     try:
-        engine = AladdinBrainEngine()
-        fresh_picks = []
-        for sym in _MONITORED_ALPHA_BASKET:
-            try:
-                res = await engine.diagnose_stock(sym)
-                if not res.get("error"):
-                    fresh_picks.append({
-                        "symbol": sym,
-                        "company_name": res.get("company_name"),
-                        "sector": res.get("sector"),
-                        "current_price": res.get("current_price"),
-                        "composite_score": res.get("composite_score"),
-                        "verdict": res.get("verdict"),
-                        "verdict_badge": res.get("verdict_badge"),
-                        "verdict_color": res.get("verdict_color"),
-                        "market_phase": res.get("market_phase"),
-                        "market_phase_desc": res.get("market_phase_desc"),
-                        "target_1": res.get("target_1"),
-                        "target_1_pct": res.get("target_1_pct"),
-                        "target_2": res.get("target_2"),
-                        "target_2_pct": res.get("target_2_pct"),
-                        "stop_loss": res.get("stop_loss"),
-                        "stop_loss_pct": res.get("stop_loss_pct"),
-                        "risk_reward_ratio": res.get("risk_reward_ratio"),
-                        "ml_win_probability": res.get("ml_win_probability"),
-                        "ml_expected_return_pct": res.get("ml_expected_return_pct"),
-                        "time_horizon": res.get("time_horizon", "5 to 20 Trading Days"),
-                    })
-            except Exception as e:
-                logger.warning(f"Dashboard: Failed diagnosing {sym} for AI picks: {e}")
+        candidates: List[str] = list(_MONITORED_ALPHA_BASKET)
+        try:
+            async with AsyncSessionLocal() as db:
+                sig_res = await db.execute(
+                    select(ScreenerSignal.symbol)
+                    .where(ScreenerSignal.passed_all == True)
+                    .order_by(ScreenerSignal.id.desc())
+                    .limit(10)
+                )
+                for s_sym in sig_res.scalars().all():
+                    if s_sym and s_sym not in candidates:
+                        candidates.append(s_sym)
 
+                snap_res = await db.execute(
+                    select(UniverseScoreSnapshot.symbol)
+                    .where(UniverseScoreSnapshot.is_top10 == True)
+                    .order_by(UniverseScoreSnapshot.id.desc())
+                    .limit(10)
+                )
+                for u_sym in snap_res.scalars().all():
+                    if u_sym and u_sym not in candidates:
+                        candidates.append(u_sym)
+        except Exception as db_err:
+            logger.debug(f"Dashboard: Optional DB candidate enrichment skipped: {db_err}")
+
+        # Normalize & deduplicate up to 24 symbols
+        seen = set()
+        target_symbols = []
+        for s in candidates:
+            clean_s = str(s).replace(".NS", "").replace(".BO", "").strip().upper()
+            if clean_s and clean_s not in seen:
+                seen.add(clean_s)
+                target_symbols.append(clean_s)
+            if len(target_symbols) >= 24:
+                break
+
+        engine = AladdinBrainEngine()
+        sem = asyncio.Semaphore(5)
+
+        async def _scan_one(sym: str) -> Optional[Dict[str, Any]]:
+            async with sem:
+                try:
+                    res = await engine.diagnose_stock(sym, force_refresh=force_refresh)
+                    if not res.get("error"):
+                        return {
+                            "symbol": sym,
+                            "company_name": res.get("company_name"),
+                            "sector": res.get("sector"),
+                            "current_price": res.get("current_price"),
+                            "composite_score": res.get("composite_score"),
+                            "verdict": res.get("verdict"),
+                            "verdict_badge": res.get("verdict_badge"),
+                            "verdict_color": res.get("verdict_color"),
+                            "market_phase": res.get("market_phase"),
+                            "market_phase_desc": res.get("market_phase_desc"),
+                            "target_1": res.get("target_1"),
+                            "target_1_pct": res.get("target_1_pct"),
+                            "target_2": res.get("target_2"),
+                            "target_2_pct": res.get("target_2_pct"),
+                            "stop_loss": res.get("stop_loss"),
+                            "stop_loss_pct": res.get("stop_loss_pct"),
+                            "risk_reward_ratio": res.get("risk_reward_ratio"),
+                            "ml_win_probability": res.get("ml_win_probability"),
+                            "ml_expected_return_pct": res.get("ml_expected_return_pct"),
+                            "time_horizon": res.get("time_horizon", "5 to 20 Trading Days"),
+                        }
+                except Exception as e:
+                    logger.warning(f"Dashboard: Failed diagnosing {sym} for AI picks: {e}")
+                return None
+
+        results = await asyncio.gather(*[_scan_one(sym) for sym in target_symbols])
+        fresh_picks = [r for r in results if r is not None]
         fresh_picks.sort(key=lambda x: x.get("composite_score", 0), reverse=True)
-        if fresh_picks:
+        top_picks = fresh_picks[:10]
+
+        if top_picks:
             _AI_PICKS_CACHE["timestamp"] = now
-            _AI_PICKS_CACHE["data"] = fresh_picks
-            return fresh_picks
+            _AI_PICKS_CACHE["data"] = top_picks
+            return top_picks
     except Exception as e:
         logger.error(f"Dashboard: Error generating AI picks: {e}")
 

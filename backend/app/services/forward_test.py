@@ -579,6 +579,141 @@ class ForwardTestEngine:
         return round(float(rho), 4)
 
     @classmethod
+    async def update_and_evaluate_cohorts(cls, db: AsyncSession) -> Dict[str, Any]:
+        """
+        Updates live Mark-to-Market (MTM) returns and Monte Carlo percentile ranks
+        for all ACTIVE forward cohorts, and marks batches COMPLETED at Day 90+.
+        """
+        stmt = select(ForwardBatch).where(ForwardBatch.status == "ACTIVE")
+        res = await db.execute(stmt)
+        active_batches = res.scalars().all()
+        if not active_batches:
+            return {"updated_batches": 0, "completed_batches": 0}
+
+        try:
+            regime_data = await asyncio.wait_for(MarketRegimeDetector.get_current_regime(), timeout=6.0)
+            nifty_price = float((regime_data or {}).get("nifty_price") or 0.0)
+        except Exception:
+            nifty_price = 0.0
+
+        from app.services.fyers_data_client import FyersDataClient
+        fyers_client = FyersDataClient()
+        fyers_ok = await asyncio.get_event_loop().run_in_executor(None, fyers_client.connect)
+        fetcher = DataFetcher()
+
+        # Gather unique symbols across all active batches to fetch prices once
+        batch_snapshots: Dict[str, List[UniverseScoreSnapshot]] = {}
+        all_syms: set[str] = set()
+        for batch in active_batches:
+            s_res = await db.execute(
+                select(UniverseScoreSnapshot).where(UniverseScoreSnapshot.batch_id == batch.batch_id)
+            )
+            snaps = s_res.scalars().all()
+            batch_snapshots[batch.batch_id] = snaps
+            for s in snaps:
+                all_syms.add(s.symbol)
+
+        price_map: Dict[str, float] = {}
+        fyers_to_orig: Dict[str, str] = {}
+        for sym in all_syms:
+            clean = sym.replace(".NS", "").replace(".BO", "").replace("NSE:", "").replace("-EQ", "").strip().upper()
+            fyers_to_orig[f"NSE:{clean}-EQ"] = sym
+
+        if fyers_ok:
+            fyers_syms = list(fyers_to_orig.keys())
+            for i in range(0, len(fyers_syms), 50):
+                chunk = fyers_syms[i : i + 50]
+                try:
+                    q_res = await asyncio.get_event_loop().run_in_executor(None, fyers_client.fetch_quotes, chunk)
+                    if q_res and q_res.get("s") == "ok" and q_res.get("d"):
+                        for q in q_res["d"]:
+                            n = q.get("n")
+                            lp = float((q.get("v") or {}).get("lp") or 0)
+                            if n in fyers_to_orig and lp > 0:
+                                price_map[fyers_to_orig[n]] = lp
+                except Exception as fe:
+                    logger.debug(f"ForwardTest MTM Fyers chunk quote error: {fe}")
+
+        missing_syms = [s for s in all_syms if s not in price_map]
+        if missing_syms:
+            sem = asyncio.Semaphore(8)
+
+            async def _fetch_fallback(sym: str) -> None:
+                async with sem:
+                    try:
+                        p = await asyncio.wait_for(fetcher.fetch_current_price(sym), timeout=2.5)
+                        if p and p > 0:
+                            price_map[sym] = float(p)
+                    except Exception:
+                        pass
+
+            await asyncio.gather(*[_fetch_fallback(s) for s in missing_syms])
+
+        updated_count = 0
+        completed_count = 0
+        today_dt = datetime.now().date()
+
+        for batch in active_batches:
+            snaps = batch_snapshots.get(batch.batch_id, [])
+            if not snaps:
+                continue
+
+            for snap in snaps:
+                curr_px = price_map.get(snap.symbol)
+                if curr_px and curr_px > 0 and snap.entry_price and snap.entry_price > 0:
+                    # Reject >60% anomaly drops on stocks > ₹100
+                    if snap.entry_price > 100 and curr_px < (snap.entry_price * 0.40):
+                        continue
+                    gross_ret = round(((curr_px / snap.entry_price) - 1.0) * 100.0, 4)
+                    net_ret = round(gross_ret - (FROZEN_DELIVERY_FRICTION_PCT * 100.0), 4)
+                    snap.day90_price = round(curr_px, 2)
+                    snap.day90_return_pct = gross_ret
+                    snap.day90_net_return_pct = net_ret
+
+            returns_map = {s.symbol: s.day90_return_pct for s in snaps if s.day90_return_pct is not None}
+            top10_syms = [s.symbol for s in snaps if s.is_top10]
+            all_snap_syms = [s.symbol for s in snaps]
+
+            if len(returns_map) >= 10:
+                mc_res = cls.run_1000_monte_carlo_baskets(
+                    all_snap_syms, returns_map, top10_syms, seed=batch.random_seed
+                )
+                scored_pairs = [(s.composite_score, returns_map[s.symbol]) for s in snaps if s.symbol in returns_map]
+                rho = cls.calculate_spearman_rho(
+                    [p[0] for p in scored_pairs],
+                    [p[1] for p in scored_pairs],
+                )
+                batch.tool_avg_return_pct = round(mc_res["tool_top10_net_return_pct"], 2)
+                batch.control_mean_return_pct = round(mc_res["universe_exact_net_return_pct"], 2)
+                batch.delta_excess_return_pct = round(mc_res["delta_excess_return_pct"], 2)
+                batch.monte_carlo_percentile = round(mc_res["tool_percentile_rank"], 1)
+                batch.spearman_rho = rho
+                if nifty_price > 0 and batch.nifty_base_price and batch.nifty_base_price > 0:
+                    batch.nifty_return_pct = round(((nifty_price / batch.nifty_base_price) - 1.0) * 100.0, 2)
+                updated_count += 1
+
+            # Auto-complete cohort once 90 calendar days have elapsed
+            try:
+                created_dt = (
+                    batch.created_at.date()
+                    if hasattr(batch.created_at, "date")
+                    else datetime.strptime(str(batch.created_at)[:10], "%Y-%m-%d").date()
+                )
+                if (today_dt - created_dt).days >= 90:
+                    batch.status = "COMPLETED"
+                    batch.completed_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S IST")
+                    completed_count += 1
+                    logger.info(
+                        f"ForwardTestEngine: Cohort {batch.batch_id} reached Day 90 and is now COMPLETED "
+                        f"(Delta Alpha: {batch.delta_excess_return_pct:+.2f}%, Percentile: {batch.monte_carlo_percentile:.1f}%)."
+                    )
+            except Exception as dt_err:
+                logger.debug(f"Could not parse created_at for {batch.batch_id}: {dt_err}")
+
+        await db.commit()
+        return {"updated_batches": updated_count, "completed_batches": completed_count}
+
+    @classmethod
     async def get_protocol_scorecard(cls, db: AsyncSession) -> Dict[str, Any]:
         """
         Computes the unified pre-registered forward scorecard across all completed cohorts.
@@ -588,6 +723,19 @@ class ForwardTestEngine:
         stmt = select(ForwardBatch).order_by(ForwardBatch.created_at)
         res = await db.execute(stmt)
         batches = res.scalars().all()
+
+        # Populate live MTM metrics if any active batch has uncomputed MTM returns
+        needs_mtm = any(
+            b.status == "ACTIVE" and (b.tool_avg_return_pct is None or b.tool_avg_return_pct == 0.0)
+            for b in batches
+        )
+        if needs_mtm:
+            try:
+                await cls.update_and_evaluate_cohorts(db)
+                res = await db.execute(stmt)
+                batches = res.scalars().all()
+            except Exception as mtm_err:
+                logger.warning(f"ForwardTestEngine: Live MTM scorecard refresh skipped: {mtm_err}")
 
         pilot_batches = [b for b in batches if b.cohort_type == "PILOT"]
         primary_batches = [b for b in batches if b.cohort_type == "PRIMARY"]

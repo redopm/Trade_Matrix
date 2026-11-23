@@ -429,19 +429,19 @@ class DataFetcher:
         interval = interval or settings.DATA_INTERVAL
 
         # ── Try Fyers first (official NSE data) ─────────────────────────
-        # Note: Fyers API historical data has a ~1-2 year limit (max ~500 daily candles).
-        # For multi-year backtesting (>= 2y), we route directly to yfinance for complete historical depth.
+        # Fyers API historical data supports up to ~729 daily candles (~2 years).
+        # Only route >2y multi-year backtesting directly to yfinance.
         is_multi_year = False
         if period:
             p_clean = period.lower().strip()
-            if p_clean == "max" or (p_clean.endswith("y") and p_clean[:-1].isdigit() and int(p_clean[:-1]) >= 2):
+            if p_clean == "max" or (p_clean.endswith("y") and p_clean[:-1].isdigit() and int(p_clean[:-1]) > 2):
                 is_multi_year = True
 
-        if interval in (None, "1d", "1D", "D") and not is_multi_year:  # Fyers daily data for short periods
+        if interval in (None, "1d", "1D", "D") and not is_multi_year:  # Fyers daily data up to 2y
             fyers = _get_fyers_client()
             if fyers is not None:
                 try:
-                    days_map = {"1mo": 30, "3mo": 90, "6mo": 180, "1y": 365}
+                    days_map = {"1mo": 30, "3mo": 90, "6mo": 180, "1y": 365, "2y": 725}
                     days = days_map.get(period, 365)
                     range_from = (dt_date.today() - timedelta(days=days)).strftime("%Y-%m-%d")
                     df = await asyncio.get_event_loop().run_in_executor(
@@ -626,6 +626,38 @@ class DataFetcher:
             except Exception as e:
                 logger.warning(f"Failed to fetch price for {symbol}: {e}")
                 return None
+
+    async def fetch_quote_ohlc(self, symbol: str) -> Optional[dict[str, float]]:
+        """Fetch latest price along with intraday Open/High/Low for accurate SL/Target evaluation."""
+        clean_sym = symbol.replace(".NS", "").replace(".BO", "").replace("NSE:", "").replace("BSE:", "").replace("-EQ", "").strip().upper()
+        fyers_sym = f"NSE:{clean_sym}-EQ"
+
+        fyers = _get_fyers_client()
+        if fyers is not None:
+            try:
+                quotes = await asyncio.get_event_loop().run_in_executor(
+                    None, fyers.fetch_quotes, [fyers_sym]
+                )
+                if quotes and quotes.get("s") == "ok" and quotes.get("d"):
+                    v = quotes["d"][0].get("v", {})
+                    lp = float(v.get("lp") or 0)
+                    if lp > 0:
+                        high_p = float(v.get("high_price") or v.get("h") or lp)
+                        low_p = float(v.get("low_price") or v.get("l") or lp)
+                        open_p = float(v.get("open_price") or v.get("o") or lp)
+                        return {
+                            "lp": lp,
+                            "high": high_p if high_p > 0 else lp,
+                            "low": low_p if low_p > 0 else lp,
+                            "open": open_p if open_p > 0 else lp,
+                        }
+            except Exception as e:
+                logger.debug(f"Fyers OHLC quote failed for {symbol}: {e}. Falling back to fetch_current_price.")
+
+        price = await self.fetch_current_price(symbol)
+        if price and price > 0:
+            return {"lp": price, "high": price, "low": price, "open": price}
+        return None
 
     @staticmethod
     @retry(

@@ -35,13 +35,29 @@ async def _run_daily_screener() -> None:
 
 
 async def _update_paper_trades() -> None:
-    """Background job: Update all open paper trades at 9:20 AM IST."""
+    """Background job: Monitor open paper trades every 5 min during NSE market hours & run EOD cohort MTM."""
     from app.services.paper_trading import PaperTradingEngine
-    logger.info(f"[Scheduler] Updating paper trades @ {datetime.now(IST).strftime('%H:%M IST')}")
+    from app.services.forward_test import ForwardTestEngine
+
+    now_ist = datetime.now(IST)
+    if now_ist.weekday() >= 5:
+        return
+    total_mins = now_ist.hour * 60 + now_ist.minute
+    if total_mins < (9 * 60 + 15) or total_mins > (15 * 60 + 45):
+        return
+
+    logger.info(f"[Scheduler] Updating paper trades @ {now_ist.strftime('%H:%M IST')}")
     async with AsyncSessionLocal() as db:
         engine = PaperTradingEngine()
         summary = await engine.update_open_trades(db)
         logger.info(f"[Scheduler] Trade update: {summary}")
+
+        if now_ist.hour == 15 and 30 <= now_ist.minute <= 45:
+            try:
+                mtm_res = await ForwardTestEngine.update_and_evaluate_cohorts(db)
+                logger.info(f"[Scheduler] Daily Forward Cohort MTM updated: {mtm_res}")
+            except Exception as e_mtm:
+                logger.warning(f"[Scheduler] Cohort MTM update failed: {e_mtm}")
 
 async def _run_weekly_self_learning() -> None:
     """Background job: Run Weekly Self-Learning (Outcomes + Gemini) on Saturday 6 AM IST."""
@@ -131,18 +147,19 @@ def create_scheduler() -> AsyncIOScheduler:
         misfire_grace_time=300,  # 5 min grace if server was down
     )
 
-    # P&L update at 9:20 AM IST (20 min after NSE open at 9:00 AM)
+    # Intraday SL / Target / P&L monitoring every 5 minutes (9:15 AM - 3:45 PM IST, Mon-Fri)
     _scheduler.add_job(
         _update_paper_trades,
         CronTrigger(
-            hour=settings.PNL_UPDATE_HOUR,
-            minute=settings.PNL_UPDATE_MINUTE,
+            day_of_week="mon-fri",
+            hour="9-15",
+            minute="*/5",
             timezone=IST,
         ),
         id="pnl_update",
-        name="Paper Trade P&L Update",
+        name="Intraday Paper Trade SL/Target Monitor (5m)",
         replace_existing=True,
-        misfire_grace_time=300,
+        misfire_grace_time=120,
     )
 
     # Weekly Self-Learning on Saturday 6:00 AM IST
