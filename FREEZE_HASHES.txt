@@ -27,10 +27,10 @@ SCORING_WEIGHTS_FILES (Tracked via SHA256 content hash):
 LOCKED_COMMITS:
   - Base Implementation Commit: a014fdd
   - Protocol v2.1.1 Prior Locked Scoring Code Commit: 50f7c60 (Fingerprint: 50f7c60+34f27003)
-  - Protocol v2.1.2 Route A Pre-Dec-1 Upgraded Scoring Commit: 45077c2
-  - Scoring Code Hash: 45077c2
+  - Protocol v2.1.2 Route A Pre-Dec-1 Upgraded Scoring Commit: 45077c2 (DataFetcher 2Y Fyers Update: 1960773)
+  - Scoring Code Hash: 1960773
   - Scoring Weights SHA256: e381b6b4
-  - Combined Scoring Fingerprint: 45077c2+e381b6b4
+  - Combined Scoring Fingerprint: 1960773+e381b6b4
 
 AUTHORITATIVE SPECIFICATION:
   - docs/forward_testing_protocol_v2_1_1_amendment.md (Authoritative over conflicting text)

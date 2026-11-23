@@ -105,6 +105,6 @@ To prevent distorted performance metrics from anomalous market ticks, latency, o
   7. **Fusion Weighting, Risk-Parity Sizing & Ledger B Runner/Sector Rules (`aladdin_brain.py` + `forward_test.py`):** Balanced composite fusion to `60% Structural + 40% ML`, applied slot risk-parity sizing, and enforced duplicate-symbol runner trailing + max 3 stocks/sector concentration cap in Ledger B.
 - **Locked Primary Series Fingerprint:**
   - **Scoring Formula Version:** `ALADDIN_V2_2_INSTITUTIONAL_UPGRADE`
-  - **Scoring Code Hash:** `45077c2`
+  - **Scoring Code Hash:** `1960773` (includes `data_fetcher.py` 2Y Fyers feed + thread-safe Fyers session lock)
   - **Scoring Weights SHA256:** `e381b6b4`
-  - **Combined Fingerprint:** **`45077c2+e381b6b4`**
+  - **Combined Fingerprint:** **`1960773+e381b6b4`**
