@@ -3,11 +3,12 @@
 # Pre-Registered: 16 October 2026, Friday
 # ==============================================================================
 
-PROTOCOL_VERSION: v2.1.1
-SCORING_FORMULA_VERSION: ALADDIN_V2_5PILLAR
+PROTOCOL_VERSION: v2.1.2
+SCORING_FORMULA_VERSION: ALADDIN_V2_2_INSTITUTIONAL_UPGRADE
 STATUTORY_FRICTION_ROUND_TRIP: 0.00385 (0.385%)
 FORWARD_TEST_CAPITAL_POOL: INR 1,000,000.00
 COHORT_1_SCHEDULED_FREEZE_DATE: 2026-11-02 (Monday, 09:30 AM IST)
+PRIMARY_SERIES_FREEZE_DATE: 2026-12-01 (Tuesday, 09:30 AM IST)
 
 SCORING_CRITICAL_CODE_FILES (Only these trigger code-dirty checks and define scoring code hash):
   1. backend/app/services/aladdin_brain.py
@@ -25,10 +26,11 @@ SCORING_WEIGHTS_FILES (Tracked via SHA256 content hash):
 
 LOCKED_COMMITS:
   - Base Implementation Commit: a014fdd
-  - Protocol v2.1.1 Locked Scoring Code Commit: 50f7c60
-  - Scoring Code Hash: 50f7c60
-  - Scoring Weights SHA256: 34f27003
-  - Combined Scoring Fingerprint: 50f7c60+34f27003
+  - Protocol v2.1.1 Prior Locked Scoring Code Commit: 50f7c60 (Fingerprint: 50f7c60+34f27003)
+  - Protocol v2.1.2 Route A Pre-Dec-1 Upgraded Scoring Commit: 45077c2
+  - Scoring Code Hash: 45077c2
+  - Scoring Weights SHA256: e381b6b4
+  - Combined Scoring Fingerprint: 45077c2+e381b6b4
 
 AUTHORITATIVE SPECIFICATION:
   - docs/forward_testing_protocol_v2_1_1_amendment.md (Authoritative over conflicting text)

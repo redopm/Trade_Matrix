@@ -90,3 +90,21 @@ To prevent distorted performance metrics from anomalous market ticks, latency, o
 - **Production Host:** GCP VM (`tradematrix-vm`, external IP `34.68.221.238`).
 - **Authoritative Database:** `/home/opmaury001/app/backend/database/tradematrix.db`.
 - **Authoritative Scheduler:** Containerized APScheduler running 24x7 on production VM.
+
+---
+
+### 2.6 Pre-Dec-1 Primary Series Engine Upgrade (Route A — 23 November 2026)
+- **Protocol Timing Justification:** Cohort 0 (Pilot) and Cohort 1 (`CATCHUP_LATE`, frozen Nov 3) are excluded from the $N=8$ primary statistical hypothesis test (`2026-12-01` to `2027-07-01`). Therefore, all scoring upgrades were completed, backtested, and re-locked **prior to December 1, 2026** so all 8 primary cohorts execute under a single uniform fingerprint.
+- **Implemented Institutional Upgrades:**
+  1. **Real Live Macro Feature Alignment (`MarketRegimeDetector` + `_extract_live_features`):** Replaced hardcoded dummy macro proxies with live `nifty_rsi`, `nifty_dist_ema_50`, `nifty_dist_ema_200`, `nifty_ret_20`, and aligned swing calculations strictly to the 60-day training window.
+  2. **XGBoost Retraining (`train_aladdin_model.py`):** Switched to ATR-scaled 15-day return hurdles and a regularized 80-tree shallow ensemble (`max_depth=3`, `n_estimators=80`), lifting Blind Holdout ROC-AUC from `0.5123` to **`0.5431`** (`accuracy_gap_pct = 6.16%`, Top 20% win rate **`44.33%`** vs `38.77%` baseline).
+  3. **Chronological Fibonacci Impulse Direction (`fibonacci.py`):** Distinguished healthy uptrend pullback support (`low_idx <= high_idx`) from bearish downtrend resistance bounces (`-10.0` penalty instead of `+25.0`).
+  4. **Cross-Sectional Relative Strength, Up/Down Volume Ratio & VCP Squeeze (`technical.py` + `aladdin_brain.py`):** Added 20D relative alpha vs Nifty 50, institutional accumulation volume ratio, and Bollinger VCP compression scoring.
+  5. **Fundamental Earnings Acceleration & Ownership (`fundamental.py` + `aladdin_brain.py`):** Wired insider/promoter & institutional ownership metrics (`heldPercentInsiders`, `heldPercentInstitutions`), earnings/revenue acceleration, and operating margin quality.
+  6. **Refined F&O Max Pain & Cash Accumulation Proxy:** Gated Max Pain magnet points to the `+0.5%` to `+4.5%` pin window (`-10.0` above `6.0%`), and replaced flat non-F&O cash score (`55.0`) with dynamic OHLCV accumulation (`45.0–72.0`).
+  7. **Fusion Weighting, Risk-Parity Sizing & Ledger B Runner/Sector Rules (`aladdin_brain.py` + `forward_test.py`):** Balanced composite fusion to `60% Structural + 40% ML`, applied slot risk-parity sizing, and enforced duplicate-symbol runner trailing + max 3 stocks/sector concentration cap in Ledger B.
+- **Locked Primary Series Fingerprint:**
+  - **Scoring Formula Version:** `ALADDIN_V2_2_INSTITUTIONAL_UPGRADE`
+  - **Scoring Code Hash:** `45077c2`
+  - **Scoring Weights SHA256:** `e381b6b4`
+  - **Combined Fingerprint:** **`45077c2+e381b6b4`**
