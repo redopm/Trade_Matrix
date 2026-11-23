@@ -43,64 +43,83 @@ FIB_SCORE_WEIGHTS = {
 LOOKBACK_DAYS = 180  # 6 months — Best for medium-term swing trading
 
 
+def find_swing_high_low_with_direction(
+    df: pd.DataFrame,
+    lookback: int = LOOKBACK_DAYS,
+) -> dict[str, Any]:
+    """
+    Find the most significant Swing High and Swing Low in the last N days
+    along with chronological impulse direction.
+
+    is_uptrend_impulse=True when swing_low occurred BEFORE swing_high
+    (a prior rally followed by pullback support).
+    """
+    if df is None or df.empty or len(df) < 20:
+        return {"swing_high": None, "swing_low": None, "is_uptrend_impulse": True}
+
+    window = df.tail(lookback).copy()
+    highs = window["High"].values
+    lows = window["Low"].values
+
+    pivot_window = 5
+    n = len(highs)
+
+    pivot_highs: list[tuple[int, float]] = []
+    pivot_lows: list[tuple[int, float]] = []
+
+    for i in range(pivot_window, n - pivot_window):
+        left_high = highs[i - pivot_window : i]
+        right_high = highs[i + 1 : i + pivot_window + 1]
+        left_low = lows[i - pivot_window : i]
+        right_low = lows[i + 1 : i + pivot_window + 1]
+
+        if highs[i] >= max(left_high) and highs[i] >= max(right_high):
+            pivot_highs.append((i, float(highs[i])))
+
+        if lows[i] <= min(left_low) and lows[i] <= min(right_low):
+            pivot_lows.append((i, float(lows[i])))
+
+    global_high_idx = int(np.argmax(highs))
+    global_high_val = float(highs[global_high_idx])
+    global_low_idx = int(np.argmin(lows))
+    global_low_val = float(lows[global_low_idx])
+
+    if pivot_highs:
+        high_idx, swing_high = max(pivot_highs, key=lambda x: x[1])
+        if global_high_val > swing_high:
+            high_idx, swing_high = global_high_idx, global_high_val
+    else:
+        high_idx, swing_high = global_high_idx, global_high_val
+
+    if pivot_lows:
+        low_idx, swing_low = min(pivot_lows, key=lambda x: x[1])
+        if global_low_val < swing_low:
+            low_idx, swing_low = global_low_idx, global_low_val
+    else:
+        low_idx, swing_low = global_low_idx, global_low_val
+
+    if swing_high <= swing_low:
+        high_idx, swing_high = global_high_idx, global_high_val
+        low_idx, swing_low = global_low_idx, global_low_val
+
+    is_uptrend_impulse = bool(low_idx <= high_idx)
+
+    return {
+        "swing_high": round(swing_high, 2),
+        "swing_low": round(swing_low, 2),
+        "is_uptrend_impulse": is_uptrend_impulse,
+    }
+
+
 def find_swing_high_low(
     df: pd.DataFrame,
     lookback: int = LOOKBACK_DAYS,
 ) -> tuple[Optional[float], Optional[float]]:
     """
     Find the most significant Swing High and Swing Low in the last N days.
-
-    Uses a rolling window approach:
-    - Swing High = local maximum where price is higher than N neighbors on each side
-    - Swing Low  = local minimum where price is lower than N neighbors on each side
-
-    Args:
-        df: OHLCV DataFrame with High, Low, Close columns
-        lookback: Number of days to look back (default: 180)
-
-    Returns:
-        (swing_high, swing_low) tuple — both are float prices
     """
-    if df is None or df.empty or len(df) < 20:
-        return None, None
-
-    # Use last N days
-    window = df.tail(lookback).copy()
-
-    highs = window["High"].values
-    lows  = window["Low"].values
-
-    # Find pivot highs/lows using a rolling window of 5 candles on each side
-    pivot_window = 5
-    n = len(highs)
-
-    pivot_highs = []
-    pivot_lows  = []
-
-    for i in range(pivot_window, n - pivot_window):
-        left_high  = highs[i - pivot_window : i]
-        right_high = highs[i + 1 : i + pivot_window + 1]
-        left_low   = lows[i - pivot_window : i]
-        right_low  = lows[i + 1 : i + pivot_window + 1]
-
-        # A pivot high: higher than all neighbors on both sides
-        if highs[i] >= max(left_high) and highs[i] >= max(right_high):
-            pivot_highs.append(highs[i])
-
-        # A pivot low: lower than all neighbors on both sides
-        if lows[i] <= min(left_low) and lows[i] <= min(right_low):
-            pivot_lows.append(lows[i])
-
-    # If no pivots found, fallback to simple period high/low
-    swing_high = max(pivot_highs) if pivot_highs else float(window["High"].max())
-    swing_low  = min(pivot_lows)  if pivot_lows  else float(window["Low"].min())
-
-    # Safety: swing_high must always be > swing_low
-    if swing_high <= swing_low:
-        swing_high = float(window["High"].max())
-        swing_low  = float(window["Low"].min())
-
-    return round(swing_high, 2), round(swing_low, 2)
+    res = find_swing_high_low_with_direction(df, lookback=lookback)
+    return res["swing_high"], res["swing_low"]
 
 
 def calculate_fib_levels(
@@ -200,6 +219,7 @@ def get_fib_analysis(
     result: dict[str, Any] = {
         "fib_swing_high":       None,
         "fib_swing_low":        None,
+        "fib_is_uptrend_impulse": True,
         "fib_level_0":          None,
         "fib_level_236":        None,
         "fib_level_382":        None,
@@ -214,7 +234,9 @@ def get_fib_analysis(
     }
 
     try:
-        swing_high, swing_low = find_swing_high_low(df, lookback)
+        dir_info = find_swing_high_low_with_direction(df, lookback)
+        swing_high = dir_info["swing_high"]
+        swing_low = dir_info["swing_low"]
         if swing_high is None or swing_low is None:
             return result
 
@@ -226,6 +248,7 @@ def get_fib_analysis(
 
         result["fib_swing_high"]    = swing_high
         result["fib_swing_low"]     = swing_low
+        result["fib_is_uptrend_impulse"] = dir_info["is_uptrend_impulse"]
         result["fib_level_0"]       = fib_levels.get("0.0")
         result["fib_level_236"]     = fib_levels.get("23.6")
         result["fib_level_382"]     = fib_levels.get("38.2")

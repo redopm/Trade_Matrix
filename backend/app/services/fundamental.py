@@ -51,6 +51,19 @@ class FundamentalAnalyzer:
         is_banking = self._is_banking(sector)
         is_capital_intensive = self._is_capital_intensive(sector)
 
+        insiders = self._safe_float(info, "heldPercentInsiders")
+        inst = self._safe_float(info, "heldPercentInstitutions")
+        promoter_pct = (
+            round(insiders * 100.0, 2)
+            if insiders is not None and insiders <= 1.0
+            else (round(insiders, 2) if insiders is not None else None)
+        )
+        fii_pct = (
+            round(inst * 100.0, 2)
+            if inst is not None and inst <= 1.0
+            else (round(inst, 2) if inst is not None else None)
+        )
+
         result = {
             "symbol": symbol,
             "sector": sector,
@@ -82,10 +95,14 @@ class FundamentalAnalyzer:
             "revenue_growth_yoy": self._safe_pct(info, "revenueGrowth"),
             "earnings_growth": self._safe_pct(info, "earningsGrowth"),
             # ── Shareholding ─────────────────────────────────────────────
-            "promoter_holding": None,   # Not available via yfinance; requires NSE API
-            "fii_holding": None,
+            "promoter_holding": promoter_pct,
+            "fii_holding": fii_pct,
             "dii_holding": None,
         }
+        result["earnings_acceleration"] = bool(
+            (result.get("eps_growth_yoy") or 0) >= 15.0
+            and (result.get("revenue_growth_yoy") or 0) >= 10.0
+        )
 
         # ── Computed Metrics ─────────────────────────────────────────────────
         result["roce"] = self._compute_roce(info)

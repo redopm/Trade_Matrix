@@ -8,6 +8,12 @@ from pathlib import Path
 from typing import Optional
 
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
+_BACKEND_DIR = Path(__file__).resolve().parent.parent
+_MODELS_DIR = (
+    _BACKEND_DIR / "models"
+    if (_BACKEND_DIR / "models").exists()
+    else (BASE_DIR / "backend" / "models")
+)
 
 
 class Settings(BaseSettings):
@@ -49,9 +55,9 @@ class Settings(BaseSettings):
     LABELS_FILE: str = str(BASE_DIR / "data" / "labels.jsonl")
 
     # Model
-    MODEL_DIR: str = str(BASE_DIR / "backend" / "models")
-    MODEL_PATH: str = str(BASE_DIR / "backend" / "models" / "expert_model_weights.pth")
-    MODEL_METADATA_PATH: str = str(BASE_DIR / "backend" / "models" / "expert_model_meta.json")
+    MODEL_DIR: str = str(_MODELS_DIR)
+    MODEL_PATH: str = str(_MODELS_DIR / "expert_model_weights.pth")
+    MODEL_METADATA_PATH: str = str(_MODELS_DIR / "expert_model_meta.json")
     MIN_PATTERN_CONFIDENCE: float = 0.50          # Kaggle model ~68% acc, set lower to capture signals
     CONFLUENCE_CONFIDENCE: float = 0.52           # Phase1+Phase2 combo threshold
 

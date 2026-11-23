@@ -34,7 +34,7 @@ logger = get_logger(__name__)
 # Frozen Statutory Equity Delivery Friction Schedule (Discount Broker Standard)
 # STT: 0.20% round-trip | Stamp: 0.015% | Exch+SEBI: 0.006% | GST: 0.001% | DP: 0.063% | Slippage: 0.10%
 FROZEN_DELIVERY_FRICTION_PCT: float = 0.00385  # 0.385%
-SCORING_FORMULA_VERSION: str = "ALADDIN_V2_5PILLAR"
+SCORING_FORMULA_VERSION: str = "ALADDIN_V2_2_INSTITUTIONAL_UPGRADE"
 
 # All files that directly define the stock scoring algorithm (excludes forward_test.py harness)
 SCORING_CRITICAL_CODE_FILES: List[str] = [
@@ -84,8 +84,10 @@ class ForwardTestEngine:
         h = hashlib.sha256()
         found_any = False
         for p_str in SCORING_WEIGHTS_FILES:
-            p = Path(p_str)
-            if p.exists():
+            rel_str = p_str.replace("backend/", "")
+            candidates = [Path(p_str), Path(rel_str), Path("/app") / rel_str]
+            p = next((c for c in candidates if c.exists()), None)
+            if p is not None:
                 h.update(p.read_bytes())
                 found_any = True
         return h.hexdigest()[:8] if found_any else "NOWEIGHTS"
@@ -228,7 +230,12 @@ class ForwardTestEngine:
                         "current_price": float(diag.get("current_price")),
                         "stop_loss": float(diag.get("stop_loss") or (diag.get("current_price") * 0.95)),
                         "target_price": float(diag.get("target_1") or (diag.get("current_price") * 1.12)),
-                        "atr": float(diag.get("atr_at_entry") or 0.0),
+                        "target_2": float(diag.get("target_2") or (diag.get("current_price") * 1.18)),
+                        "atr": float(
+                            diag.get("atr_at_entry")
+                            or diag.get("pillars", {}).get("pillar_2_technical", {}).get("atr")
+                            or 0.0
+                        ),
                     })
             except Exception as e:
                 logger.warning(f"ForwardTestEngine: Failed scoring {sym}: {e}")
@@ -257,49 +264,84 @@ class ForwardTestEngine:
             db.add(rec)
             snapshot_records.append(rec)
 
-        # 5. Insert Ledger B: Secondary Live Paper Execution Desk (Tool Top 10 @ ₹25k slots)
+        # 5. Insert Ledger B: Secondary Live Paper Execution Desk (up to 10 slots @ ₹25k)
         slot_capital = settings.FORWARD_TEST_SLOT_CAPITAL # ₹25,000
         forward_pool = getattr(settings, "FORWARD_TEST_CAPITAL_POOL", 1_000_000.0)
         
-        # Check active live forward test capital
-        active_fwd_stmt = select(func.sum(PaperTrade.invested_amount)).where(
-            and_(PaperTrade.batch_id.isnot(None), PaperTrade.status == TradeStatus.OPEN)
+        # Fetch all open PaperTrade positions to apply Duplicate Runner/Trail rule & pool sizing
+        all_open_stmt = select(PaperTrade).where(PaperTrade.status == TradeStatus.OPEN)
+        all_open_res = await db.execute(all_open_stmt)
+        all_open_trades = all_open_res.scalars().all()
+        open_by_symbol = {t.symbol: t for t in all_open_trades}
+        active_fwd_allocated = sum(
+            float(t.invested_amount or 0.0) for t in all_open_trades if t.batch_id is not None
         )
-        res_cap = await db.execute(active_fwd_stmt)
-        active_fwd_allocated = float(res_cap.scalar() or 0.0)
         available_fwd_capital = forward_pool - active_fwd_allocated
 
         fetcher = DataFetcher()
         live_trades = []
-        for stock in universe_scores[:10]:
+        sector_allocated: Dict[str, int] = {}
+
+        for rank, stock in enumerate(universe_scores, start=1):
+            if len(live_trades) >= 10:
+                break
+
+            sym = stock["symbol"]
+            sec = stock.get("sector") or "General"
+
+            # Duplicate Position & Runner/Trail Rule: never average up blindly on an already open symbol
+            if sym in open_by_symbol:
+                existing_t = open_by_symbol[sym]
+                new_target = float(stock.get("target_2") or stock["target_price"])
+                if new_target > (existing_t.target_price or 0.0):
+                    existing_t.target_price = round(new_target, 2)
+                if (existing_t.unrealized_pnl_pct or 0.0) >= 2.0 and (existing_t.stop_loss or 0.0) < existing_t.entry_price:
+                    existing_t.stop_loss = round(existing_t.entry_price * 1.005, 2)
+                runner_note = f"[Runner Rule {batch_id}: Re-ranked #{rank}, Target stretched & SL protected]"
+                if runner_note not in (existing_t.notes or ""):
+                    existing_t.notes = f"{existing_t.notes or ''} | {runner_note}".strip(" |")
+                logger.info(
+                    f"[RUNNER_RULE] Skipped duplicate Ledger B buy for {sym} (Rank #{rank}); "
+                    f"extended existing Trade #{existing_t.id} target to ₹{existing_t.target_price:.2f}."
+                )
+                continue
+
+            # Sector Concentration Cap: max 3 new Ledger B entries per sector in a cohort
+            if sector_allocated.get(sec, 0) >= 3:
+                logger.info(
+                    f"[SECTOR_CAP] Skipped Ledger B buy for {sym} (Rank #{rank}); "
+                    f"sector '{sec}' already reached cap of 3 positions in {batch_id}."
+                )
+                continue
+
             p = stock["current_price"]
             try:
-                live_p = await asyncio.wait_for(fetcher.fetch_current_price(stock["symbol"]), timeout=2.0)
+                live_p = await asyncio.wait_for(fetcher.fetch_current_price(sym), timeout=2.0)
                 if live_p and live_p > 0:
                     p = live_p
             except Exception:
                 pass
             qty = max(1, int(slot_capital / p))
             invested = round(qty * p, 2)
-            friction = round(invested * FROZEN_DELIVERY_FRICTION_PCT, 2)
 
             # Strict ring-fenced capital check for Ledger B
             if available_fwd_capital < invested:
                 logger.warning(
-                    f"[FORWARD_LEDGER_B_REJECT] Trade for {stock['symbol']} rejected: "
+                    f"[FORWARD_LEDGER_B_REJECT] Trade for {sym} rejected: "
                     f"Forward Test capital pool (₹{forward_pool:,.2f}) exhausted. "
                     f"Available: ₹{available_fwd_capital:,.2f}, Required: ₹{invested:,.2f}."
                 )
                 continue
 
             available_fwd_capital -= invested
+            sector_allocated[sec] = sector_allocated.get(sec, 0) + 1
             trade = PaperTrade(
                 batch_id=batch_id,
                 experiment_arm="TOOL_TOP10",
                 regime_tag=regime_tag,
-                symbol=stock["symbol"],
+                symbol=sym,
                 company_name=stock["company_name"],
-                sector=stock["sector"],
+                sector=sec,
                 entry_date=now.strftime("%Y-%m-%d"),
                 entry_price=p,
                 quantity=qty,
@@ -311,10 +353,11 @@ class ForwardTestEngine:
                 nifty_entry_price=nifty_price,
                 friction_cost=FROZEN_DELIVERY_FRICTION_PCT,
                 status=TradeStatus.OPEN,
-                notes=f"Protocol v2.1.1 Cohort {cohort_type} | Aladdin Top 10 Rank | Score: {stock['composite_score']:.1f}%"
+                notes=f"Protocol v2.1.2 Cohort {cohort_type} | Aladdin Rank #{rank} | Score: {stock['composite_score']:.1f}%"
             )
             db.add(trade)
             live_trades.append(trade)
+            open_by_symbol[sym] = trade
 
         # 6. Calculate Score Distribution & Sector Exposure
         scores_arr = [s["composite_score"] for s in universe_scores]

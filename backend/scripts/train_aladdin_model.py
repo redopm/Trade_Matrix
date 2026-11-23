@@ -64,6 +64,11 @@ def load_dataset() -> pd.DataFrame:
         raise FileNotFoundError(f"Training dataset not found in {MODELS_DIR}. Run generate_aladdin_dataset.py first.")
     
     print(f"Dataset loaded: {len(df):,} rows, {len(df.columns)} columns.")
+
+    # Compute ATR-scaled 15-day forward return hurdle across full dataset
+    if {"final_ret", "atr_pct"}.issubset(df.columns):
+        df["label"] = (df["final_ret"] >= np.clip(0.8 * df["atr_pct"], 1.2, 4.0)).astype(int)
+
     return df
 
 
@@ -82,8 +87,8 @@ def purged_time_split(df: pd.DataFrame, embargo_days: int = 15):
     in_sample_df = df_sorted[in_sample_mask]
     test_df = df_sorted[test_mask]
 
-    # Purged split within in-sample: 80% train, 20% validation
-    split_idx = int(len(in_sample_df) * 0.82)
+    # Purged split within in-sample: 85% train, 15% validation
+    split_idx = int(len(in_sample_df) * 0.85)
     train_df = in_sample_df.iloc[:split_idx]
     val_df = in_sample_df.iloc[split_idx + embargo_days:] # 15-day embargo gap
 
@@ -110,20 +115,19 @@ def train_classifier(X_train, y_train, X_val, y_val, feature_names):
     print(f"Class Balance: {pos_count:,} Wins vs {neg_count:,} Losses (scale_pos_weight: {scale_pos:.2f})")
 
     clf = xgb.XGBClassifier(
-        n_estimators=300,
-        learning_rate=0.03,
+        n_estimators=80,
+        learning_rate=0.02,
         max_depth=3,                # Ultra-shallow 3-level trees (robust generalizer)
-        min_child_weight=25,        # Minimum 25 trade instances per leaf
+        min_child_weight=35,        # Minimum 35 trade instances per leaf
         subsample=0.80,             # 80% row sampling
         colsample_bytree=0.70,      # 70% feature sampling per tree
-        reg_alpha=2.0,              # L1 Lasso penalty (zeros out noisy features)
-        reg_lambda=4.0,             # L2 Ridge penalty (prevents extreme weights)
+        reg_alpha=3.0,              # L1 Lasso penalty (zeros out noisy features)
+        reg_lambda=5.0,             # L2 Ridge penalty (prevents extreme weights)
         scale_pos_weight=1.0,       # Natural probability calibration
         gamma=1.0,
         objective="binary:logistic",
         eval_metric="logloss",
         random_state=42,
-        early_stopping_rounds=40,
         n_jobs=-1
     )
 
@@ -133,7 +137,7 @@ def train_classifier(X_train, y_train, X_val, y_val, feature_names):
         verbose=25
     )
 
-    print(f"Classifier converged at best iteration: {clf.best_iteration}")
+    print(f"Classifier trained: {clf.n_estimators} trees")
     return clf
 
 
@@ -224,7 +228,7 @@ def evaluate_model(clf, reg, X_train, y_train, X_test, y_test, y_test_ret, featu
     print("TOP 10 MOST INFLUENTIAL ALPHA FACTORS:")
     for rank, idx in enumerate(sorted_idx[:10], 1):
         name = feature_names[idx]
-        imp = importances[idx] * 100.0
+        imp = float(importances[idx]) * 100.0
         top_features.append({"rank": rank, "feature": name, "importance_pct": round(imp, 2)})
         print(f"  {rank:02d}. {name:<25} : {imp:.2f}%")
     print("-" * 70)

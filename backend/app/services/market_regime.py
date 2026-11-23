@@ -138,8 +138,12 @@ class MarketRegimeDetector:
             latest  = nifty_df.iloc[-1]
             price   = latest["Close"]
             ema200  = latest["EMA_200"]   if "EMA_200"  in nifty_df.columns else price
+            ema50   = float(latest["EMA_50"]) if "EMA_50" in nifty_df.columns and not pd.isna(latest["EMA_50"]) else float(price)
             rsi     = latest["RSI_14"]    if "RSI_14"   in nifty_df.columns else 50
             adx     = latest["ADX_14"]    if "ADX_14"   in nifty_df.columns else 0
+            ret20   = float(latest["RET_20"]) if "RET_20" in nifty_df.columns and not pd.isna(latest["RET_20"]) else 0.0
+            dist_ema50  = ((float(price) - ema50) / ema50) * 100.0 if ema50 > 0 else 0.0
+            dist_ema200 = ((float(price) - float(ema200)) / float(ema200)) * 100.0 if ema200 > 0 else 0.0
 
             # --- Regime Logic ---
             regime     = "SIDEWAYS"
@@ -200,18 +204,22 @@ class MarketRegimeDetector:
                 confidence = 0.5
 
             result = {
-                "regime":       regime,
-                "confidence":   round(confidence, 2),
-                "nifty_price":  round(price, 2),
-                "nifty_rsi":    round(rsi, 2),
-                "nifty_ema200": round(ema200, 2),
-                "adx":          round(adx, 2),
-                "vix":          round(vix, 2) if vix else None,
-                "nifty_bank":   round(nifty_bank, 2) if nifty_bank else None,
-                "sensex":       round(sensex, 2) if sensex else None,
-                "ad_ratio":     round(ad_ratio, 2),
-                "reasons":      reasons,
-                "timestamp":    datetime.now().isoformat(),
+                "regime":            regime,
+                "confidence":        round(confidence, 2),
+                "nifty_price":       round(price, 2),
+                "nifty_rsi":         round(rsi, 2),
+                "nifty_ema50":       round(ema50, 2),
+                "nifty_ema200":      round(ema200, 2),
+                "nifty_dist_ema_50": round(dist_ema50, 2),
+                "nifty_dist_ema_200": round(dist_ema200, 2),
+                "nifty_ret_20":      round(ret20, 2),
+                "adx":               round(adx, 2),
+                "vix":               round(vix, 2) if vix else None,
+                "nifty_bank":        round(nifty_bank, 2) if nifty_bank else None,
+                "sensex":            round(sensex, 2) if sensex else None,
+                "ad_ratio":          round(ad_ratio, 2),
+                "reasons":           reasons,
+                "timestamp":         datetime.now().isoformat(),
             }
             logger.info(
                 f"Market Regime: {regime} ({confidence:.0%}) | "
@@ -228,18 +236,22 @@ class MarketRegimeDetector:
     @staticmethod
     def _default_regime(reason: str) -> dict:
         return {
-            "regime":       "SIDEWAYS",
-            "confidence":   0.5,
-            "nifty_price":  0.0,
-            "nifty_rsi":    50.0,
-            "nifty_ema200": 0.0,
-            "adx":          0.0,
-            "vix":          None,
-            "nifty_bank":   None,
-            "sensex":       None,
-            "ad_ratio":     1.0,
-            "reasons":      [f"Fallback to sideways due to error: {reason}"],
-            "timestamp":    datetime.now().isoformat(),
+            "regime":             "SIDEWAYS",
+            "confidence":         0.5,
+            "nifty_price":        0.0,
+            "nifty_rsi":          50.0,
+            "nifty_ema50":        0.0,
+            "nifty_ema200":       0.0,
+            "nifty_dist_ema_50":  0.0,
+            "nifty_dist_ema_200": 0.0,
+            "nifty_ret_20":       0.0,
+            "adx":                0.0,
+            "vix":                None,
+            "nifty_bank":         None,
+            "sensex":             None,
+            "ad_ratio":           1.0,
+            "reasons":            [f"Fallback to sideways due to error: {reason}"],
+            "timestamp":          datetime.now().isoformat(),
         }
 
     @staticmethod
@@ -260,7 +272,9 @@ class MarketRegimeDetector:
             return None
 
         # Technical indicators
+        df["EMA_50"] = df["Close"].ewm(span=50, adjust=False).mean()
         df["EMA_200"] = df["Close"].ewm(span=200, adjust=False).mean()
+        df["RET_20"] = df["Close"].pct_change(20) * 100.0
 
         delta  = df["Close"].diff()
         gain   = delta.where(delta > 0, 0).rolling(14).mean()

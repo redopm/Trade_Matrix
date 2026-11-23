@@ -29,6 +29,7 @@ from app.services.technical import TechnicalAnalyzer
 from app.services.fundamental import FundamentalAnalyzer
 from app.services.fibonacci import (
     find_swing_high_low, 
+    find_swing_high_low_with_direction,
     calculate_fib_levels, 
     get_nearest_fib_level
 )
@@ -66,7 +67,15 @@ class AladdinBrainEngine:
     def _load_ml_models(self) -> None:
         """Loads trained XGBoost classifier and regressor from backend/models/."""
         try:
-            models_dir = Path(BASE_DIR) / "backend" / "models"
+            candidate_dirs = [
+                Path(__file__).resolve().parent.parent.parent / "models",
+                Path(BASE_DIR) / "backend" / "models",
+                Path("/app/models"),
+            ]
+            models_dir = next(
+                (d for d in candidate_dirs if (d / "aladdin_classifier.pkl").exists()),
+                candidate_dirs[1],
+            )
             clf_path = models_dir / "aladdin_classifier.pkl"
             reg_path = models_dir / "aladdin_regressor.pkl"
             feat_path = models_dir / "aladdin_feature_names.json"
@@ -168,17 +177,17 @@ class AladdinBrainEngine:
                 pass
 
             # ── Step 2: Diagnostic Diagnostics Across 5 Pillars ───────────────
+            p5_res = self._analyze_pillar_macro(macro_data)
+
             # Run Technical, Fundamental, Fibonacci, and F&O concurrently
             p1_task = self._analyze_pillar_geometry(clean_symbol, df, current_price)
-            p2_task = self._analyze_pillar_technical(clean_symbol, df, current_price)
+            p2_task = self._analyze_pillar_technical(clean_symbol, df, current_price, macro_data=macro_data)
             p3_task = self._analyze_pillar_fundamental(clean_symbol, info, current_price)
-            p4_task = self._analyze_pillar_fno(clean_symbol, current_price)
+            p4_task = self._analyze_pillar_fno(clean_symbol, current_price, df=df)
 
             p1_res, p2_res, p3_res, p4_res = await asyncio.gather(
                 p1_task, p2_task, p3_task, p4_task
             )
-
-            p5_res = self._analyze_pillar_macro(macro_data)
 
             # ── Step 3: Synthesis & Conviction Scoring ────────────────────────
             dossier = self._synthesize_master_verdict(
@@ -212,8 +221,11 @@ class AladdinBrainEngine:
         bull_points = []
         bear_points = []
 
-        # 1. Fibonacci Analysis
-        swing_high, swing_low = find_swing_high_low(df, lookback=180)
+        # 1. Fibonacci Analysis with Chronological Trend Direction
+        dir_res = find_swing_high_low_with_direction(df, lookback=180)
+        swing_high = dir_res["swing_high"]
+        swing_low = dir_res["swing_low"]
+        is_uptrend_impulse = dir_res["is_uptrend_impulse"]
         fib_levels = calculate_fib_levels(swing_high, swing_low) if swing_high and swing_low else {}
         nearest_fib = get_nearest_fib_level(current_price, fib_levels, tolerance=0.03)
 
@@ -227,16 +239,32 @@ class AladdinBrainEngine:
             nearest_level_price = nearest_fib["price"]
 
             if nearest_fib["level"] in ("50.0", "61.8"):
-                score += 25.0
-                bull_points.append(
-                    f"Golden Ratio Support: Price is holding within {nearest_fib['distance_pct']:.1f}% of key {nearest_level_name} Fib level (₹{nearest_level_price:.1f})."
-                )
+                if is_uptrend_impulse:
+                    score += 25.0
+                    bull_points.append(
+                        f"Golden Ratio Support: Price is holding within {nearest_fib['distance_pct']:.1f}% of key {nearest_level_name} Fib level (₹{nearest_level_price:.1f})."
+                    )
+                else:
+                    score -= 10.0
+                    bear_points.append(
+                        f"Bearish Retracement Resistance: Price bouncing into overhead {nearest_level_name} Fib supply (₹{nearest_level_price:.1f}) in a primary down-swing."
+                    )
             elif nearest_fib["level"] == "38.2":
-                score += 15.0
-                bull_points.append(f"Shallow Pullback: Testing 38.2% Fibonacci support level (₹{nearest_level_price:.1f}).")
+                if is_uptrend_impulse:
+                    score += 15.0
+                    bull_points.append(f"Shallow Pullback: Testing 38.2% Fibonacci support level (₹{nearest_level_price:.1f}).")
+                else:
+                    score -= 10.0
+                    bear_points.append(
+                        f"Bearish Retracement Resistance: Price bouncing into overhead 38.2% Fib supply (₹{nearest_level_price:.1f}) in a primary down-swing."
+                    )
             elif nearest_fib["level"] == "78.6":
-                score += 5.0
-                bull_points.append("Deep value retracement near 78.6% Fib support.")
+                if is_uptrend_impulse:
+                    score += 5.0
+                    bull_points.append("Deep value retracement near 78.6% Fib support.")
+                else:
+                    score -= 5.0
+                    bear_points.append("Testing weak downtrend retracement level near 78.6% Fib.")
             elif nearest_fib["level"] == "0.0":
                 score -= 10.0
                 bear_points.append("Testing swing high resistance — high risk of rejection.")
@@ -282,6 +310,7 @@ class AladdinBrainEngine:
             "score": round(score, 1),
             "swing_high": swing_high,
             "swing_low": swing_low,
+            "is_uptrend_impulse": is_uptrend_impulse,
             "fib_levels": fib_levels,
             "fib_confluence": fib_confluence,
             "nearest_fib_level": nearest_level_name,
@@ -299,7 +328,11 @@ class AladdinBrainEngine:
     # PILLAR 2: Mathematical Technical Momentum & Volatility (Weight: 25%)
     # ──────────────────────────────────────────────────────────────────────────
     async def _analyze_pillar_technical(
-        self, symbol: str, df: pd.DataFrame, current_price: float
+        self,
+        symbol: str,
+        df: pd.DataFrame,
+        current_price: float,
+        macro_data: Optional[dict] = None,
     ) -> Dict[str, Any]:
         tech = self.technical.analyze(symbol, df)
         score = 50.0
@@ -316,6 +349,11 @@ class AladdinBrainEngine:
         macd = tech.get("macd")
         macd_signal = tech.get("macd_signal")
         supertrend_bull = tech.get("supertrend_bullish")
+        up_down_vol_ratio = float(tech.get("up_down_vol_ratio") or 1.0)
+        vcp_squeeze_ratio = float(tech.get("vcp_squeeze_ratio") or 1.0)
+        ret_20d = float(tech.get("ret_20d") or 0.0)
+        nifty_ret_20 = float((macro_data or {}).get("nifty_ret_20") or 0.0)
+        rel_strength_20d = round(ret_20d - nifty_ret_20, 2)
 
         # 1. 200 EMA Macro Trend
         if ema_200:
@@ -372,6 +410,27 @@ class AladdinBrainEngine:
                 score -= 10.0
                 bear_points.append("MACD Bearish: MACD line is below signal line.")
 
+        # 7. Cross-Sectional Relative Strength vs Nifty 50 (20D)
+        if rel_strength_20d >= 3.0:
+            score += 12.0
+            bull_points.append(f"Market Leader Alpha: Outperforming Nifty 50 by +{rel_strength_20d:.1f}% over 20 days.")
+        elif rel_strength_20d <= -5.0:
+            score -= 12.0
+            bear_points.append(f"Relative Weakness: Underperforming Nifty 50 by {rel_strength_20d:.1f}% over 20 days.")
+
+        # 8. Institutional Up/Down Volume Accumulation (20D)
+        if up_down_vol_ratio >= 1.30:
+            score += 10.0
+            bull_points.append(f"Institutional Accumulation: Up-day volume is {up_down_vol_ratio:.2f}x down-day volume (20D).")
+        elif up_down_vol_ratio < 0.75:
+            score -= 10.0
+            bear_points.append(f"Distribution Footprint: Down-day selling volume exceeds up-day volume ({up_down_vol_ratio:.2f}x).")
+
+        # 9. Volatility Contraction Pattern (VCP Squeeze)
+        if vcp_squeeze_ratio <= 0.85 and ema_200 and current_price > ema_200:
+            score += 8.0
+            bull_points.append(f"VCP Volatility Squeeze: Bollinger width contracted to {vcp_squeeze_ratio:.2f}x of 60D average (coiling for breakout).")
+
         score = max(5.0, min(98.0, score))
 
         return {
@@ -384,6 +443,10 @@ class AladdinBrainEngine:
             "atr": round(atr, 2),
             "atr_pct": round((atr / current_price) * 100, 2) if current_price > 0 else 2.0,
             "volume_ratio": round(volume_ratio, 2),
+            "up_down_vol_ratio": round(up_down_vol_ratio, 2),
+            "vcp_squeeze_ratio": round(vcp_squeeze_ratio, 2),
+            "ret_20d": round(ret_20d, 2),
+            "rel_strength_20d": rel_strength_20d,
             "supertrend_bullish": supertrend_bull,
             "bull_points": bull_points,
             "bear_points": bear_points,
@@ -406,6 +469,10 @@ class AladdinBrainEngine:
         altman_z = fund.get("altman_z_score")
         pe = fund.get("pe_ratio")
         promoter_holding = fund.get("promoter_holding")
+        fii_holding = fund.get("fii_holding")
+        eps_growth = fund.get("eps_growth_yoy")
+        rev_growth = fund.get("revenue_growth_yoy")
+        op_margin = fund.get("operating_margin")
         is_banking = fund.get("is_banking", False)
 
         # 1. ROCE (Capital Efficiency)
@@ -461,6 +528,24 @@ class AladdinBrainEngine:
                 score -= 10.0
                 bear_points.append(f"Low Promoter Holding: Only {promoter_holding:.1f}% owned by founders.")
 
+        # 6. Earnings & Revenue Acceleration
+        if eps_growth is not None and eps_growth >= 15.0 and (rev_growth or 0) >= 10.0:
+            score += 15.0
+            bull_points.append(f"Earnings Acceleration: YoY EPS growth +{eps_growth:.1f}% with Revenue growth +{rev_growth or 0:.1f}%.")
+        elif eps_growth is not None and eps_growth < -10.0:
+            score -= 15.0
+            bear_points.append(f"Earnings Contraction: YoY EPS declined {eps_growth:.1f}%.")
+
+        # 7. Operating Margin Quality
+        if op_margin is not None and op_margin >= 0.18:
+            score += 8.0
+            bull_points.append(f"High Operating Margin: {op_margin*100:.1f}% pricing power.")
+
+        # 8. Institutional Ownership
+        if fii_holding is not None and fii_holding >= 15.0:
+            score += 5.0
+            bull_points.append(f"Institutional Backing: {fii_holding:.1f}% institutional ownership.")
+
         score = max(5.0, min(98.0, score))
 
         return {
@@ -479,7 +564,9 @@ class AladdinBrainEngine:
     # ──────────────────────────────────────────────────────────────────────────
     # PILLAR 4: F&O Smart Money Derivatives & Greeks (Weight: 20%)
     # ──────────────────────────────────────────────────────────────────────────
-    async def _analyze_pillar_fno(self, symbol: str, current_price: float) -> Dict[str, Any]:
+    async def _analyze_pillar_fno(
+        self, symbol: str, current_price: float, df: Optional[pd.DataFrame] = None
+    ) -> Dict[str, Any]:
         score = 50.0
         bull_points = []
         bear_points = []
@@ -565,8 +652,12 @@ class AladdinBrainEngine:
                 if max_pain and max_pain > 0:
                     if current_price < max_pain:
                         dist = ((max_pain - current_price) / current_price) * 100
-                        score += 15.0
-                        bull_points.append(f"Max Pain Magnet: Expiry target pulled toward ₹{max_pain:.0f} (+{dist:.1f}% above current price).")
+                        if 0.5 <= dist <= 4.5:
+                            score += 15.0
+                            bull_points.append(f"Max Pain Magnet: Expiry target pulled toward ₹{max_pain:.0f} (+{dist:.1f}% above current price).")
+                        elif dist > 6.0:
+                            score -= 10.0
+                            bear_points.append(f"Option Anchor Breakdown: Trading {dist:.1f}% below Max Pain (₹{max_pain:.0f}) — weak derivatives structure.")
                     else:
                         dist = ((current_price - max_pain) / current_price) * 100
                         bear_points.append(f"Max Pain Gravity: Trading {dist:.1f}% above Max Pain strike (₹{max_pain:.0f}).")
@@ -581,9 +672,27 @@ class AladdinBrainEngine:
             logger.debug(f"F&O check skipped for {symbol}: {e}")
 
         if not has_fno:
-            # Fallback for Cash-only stocks: neutral score, check volume proxy
-            score = 55.0
-            bull_points.append("Non-F&O Equity Stock: Trade driven purely by cash volume & delivery accumulation.")
+            # Fallback for Cash-only stocks: dynamic cash accumulation proxy from OHLCV
+            cash_score = 52.0
+            if df is not None and len(df) >= 21 and "Volume" in df.columns and "Close" in df.columns:
+                try:
+                    c_s = df["Close"].astype(float)
+                    v_s = df["Volume"].astype(float)
+                    is_up = (c_s >= c_s.shift(1)).astype(float)
+                    up_v = float((v_s * is_up).tail(20).sum())
+                    dn_v = float((v_s * (1.0 - is_up)).tail(20).sum())
+                    ud_ratio = up_v / max(1.0, dn_v)
+                    vol_ma20 = float(v_s.tail(20).mean())
+                    vol_r = float(v_s.iloc[-1]) / max(1.0, vol_ma20)
+                    cash_score += max(-7.0, min(14.0, (ud_ratio - 1.0) * 14.0))
+                    if vol_r >= 1.25 and float(c_s.iloc[-1]) > float(c_s.iloc[-2]):
+                        cash_score += 6.0
+                except Exception:
+                    pass
+            score = max(45.0, min(72.0, cash_score))
+            bull_points.append(
+                f"Non-F&O Equity Stock: Cash accumulation score {score:.1f}/100 driven by delivery & up/down volume balance."
+            )
 
         score = max(10.0, min(95.0, score))
 
@@ -634,7 +743,12 @@ class AladdinBrainEngine:
             "vix": round(vix, 1),
             "confidence": round(confidence * 100, 1),
             "nifty_price": round(nifty_price, 2),
+            "nifty_rsi": round(float(macro_data.get("nifty_rsi") or 50.0), 2),
+            "nifty_ema50": round(float(macro_data.get("nifty_ema50") or nifty_price), 2),
             "nifty_ema200": round(nifty_ema200, 2),
+            "nifty_dist_ema_50": round(float(macro_data.get("nifty_dist_ema_50") or 0.0), 2),
+            "nifty_dist_ema_200": round(float(macro_data.get("nifty_dist_ema_200") or 0.0), 2),
+            "nifty_ret_20": round(float(macro_data.get("nifty_ret_20") or 0.0), 2),
             "is_macro_bullish": is_macro_bullish,
             "regime_status": "BULLISH_REGIME" if is_macro_bullish else "DEFENSIVE_CASH_REGIME",
             "capital_defense_guidance": "Nifty 200-day EMA se upar hai (trend positive)" if is_macro_bullish else "Nifty 200-day EMA se neeche hai (trend weak)",
@@ -736,14 +850,14 @@ class AladdinBrainEngine:
             vol_prev5 = float(v.iloc[-6]) if len(v) >= 6 else current_vol
             vol_change_5 = (current_vol - vol_prev5) / (vol_prev5 + 1e-9)
 
-            # Trailing Range & Fibonacci
+            # Trailing Range & Fibonacci (strictly 60-day rolling window matching training generator)
             high_52w = float(h.tail(252).max()) if len(h) >= 252 else float(h.max())
             low_52w = float(l.tail(252).min()) if len(l) >= 252 else float(l.min())
             dist_52w_high = ((current_price - high_52w) / (high_52w + 1e-9)) * 100.0
             dist_52w_low = ((current_price - low_52w) / (low_52w + 1e-9)) * 100.0
 
-            swing_high = float(p1.get("swing_high") or high_52w)
-            swing_low = float(p1.get("swing_low") or low_52w)
+            swing_high = float(h.tail(60).max()) if len(h) >= 60 else float(h.max())
+            swing_low = float(l.tail(60).min()) if len(l) >= 60 else float(l.min())
             dist_swing_high = ((current_price - swing_high) / (swing_high + 1e-9)) * 100.0
             dist_swing_low = ((current_price - swing_low) / (swing_low + 1e-9)) * 100.0
 
@@ -767,13 +881,30 @@ class AladdinBrainEngine:
             ret_5d = ((curr_c - float(c.iloc[-6])) / float(c.iloc[-6])) * 100.0 if len(c) >= 6 else 0.0
             ret_20d = ((curr_c - float(c.iloc[-21])) / float(c.iloc[-21])) * 100.0 if len(c) >= 21 else 0.0
 
-            # Macro Market Alignment
+            # Macro Market Alignment (real live Nifty 50 features from Pillar 5)
             regime = str(p5.get("regime", "SIDEWAYS")).upper()
-            nifty_bull_regime = 1.0 if regime == "BULLISH" else 0.0
-            nifty_dist_ema_50 = 1.5 if regime == "BULLISH" else (-1.5 if regime == "BEARISH" else 0.0)
-            nifty_dist_ema_200 = 3.0 if regime == "BULLISH" else (-3.0 if regime == "BEARISH" else 0.5)
-            nifty_rsi_14 = 58.0 if regime == "BULLISH" else (42.0 if regime == "BEARISH" else 50.0)
-            rel_strength_nifty_20 = ret_20d - (2.0 if regime == "BULLISH" else -1.0)
+            nifty_bull_regime = 1.0 if p5.get("is_macro_bullish") else 0.0
+            nifty_dist_ema_50 = float(
+                p5.get("nifty_dist_ema_50")
+                if p5.get("nifty_dist_ema_50") is not None
+                else (1.5 if regime == "BULLISH" else (-1.5 if regime == "BEARISH" else 0.0))
+            )
+            nifty_dist_ema_200 = float(
+                p5.get("nifty_dist_ema_200")
+                if p5.get("nifty_dist_ema_200") is not None
+                else (3.0 if regime == "BULLISH" else (-3.0 if regime == "BEARISH" else 0.5))
+            )
+            nifty_rsi_14 = float(
+                p5.get("nifty_rsi")
+                if p5.get("nifty_rsi") is not None
+                else (58.0 if regime == "BULLISH" else (42.0 if regime == "BEARISH" else 50.0))
+            )
+            nifty_ret_20 = float(
+                p5.get("nifty_ret_20")
+                if p5.get("nifty_ret_20") is not None
+                else (2.0 if regime == "BULLISH" else -1.0)
+            )
+            rel_strength_nifty_20 = ret_20d - nifty_ret_20
 
             raw_dict = {
                 "dist_ema_20": dist_ema_20,
@@ -1122,12 +1253,14 @@ class AladdinBrainEngine:
                     if self.regressor is not None:
                         ml_expected_return = round(float(self.regressor.predict(feat_vec)[0]), 2)
 
-                    # Calibrate probability: base rate ~37% maps to 50 neutral
-                    # e.g. 0.30 -> 30, 0.37 -> 50, 0.44 -> 70, 0.50 -> 87
-                    calibrated_ml_score = max(5.0, min(98.0, round(((prob_win - 0.20) / 0.35) * 100.0, 1)))
+                    # Calibrate probability dynamically around model holdout baseline if available
+                    base_rate = float(self.ml_metrics.get("blind_holdout", {}).get("baseline_win_rate_pct", 37.0)) / 100.0
+                    low_bound = max(0.05, base_rate - 0.17)
+                    span = 0.35
+                    calibrated_ml_score = max(5.0, min(98.0, round(((prob_win - low_bound) / span) * 100.0, 1)))
 
-                    # Master Quant Fusion: 60% ML Probability + 40% Structural Confluence
-                    composite_score = round((calibrated_ml_score * 0.60) + (pillar_score * 0.40), 1)
+                    # Master Quant Fusion: 60% 5-Pillar Structural Confluence + 40% Calibrated ML
+                    composite_score = round((pillar_score * 0.60) + (calibrated_ml_score * 0.40), 1)
                     ml_model_active = True
                 except Exception as me:
                     logger.warning(f"AladdinBrain: ML inference failed, using structural score: {me}")
@@ -1214,8 +1347,10 @@ class AladdinBrainEngine:
 
         rr_ratio = round(target_2_pct / sl_pct, 2) if sl_pct > 0 else 2.0
 
-        # Suggested Quantity for standard ₹25,000 position allocation
-        suggested_qty = max(1, int(25000 / current_price))
+        # Risk-Parity Suggested Quantity: cap capital at ₹25,000 slot and cap stop-out loss at ₹625 (2.5% of slot)
+        max_cap_qty = max(1, int(25000.0 / current_price))
+        risk_parity_qty = max(1, int(625.0 / risk_per_share)) if risk_per_share > 0 else max_cap_qty
+        suggested_qty = max(1, min(max_cap_qty, risk_parity_qty))
 
         # 6. Aggregate Top Catalysts & Red Flags
         all_bulls = p1["bull_points"] + p2["bull_points"] + p3["bull_points"] + p4["bull_points"] + p5["bull_points"]

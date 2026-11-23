@@ -149,9 +149,25 @@ class TechnicalAnalyzer:
         df["R2"] = df["PIVOT"] + (high - low)
         df["S2"] = df["PIVOT"] - (high - low)
 
-        # ── Price Position ────────────────────────────────────────────────────
+        # ── Price Position & Institutional Accumulation / VCP ─────────────────
         df["PCT_FROM_52W_HIGH"] = (close / close.rolling(252).max() - 1) * 100
         df["PCT_FROM_52W_LOW"] = (close / close.rolling(252).min() - 1) * 100
+
+        df["RET_5D"] = close.pct_change(5) * 100.0
+        df["RET_20D"] = close.pct_change(20) * 100.0
+        df["RET_60D"] = close.pct_change(60) * 100.0
+
+        is_up = (close >= close.shift(1)).astype(float)
+        up_vol_20 = (volume * is_up).rolling(20).sum()
+        down_vol_20 = (volume * (1.0 - is_up)).rolling(20).sum()
+        df["UP_DOWN_VOL_RATIO"] = (up_vol_20 / (down_vol_20 + 1.0)).clip(0.1, 5.0)
+
+        if "BB_WIDTH" in df.columns:
+            bb_w_abs = df["BB_WIDTH"].abs()
+            bb_width_ma60 = bb_w_abs.rolling(60, min_periods=20).mean()
+            df["VCP_SQUEEZE_RATIO"] = (bb_w_abs / (bb_width_ma60 + 1e-6)).clip(0.2, 3.0)
+        else:
+            df["VCP_SQUEEZE_RATIO"] = 1.0
 
         return df
 
@@ -247,11 +263,21 @@ class TechnicalAnalyzer:
                 if latest.get("SUPERTREND_DIR") is not None
                 else None
             ),
-            # 52-week
+            # 52-week & Multi-Horizon Returns / Institutional Flow
             "pct_from_52w_high": safe(latest.get("PCT_FROM_52W_HIGH")),
             "pct_from_52w_low": safe(latest.get("PCT_FROM_52W_LOW")),
             "week_52_high": safe(df["High"].rolling(252).max().iloc[-1]),
             "week_52_low": safe(df["Low"].rolling(252).min().iloc[-1]),
+            "ret_5d": safe(latest.get("RET_5D")),
+            "ret_20d": safe(latest.get("RET_20D")),
+            "ret_60d": safe(latest.get("RET_60D")),
+            "up_down_vol_ratio": safe(latest.get("UP_DOWN_VOL_RATIO")),
+            "vcp_squeeze_ratio": safe(latest.get("VCP_SQUEEZE_RATIO")),
+            "risk_adj_momentum": (
+                round(float(latest.get("RET_20D")) / max(0.5, (atr / close) * 100.0), 2)
+                if atr and close > 0 and latest.get("RET_20D") is not None and not np.isnan(latest.get("RET_20D"))
+                else 0.0
+            ),
             # Pivot Points
             "pivot": safe(latest.get("PIVOT")),
             "r1": safe(latest.get("R1")),
