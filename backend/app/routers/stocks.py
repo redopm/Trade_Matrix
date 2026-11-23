@@ -7,7 +7,7 @@ GET /api/v1/stocks/search               → Search stocks by name/symbol
 """
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -55,6 +55,36 @@ async def get_universe():
     """Return the full list of symbols in the screener universe."""
     symbols = fetcher.get_nifty500_symbols()
     return {"count": len(symbols), "symbols": symbols}
+
+
+@router.get("/data-store/status")
+async def get_data_store_status():
+    """Get storage size, symbol coverage, and sync progress of the local 2-year Nifty 500 OHLCV store."""
+    from app.services.daily_history_store import DailyHistoryStore
+    return DailyHistoryStore.get_store_status()
+
+
+@router.post("/data-store/sync")
+async def trigger_data_store_sync(
+    background_tasks: BackgroundTasks,
+    force_full: bool = Query(False, description="Force full 2-year re-download across Nifty 500 + Indices"),
+    sync: bool = Query(False, description="Wait synchronously (for small subsets)"),
+    max_symbols: Optional[int] = Query(None, description="Optional limit on number of symbols to sync"),
+):
+    """Trigger background or synchronous 2-year daily data store download/EOD update."""
+    from app.services.daily_history_store import DailyHistoryStore
+    status = DailyHistoryStore.get_store_status()
+    if status["sync_job"].get("is_running"):
+        return {"message": "Sync already running in background", **status}
+
+    if sync:
+        return await DailyHistoryStore.sync_full_universe(force_full=force_full, max_symbols=max_symbols)
+
+    async def _bg():
+        await DailyHistoryStore.sync_full_universe(force_full=force_full, max_symbols=max_symbols)
+
+    background_tasks.add_task(_bg)
+    return {"message": "Nifty 500 2-year daily OHLCV sync started in background", **status}
 
 
 @router.get("/{symbol}")

@@ -20,22 +20,7 @@ export const FNO_INDEX_OPTIONS = [
   { value: "MIDCPNIFTY", label: "MIDCAP NIFTY" },
 ];
 
-export const FNO_STOCK_OPTIONS = [
-  { value: "RELIANCE", label: "RELIANCE (Reliance Ind.)" },
-  { value: "HDFCBANK", label: "HDFCBANK (HDFC Bank)" },
-  { value: "ICICIBANK", label: "ICICIBANK (ICICI Bank)" },
-  { value: "SBIN", label: "SBIN (State Bank)" },
-  { value: "INFY", label: "INFY (Infosys)" },
-  { value: "TCS", label: "TCS (Tata Consultancy)" },
-  { value: "BHARTIARTL", label: "BHARTIARTL (Airtel)" },
-  { value: "TATAMOTORS", label: "TATAMOTORS (Tata Motors)" },
-  { value: "HAL", label: "HAL (Hindustan Aero)" },
-  { value: "BAJFINANCE", label: "BAJFINANCE (Bajaj Finance)" },
-  { value: "LT", label: "LT (Larsen & Toubro)" },
-  { value: "TRENT", label: "TRENT (Trent Ltd)" },
-  { value: "SUNPHARMA", label: "SUNPHARMA (Sun Pharma)" },
-  { value: "BSE", label: "BSE (BSE Ltd)" },
-];
+const VALID_INDEX_SET = new Set(FNO_INDEX_OPTIONS.map((o) => o.value));
 
 export function getSavedFnoSymbol(): string {
   if (typeof window === "undefined") return "NIFTY";
@@ -44,10 +29,12 @@ export function getSavedFnoSymbol(): string {
     const urlSym = params.get("symbol");
     if (urlSym) {
       const clean = urlSym.toUpperCase().trim();
-      window.sessionStorage.setItem("tradematrix_fno_symbol", clean);
-      return clean;
+      const valid = VALID_INDEX_SET.has(clean) ? clean : "NIFTY";
+      window.sessionStorage.setItem("tradematrix_fno_symbol", valid);
+      return valid;
     }
-    return window.sessionStorage.getItem("tradematrix_fno_symbol") || "NIFTY";
+    const stored = (window.sessionStorage.getItem("tradematrix_fno_symbol") || "NIFTY").toUpperCase().trim();
+    return VALID_INDEX_SET.has(stored) ? stored : "NIFTY";
   } catch {
     return "NIFTY";
   }
@@ -169,29 +156,20 @@ export function FnoHeaderNav({
         <div className="flex flex-wrap items-center gap-2.5 w-full lg:w-auto">
           {symbol && onSymbolChange && (
             <select
-              aria-label="Select F&O Symbol"
+              aria-label="Select Index Options"
               className="bg-white border border-slate-300 text-slate-800 rounded-lg px-3 py-2 text-sm font-bold shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-              value={symbol}
+              value={VALID_INDEX_SET.has(symbol) ? symbol : "NIFTY"}
               onChange={(e) => {
                 const next = e.target.value;
                 saveFnoSymbol(next);
                 onSymbolChange(next);
               }}
             >
-              <optgroup label="Major Indices">
-                {FNO_INDEX_OPTIONS.map((opt) => (
-                  <option key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </option>
-                ))}
-              </optgroup>
-              <optgroup label="Top Liquid F&O Stocks">
-                {FNO_STOCK_OPTIONS.map((opt) => (
-                  <option key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </option>
-                ))}
-              </optgroup>
+              {FNO_INDEX_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
             </select>
           )}
 

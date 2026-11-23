@@ -21,6 +21,20 @@ IST = pytz.timezone("Asia/Kolkata")
 _scheduler: AsyncIOScheduler = None
 
 
+async def _run_daily_ohlcv_sync() -> None:
+    """Background job: Append today's daily candles across Nifty 500 + Indices at 3:38 PM IST."""
+    from app.services.daily_history_store import DailyHistoryStore
+    logger.info(f"[Scheduler] Starting daily Nifty 500 EOD OHLCV sync @ {datetime.now(IST).strftime('%H:%M IST')}")
+    try:
+        res = await DailyHistoryStore.sync_full_universe(force_full=False)
+        logger.info(
+            f"[Scheduler] Daily OHLCV sync done: {res.get('stored_symbols')} symbols, "
+            f"{res.get('total_daily_candles')} candles ({res.get('db_size_mb')} MB)"
+        )
+    except Exception as e:
+        logger.error(f"[Scheduler] Daily OHLCV sync error: {e}")
+
+
 async def _run_daily_screener() -> None:
     """Background job: Run Alpha Screener at 3:45 PM IST."""
     from app.services.screener import AlphaScreener
@@ -133,6 +147,21 @@ def create_scheduler() -> AsyncIOScheduler:
     global _scheduler
     _scheduler = AsyncIOScheduler(timezone=IST)
 
+    # Daily Nifty 500 + Indices EOD OHLCV append at 3:38 PM IST (Mon-Fri, before screener)
+    _scheduler.add_job(
+        _run_daily_ohlcv_sync,
+        CronTrigger(
+            day_of_week="mon-fri",
+            hour=15,
+            minute=38,
+            timezone=IST,
+        ),
+        id="daily_ohlcv_eod_sync",
+        name="Daily Nifty 500 EOD Data Store Sync (15:38 IST)",
+        replace_existing=True,
+        misfire_grace_time=1800,
+    )
+
     # Daily screener at 3:45 PM IST (after NSE close at 3:30 PM)
     _scheduler.add_job(
         _run_daily_screener,
@@ -206,7 +235,7 @@ def create_scheduler() -> AsyncIOScheduler:
         misfire_grace_time=3600,
     )
 
-    logger.info("Scheduler configured with 5 jobs (including Forward Test Freeze & Fyers Auto-Login)")
+    logger.info("Scheduler configured with 6 jobs (including Daily OHLCV Sync, Forward Test Freeze & Fyers Auto-Login)")
     return _scheduler
 
 

@@ -287,16 +287,74 @@ class FyersDataClient:
                 return token if token else None
         return None
 
-    def get_historical_data(self, symbol: str, resolution: str = "D", range_from: str = "2020-01-01", range_to: str = None) -> pd.DataFrame:
-        """
-        Fetch historical OHLCV data from Fyers. Auto-chunks for API limits.
-        symbol: "NSE:RELIANCE-EQ" or "RELIANCE.NS" (auto-converted)
-        resolution: "1","5","15","60","D"
-        """
+    def _fetch_raw_historical_df(self, fyers_sym: str, resolution: str, start_date: date, end_date: date) -> pd.DataFrame:
+        """Raw Fyers OHLCV history fetcher with automatic chunking and 429 burst retry."""
         if not self.fyers:
             if not self.connect():
                 return pd.DataFrame()
 
+        if resolution in ("1D", "D"):
+            fyers_limit = date.today() - timedelta(days=729)
+            if start_date < fyers_limit:
+                start_date = fyers_limit
+
+        all_candles = []
+        current_start = start_date
+
+        while current_start <= end_date:
+            max_days = 365 if resolution in ("1D", "D") else 90
+            current_end = min(current_start + timedelta(days=max_days - 1), end_date)
+
+            data = {
+                "symbol": fyers_sym,
+                "resolution": resolution,
+                "date_format": "1",
+                "range_from": current_start.strftime("%Y-%m-%d"),
+                "range_to": current_end.strftime("%Y-%m-%d"),
+                "cont_flag": "1",
+            }
+
+            res = {}
+            for attempt in range(3):
+                res = self.fyers.history(data=data)
+                if res.get("s") != "ok":
+                    msg = str(res.get("message") or "").lower()
+                    if (res.get("code") == 429 or "limit" in msg) and attempt < 2:
+                        time.sleep(1.2 * (attempt + 1))
+                        continue
+                break
+
+            if res.get("s") != "ok":
+                if res.get("s") == "no_data":
+                    current_start = current_end + timedelta(days=1)
+                    continue
+                if res.get("code") != 429:
+                    logger.debug(f"Fyers history unavailable for {fyers_sym}: {res.get('message', res.get('s'))}")
+                break
+
+            candles = res.get("candles", [])
+            if candles:
+                all_candles.extend(candles)
+            current_start = current_end + timedelta(days=1)
+            time.sleep(0.08)
+
+        if not all_candles:
+            return pd.DataFrame()
+
+        df = pd.DataFrame(all_candles, columns=["epoch", "Open", "High", "Low", "Close", "Volume"])
+        df["datetime"] = pd.to_datetime(df["epoch"], unit="s")
+        df["datetime"] = df["datetime"].dt.tz_localize("UTC").dt.tz_convert("Asia/Kolkata")
+        df.set_index("datetime", inplace=True)
+        df.drop("epoch", axis=1, inplace=True)
+        df = df[~df.index.duplicated(keep="last")]
+        return df
+
+    def get_historical_data(self, symbol: str, resolution: str = "D", range_from: str = "2020-01-01", range_to: str = None) -> pd.DataFrame:
+        """
+        Fetch historical OHLCV data from Fyers (with transparent 2-year local SQLite cache for Daily candles).
+        symbol: "NSE:RELIANCE-EQ" or "RELIANCE.NS" (auto-converted)
+        resolution: "1","5","15","60","D"
+        """
         if not range_to:
             range_to = date.today().strftime("%Y-%m-%d")
 
@@ -312,51 +370,13 @@ class FyersDataClient:
         end_date = datetime.strptime(range_to, "%Y-%m-%d").date()
 
         if resolution in ("1D", "D"):
-            fyers_limit = date.today() - timedelta(days=729)
-            if start_date < fyers_limit:
-                start_date = fyers_limit
+            try:
+                from app.services.daily_history_store import DailyHistoryStore
+                return DailyHistoryStore.get_or_sync_daily_df(self, fyers_sym, start_date, end_date)
+            except Exception as e:
+                logger.warning(f"DailyHistoryStore fallback to direct Fyers for {fyers_sym}: {e}")
 
-        all_candles = []
-        current_start = start_date
-
-        while current_start <= end_date:
-            max_days = 365 if resolution in ("1D", "D") else 90
-            current_end = min(current_start + timedelta(days=max_days - 1), end_date)
-
-            data = {
-                "symbol": fyers_sym, "resolution": resolution,
-                "date_format": "1",
-                "range_from": current_start.strftime("%Y-%m-%d"),
-                "range_to": current_end.strftime("%Y-%m-%d"),
-                "cont_flag": "1"
-            }
-
-            res = self.fyers.history(data=data)
-
-            if res.get("s") != "ok":
-                if res.get("s") == "no_data":
-                    current_start = current_end + timedelta(days=1)
-                    continue
-                if res.get("code") != 429:
-                    logger.debug(f"Fyers history unavailable for {fyers_sym}: {res.get('message', res.get('s'))}")
-                break
-
-            candles = res.get("candles", [])
-            if candles:
-                all_candles.extend(candles)
-            current_start = current_end + timedelta(days=1)
-            time.sleep(0.05)
-
-        if not all_candles:
-            return pd.DataFrame()
-
-        df = pd.DataFrame(all_candles, columns=["epoch", "Open", "High", "Low", "Close", "Volume"])
-        df["datetime"] = pd.to_datetime(df["epoch"], unit="s")
-        df["datetime"] = df["datetime"].dt.tz_localize("UTC").dt.tz_convert("Asia/Kolkata")
-        df.set_index("datetime", inplace=True)
-        df.drop("epoch", axis=1, inplace=True)
-        df = df[~df.index.duplicated(keep="last")]
-        return df
+        return self._fetch_raw_historical_df(fyers_sym, resolution, start_date, end_date)
 
     def fetch_quotes(self, symbols: list) -> dict:
         """Fetch live quotes for up to 50 symbols from Fyers."""
