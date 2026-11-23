@@ -1,160 +1,215 @@
 "use client";
 
-import React from "react";
-import { Building2, TrendingUp, TrendingDown, Info } from "lucide-react";
-import Link from "next/link";
+import React, { useEffect, useState } from "react";
+import { fnoApi } from "@/lib/api";
+import { Building2, TrendingUp, TrendingDown, ShieldCheck, Activity, AlertCircle } from "lucide-react";
+import { FnoHeaderNav } from "@/components/FnoHeaderNav";
 
 export default function FiiDiiData() {
-  // Mock data since Fyers doesn't provide FII/DII. 
-  // In a real scenario, this would come from an NSE scraper API.
-  const fiiDiiData = {
-    date: "Latest Trading Session",
-    cash: {
-      fii_net: -1250.50,
-      dii_net: 2100.25
-    },
-    fno: {
-      index_futures_long: 120000,
-      index_futures_short: 180000,
-      net_contracts: -60000
+  const [flow, setFlow] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const loadFlow = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fnoApi.getInstitutionalFlow();
+      setFlow(res.data);
+    } catch (e: any) {
+      setError(e.message || "Failed to fetch live institutional derivatives flow");
     }
+    setLoading(false);
   };
 
-  const longShortRatio = fiiDiiData.fno.index_futures_long / (fiiDiiData.fno.index_futures_long + fiiDiiData.fno.index_futures_short);
-  const isBullish = longShortRatio > 0.5;
+  useEffect(() => {
+    loadFlow();
+  }, []);
+
+  const bias = flow?.institutional_bias || "NEUTRAL";
+  const putShare = Number(flow?.put_writing_share_pct ?? 50);
+  const callShare = Number(flow?.call_writing_share_pct ?? 50);
+  const indices = flow?.indices || [];
 
   return (
     <div className="flex-1 min-h-screen bg-slate-50/50 pb-12">
-      {/* HEADER */}
-      <div className="bg-white border-b border-slate-200 sticky top-0 z-30 shadow-sm">
-        <div className="px-6 py-4 flex justify-between items-center">
-          <div>
-            <h1 className="text-2xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
-              <Building2 size={24} className="text-blue-600" /> Institutional Activity
-            </h1>
-            <p className="text-sm text-slate-500 mt-1">FII & DII Cash & F&O Data</p>
+      <FnoHeaderNav
+        activeTab="fii"
+        title="Institutional Smart Money & F&O Positioning"
+        subtitle="Real-time NIFTY & BANKNIFTY Institutional Call/Put Writing Dominance"
+        onRefresh={loadFlow}
+        isRefreshing={loading}
+        rightExtra={
+          <div
+            className={`px-3.5 py-2 rounded-lg border font-bold text-xs sm:text-sm ${
+              bias === "BULLISH"
+                ? "text-emerald-700 bg-emerald-50 border-emerald-200"
+                : bias === "BEARISH"
+                ? "text-red-700 bg-red-50 border-red-200"
+                : "text-slate-700 bg-slate-100 border-slate-200"
+            }`}
+          >
+            Smart Money Bias: {bias.replace("_", " ")}
           </div>
-          <div className={`px-4 py-2 rounded-lg border font-bold text-sm ${
-            isBullish ? "text-emerald-600 bg-emerald-50 border-emerald-200" : "text-red-600 bg-red-50 border-red-200"
-          }`}>
-            Institutional Bias: {isBullish ? "BULLISH" : "BEARISH"}
-          </div>
-        </div>
-        
-        {/* HORIZONTAL TAB NAVIGATION */}
-        <div className="px-6 flex items-center gap-6 overflow-x-auto border-t border-slate-100">
-          <Link href="/fno" className="py-3 border-b-2 border-transparent text-slate-600 hover:text-slate-900 font-medium text-sm whitespace-nowrap">
-            Option Chain
-          </Link>
-          <Link href="/fno/strategy-builder" className="py-3 border-b-2 border-transparent text-slate-600 hover:text-slate-900 font-medium text-sm whitespace-nowrap">
-            Strategy Builder
-          </Link>
-          <Link href="/fno/oi-analysis" className="py-3 border-b-2 border-transparent text-slate-600 hover:text-slate-900 font-medium text-sm whitespace-nowrap">
-            Open Interest
-          </Link>
-          <Link href="/fno/pcr-analysis" className="py-3 border-b-2 border-transparent text-slate-600 hover:text-slate-900 font-medium text-sm whitespace-nowrap">
-            PCR & Volatility
-          </Link>
-          <Link href="/fno/option-analysis" className="py-3 border-b-2 border-transparent text-slate-600 hover:text-slate-900 font-medium text-sm whitespace-nowrap">
-            Option Analysis
-          </Link>
-          <Link href="/fno/fii-dii" className="py-3 border-b-2 border-blue-600 text-blue-600 font-semibold text-sm whitespace-nowrap">
-            FII / DII Data
-          </Link>
-        </div>
-      </div>
+        }
+      />
 
-      <div className="p-6 max-w-6xl mx-auto space-y-6">
-        
-        <div className="bg-blue-50 border border-blue-200 p-4 rounded-xl flex items-start gap-3">
-          <Info className="text-blue-600 mt-0.5" size={20} />
-          <div>
-            <h3 className="font-bold text-blue-900">Data Source Notice</h3>
-            <p className="text-sm text-blue-800 mt-1">
-              Fyers API does not provide real-time Institutional data. This page currently displays a structural template. In a production environment, this would integrate with an NSE Data Scraper API.
-            </p>
-          </div>
+      {loading ? (
+        <div className="p-12 flex items-center justify-center">
+          <div className="w-8 h-8 rounded-full border-4 border-slate-200 border-t-indigo-600 animate-spin" />
         </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {/* CASH MARKET */}
-          <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-            <div className="p-4 border-b border-slate-100 bg-slate-50">
-              <h2 className="font-bold text-slate-800 uppercase tracking-wider text-sm">Cash Market (Equities)</h2>
-              <p className="text-xs text-slate-500 mt-0.5">{fiiDiiData.date}</p>
+      ) : error ? (
+        <div className="p-6 max-w-4xl mx-auto">
+          <div className="bg-red-50 border border-red-200 p-6 rounded-xl flex items-start gap-4">
+            <AlertCircle className="text-red-600 mt-1" />
+            <div>
+              <h3 className="font-bold text-red-900">Unable to load Live Institutional Flow</h3>
+              <p className="text-sm text-red-700 mt-1">{error}</p>
             </div>
-            <div className="p-6 space-y-6">
+          </div>
+        </div>
+      ) : (
+        <div className="p-6 max-w-6xl mx-auto space-y-6">
+          {/* LIVE AGGREGATE SUMMARY */}
+          <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-5">
               <div>
-                <div className="flex justify-between items-center mb-2">
-                  <span className="font-bold text-slate-700">FII Net Activity</span>
-                  <span className={`font-black ${fiiDiiData.cash.fii_net > 0 ? "text-emerald-600" : "text-red-600"}`}>
-                    {fiiDiiData.cash.fii_net > 0 ? "+" : ""}₹{fiiDiiData.cash.fii_net} Cr
+                <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+                  <Building2 size={20} className="text-indigo-600" /> Live Index Writer Positioning (NIFTY + BANKNIFTY)
+                </h2>
+                <p className="text-sm text-slate-600 mt-1">{flow?.interpretation}</p>
+              </div>
+              <div className="text-right shrink-0">
+                <div className="text-xs font-bold uppercase text-slate-400">Aggregate Index PCR</div>
+                <div className="text-3xl font-black text-indigo-700">
+                  {Number(flow?.aggregate_pcr || 1.0).toFixed(2)}
+                </div>
+              </div>
+            </div>
+
+            {/* CALL VS PUT WRITER SHARE BAR */}
+            <div className="relative h-9 bg-slate-100 rounded-full overflow-hidden flex shadow-inner">
+              <div
+                className="h-full bg-gradient-to-r from-emerald-600 to-emerald-400 flex items-center px-4 text-white text-xs sm:text-sm font-bold"
+                style={{ width: `${putShare}%` }}
+              >
+                Put Support Writers {putShare}%
+              </div>
+              <div
+                className="h-full bg-gradient-to-l from-red-600 to-red-400 flex items-center justify-end px-4 text-white text-xs sm:text-sm font-bold"
+                style={{ width: `${callShare}%` }}
+              >
+                Call Resistance Writers {callShare}%
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-5">
+              <div className="bg-emerald-50/70 p-4 rounded-xl border border-emerald-100">
+                <div className="text-xs font-bold text-emerald-700 uppercase">Total Index Put OI</div>
+                <div className="text-xl font-black text-emerald-800 mt-1 flex items-center gap-1.5">
+                  <TrendingUp size={18} /> {(Number(flow?.total_index_put_oi || 0) / 10000000).toFixed(2)} Cr
+                </div>
+              </div>
+              <div className="bg-red-50/70 p-4 rounded-xl border border-red-100">
+                <div className="text-xs font-bold text-red-700 uppercase">Total Index Call OI</div>
+                <div className="text-xl font-black text-red-800 mt-1 flex items-center gap-1.5">
+                  <TrendingDown size={18} /> {(Number(flow?.total_index_call_oi || 0) / 10000000).toFixed(2)} Cr
+                </div>
+              </div>
+              <div className="bg-slate-50 p-4 rounded-xl border border-slate-200">
+                <div className="text-xs font-bold text-slate-600 uppercase">Net Intraday OI Shift</div>
+                <div
+                  className={`text-xl font-black mt-1 ${
+                    Number(flow?.net_intraday_oi_flow || 0) >= 0 ? "text-emerald-700" : "text-red-600"
+                  }`}
+                >
+                  {Number(flow?.net_intraday_oi_flow || 0) >= 0 ? "+" : ""}
+                  {(Number(flow?.net_intraday_oi_flow || 0) / 100000).toFixed(2)}L (Put - Call)
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* PER-INDEX LIVE INSTITUTIONAL BREAKDOWN */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {indices.map((idx: any) => (
+              <div key={idx.symbol} className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                <div className="p-4 border-b border-slate-100 bg-slate-50 flex justify-between items-center">
+                  <div>
+                    <h3 className="font-bold text-slate-900 flex items-center gap-2">
+                      <Activity size={16} className="text-indigo-600" /> {idx.symbol} Derivatives Desk
+                    </h3>
+                    <div className="text-xs text-slate-500 mt-0.5">
+                      Spot: ₹{Number(idx.spot_price || 0).toLocaleString("en-IN")} (
+                      <span className={idx.spot_change_pct >= 0 ? "text-emerald-600 font-semibold" : "text-red-600 font-semibold"}>
+                        {idx.spot_change_pct >= 0 ? "+" : ""}
+                        {Number(idx.spot_change_pct || 0).toFixed(2)}%
+                      </span>
+                      )
+                    </div>
+                  </div>
+                  <span
+                    className={`px-2.5 py-1 rounded-full text-xs font-bold border ${
+                      idx.directional_bias === "BULLISH"
+                        ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                        : idx.directional_bias === "BEARISH"
+                        ? "bg-red-50 text-red-700 border-red-200"
+                        : "bg-slate-100 text-slate-700 border-slate-200"
+                    }`}
+                  >
+                    Aladdin: {idx.conviction_score}% ({idx.directional_bias})
                   </span>
                 </div>
-                <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
-                  <div className={`h-full ${fiiDiiData.cash.fii_net > 0 ? "bg-emerald-500" : "bg-red-500"}`} style={{ width: "100%" }}></div>
-                </div>
-              </div>
 
-              <div>
-                <div className="flex justify-between items-center mb-2">
-                  <span className="font-bold text-slate-700">DII Net Activity</span>
-                  <span className={`font-black ${fiiDiiData.cash.dii_net > 0 ? "text-emerald-600" : "text-red-600"}`}>
-                    {fiiDiiData.cash.dii_net > 0 ? "+" : ""}₹{fiiDiiData.cash.dii_net} Cr
-                  </span>
-                </div>
-                <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
-                  <div className={`h-full ${fiiDiiData.cash.dii_net > 0 ? "bg-emerald-500" : "bg-red-500"}`} style={{ width: "100%" }}></div>
+                <div className="p-5 grid grid-cols-2 sm:grid-cols-3 gap-4 text-sm">
+                  <div>
+                    <div className="text-xs text-slate-400 font-semibold">OI PCR / Vol PCR</div>
+                    <div className="font-bold text-slate-800 mt-0.5">
+                      {idx.pcr} / {idx.vol_pcr}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-xs text-slate-400 font-semibold">ATM IV / Skew</div>
+                    <div className="font-bold text-slate-800 mt-0.5">
+                      {idx.avg_atm_iv}% ({idx.iv_skew >= 0 ? "+" : ""}
+                      {idx.iv_skew}%)
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-xs text-slate-400 font-semibold">Max Pain Magnet</div>
+                    <div className="font-bold text-indigo-700 mt-0.5">{idx.max_pain}</div>
+                  </div>
+                  <div>
+                    <div className="text-xs text-slate-400 font-semibold">Put Floor Wall</div>
+                    <div className="font-bold text-emerald-600 mt-0.5">{idx.put_wall}</div>
+                  </div>
+                  <div>
+                    <div className="text-xs text-slate-400 font-semibold">Call Ceiling Wall</div>
+                    <div className="font-bold text-red-600 mt-0.5">{idx.call_wall}</div>
+                  </div>
+                  <div>
+                    <div className="text-xs text-slate-400 font-semibold">Intraday OI Shift</div>
+                    <div
+                      className={`font-bold mt-0.5 ${
+                        idx.put_chng_oi - idx.call_chng_oi >= 0 ? "text-emerald-600" : "text-red-600"
+                      }`}
+                    >
+                      {((idx.put_chng_oi - idx.call_chng_oi) / 100000).toFixed(1)}L
+                    </div>
+                  </div>
                 </div>
               </div>
-            </div>
+            ))}
           </div>
 
-          {/* F&O MARKET (INDEX FUTURES) */}
-          <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-            <div className="p-4 border-b border-slate-100 bg-slate-50">
-              <h2 className="font-bold text-slate-800 uppercase tracking-wider text-sm">F&O Market (Index Futures)</h2>
-              <p className="text-xs text-slate-500 mt-0.5">FII Long vs Short Positioning</p>
-            </div>
-            <div className="p-6">
-              
-              <div className="flex items-center justify-between mb-8">
-                <div className="text-center">
-                  <div className="text-2xl font-black text-emerald-600 flex items-center justify-center gap-1">
-                    <TrendingUp size={20}/> {fiiDiiData.fno.index_futures_long}
-                  </div>
-                  <div className="text-xs font-bold text-slate-400 uppercase tracking-wider mt-1">Long Contracts</div>
-                </div>
-                
-                <div className="text-center">
-                  <div className="text-3xl font-black text-slate-800">
-                    {(longShortRatio * 100).toFixed(1)}%
-                  </div>
-                  <div className="text-xs font-bold text-slate-400 uppercase tracking-wider mt-1">Long Ratio</div>
-                </div>
-
-                <div className="text-center">
-                  <div className="text-2xl font-black text-red-600 flex items-center justify-center gap-1">
-                    <TrendingDown size={20}/> {fiiDiiData.fno.index_futures_short}
-                  </div>
-                  <div className="text-xs font-bold text-slate-400 uppercase tracking-wider mt-1">Short Contracts</div>
-                </div>
-              </div>
-
-              <div className="bg-slate-50 rounded-lg p-4 border border-slate-200 text-center">
-                 <h3 className="text-sm font-bold text-slate-800 mb-1">Interpretation</h3>
-                 <p className="text-sm text-slate-600">
-                    {isBullish 
-                      ? "FIIs are carrying more LONG contracts than SHORT contracts. This indicates a structurally Bullish bias for the upcoming sessions."
-                      : "FIIs are carrying more SHORT contracts. This heavy short positioning indicates they expect the market to fall."}
-                 </p>
-              </div>
-
+          <div className="bg-indigo-50/70 border border-indigo-200 p-4 rounded-xl flex items-start gap-3">
+            <ShieldCheck className="text-indigo-600 mt-0.5 shrink-0" size={20} />
+            <div className="text-sm text-indigo-900">
+              <span className="font-bold">Live Exchange Footprint (Zero Delay):</span> FII/DII exchange cash reports publish after market close, whereas live Index Option Writers (Big Money sellers defending Call & Put Walls) reveal institutional bias in real time via live Open Interest & IV Skew above.
             </div>
           </div>
         </div>
-
-      </div>
+      )}
     </div>
   );
 }

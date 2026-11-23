@@ -40,6 +40,39 @@ class PaperTradingEngine:
         self.technical = TechnicalAnalyzer()
         self.cfg = settings
 
+    @staticmethod
+    def _is_fno_trade(trade: PaperTrade) -> bool:
+        """Detect F&O option/future contract trades vs NSE cash equities."""
+        sym = (trade.symbol or "").upper()
+        sector = (trade.sector or "").upper()
+        arm = (trade.experiment_arm or "").upper()
+        return (
+            arm == "FNO_ALADDIN"
+            or sector.startswith("F&O")
+            or ((sym.startswith("NSE:") or sym.startswith("BSE:")) and sym.endswith(("CE", "PE", "FUT")))
+        )
+
+    async def _fetch_fno_quote_ohlc(self, symbol: str) -> Optional[dict[str, float]]:
+        """Fetch live option/derivative OHLC quote directly via Fyers without -EQ rewriting."""
+        import asyncio
+        from app.services.fyers_data_client import FyersDataClient
+        try:
+            fyers = FyersDataClient()
+            raw = await asyncio.to_thread(fyers.fetch_quotes, [symbol])
+            if raw and raw.get("s") == "ok" and raw.get("d"):
+                v = raw["d"][0].get("v") or {}
+                lp = float(v.get("lp") or 0)
+                if lp > 0:
+                    return {
+                        "lp": lp,
+                        "high": float(v.get("high_price") or lp),
+                        "low": float(v.get("low_price") or lp),
+                        "open": float(v.get("open_price") or lp),
+                    }
+        except Exception as e:
+            logger.warning(f"Failed fetching F&O quote for {symbol}: {e}")
+        return None
+
     async def enter_trade(
         self,
         db: AsyncSession,
@@ -258,19 +291,20 @@ class PaperTradingEngine:
     ) -> None:
         """Update a single trade with current market data and check exits."""
         symbol = trade.symbol
+        is_fno = self._is_fno_trade(trade)
 
-        # Fetch current OHLC quote (Fyers intraday Open/High/Low/LTP)
-        quote_ohlc = await self.fetcher.fetch_quote_ohlc(symbol)
+        # Fetch current OHLC quote (F&O direct Fyers contract vs Equity fetcher)
+        if is_fno:
+            quote_ohlc = await self._fetch_fno_quote_ohlc(symbol)
+        else:
+            quote_ohlc = await self.fetcher.fetch_quote_ohlc(symbol)
         current_price = quote_ohlc["lp"] if quote_ohlc else None
         if current_price is None or current_price <= 0:
             logger.warning(f"Could not fetch price for {symbol}")
             return
 
-        # Anomaly / Circuit Filter Guard:
-        # Detect corrupted data feed or foreign ticker collision (e.g. HAL -> Halliburton $34.61 vs ₹4947).
-        # In Indian markets, daily circuit limits are 5-20%. A single-day drop > 40% on an asset > ₹100
-        # is virtually always a data glitch, not a real price move. Do not execute false exits on glitches!
-        if trade.entry_price > 100 and current_price < (trade.entry_price * 0.40):
+        # Anomaly / Circuit Filter Guard (equities only — option premiums swing >60% legitimately)
+        if not is_fno and trade.entry_price > 100 and current_price < (trade.entry_price * 0.40):
             logger.error(
                 f"DATA ANOMALY BLOCKED for {symbol}: current_price ₹{current_price} is >60% below "
                 f"entry ₹{trade.entry_price}. Tagging trade DATA_SUSPECT and alerting admin."
@@ -298,7 +332,7 @@ class PaperTradingEngine:
         if is_prior_day_trade and quote_ohlc:
             day_high = max(current_price, float(quote_ohlc.get("high") or current_price))
             raw_low = float(quote_ohlc.get("low") or current_price)
-            if raw_low <= 0 or (trade.entry_price > 100 and raw_low < trade.entry_price * 0.40):
+            if raw_low <= 0 or (not is_fno and trade.entry_price > 100 and raw_low < trade.entry_price * 0.40):
                 raw_low = current_price
             day_low = min(current_price, raw_low)
             day_open = float(quote_ohlc.get("open") or current_price)
@@ -330,27 +364,30 @@ class PaperTradingEngine:
             pass
 
         # ── Dynamic Trailing Stop Loss Logic ──────────────────────────────────
-        # Protects accumulated gains as price moves in our favor:
-        # Milestone 1: At +3.5% gain, shift SL to Breakeven (entry_price) -> Risk-Free Trade!
-        # Milestone 2: At +6.0% or higher, trail SL to lock in 50% of peak gains
-        if trade.direction == "LONG":
-            if pnl_pct >= 3.5 and trade.stop_loss < trade.entry_price:
+        # Equities: +3.5% -> Breakeven, +6.0% -> Lock 50% peak gain.
+        # F&O Options: +15.0% -> Breakeven, +30.0% -> Lock 50% peak gain (higher gamma volatility).
+        be_trigger = 15.0 if is_fno else 3.5
+        trail_trigger = 30.0 if is_fno else 6.0
+        has_sl = bool(trade.stop_loss and trade.stop_loss > 0)
+
+        if has_sl and trade.direction == "LONG":
+            if pnl_pct >= be_trigger and trade.stop_loss < trade.entry_price:
                 old_sl = trade.stop_loss
                 trade.stop_loss = round(trade.entry_price, 2)
                 logger.info(f"TRAILING SL: {symbol} reached +{pnl_pct:.2f}%! Moved SL from ₹{old_sl:.2f} to Breakeven ₹{trade.entry_price:.2f}")
-            elif pnl_pct >= 6.0:
+            elif pnl_pct >= trail_trigger:
                 peak_price = trade.highest_price or current_price
                 locked_sl = round(trade.entry_price + ((peak_price - trade.entry_price) * 0.5), 2)
                 if locked_sl > trade.stop_loss:
                     old_sl = trade.stop_loss
                     trade.stop_loss = locked_sl
                     logger.info(f"TRAILING SL: {symbol} reached +{pnl_pct:.2f}%! Trailed SL from ₹{old_sl:.2f} to ₹{locked_sl:.2f}")
-        elif trade.direction == "SHORT":
-            if pnl_pct >= 3.5 and trade.stop_loss > trade.entry_price:
+        elif has_sl and trade.direction == "SHORT":
+            if pnl_pct >= be_trigger and trade.stop_loss > trade.entry_price:
                 old_sl = trade.stop_loss
                 trade.stop_loss = round(trade.entry_price, 2)
                 logger.info(f"TRAILING SL (SHORT): {symbol} reached +{pnl_pct:.2f}%! Moved SL from ₹{old_sl:.2f} to Breakeven ₹{trade.entry_price:.2f}")
-            elif pnl_pct >= 6.0:
+            elif pnl_pct >= trail_trigger:
                 locked_sl = round(trade.entry_price - ((trade.entry_price - current_price) * 0.5), 2)
                 if locked_sl < trade.stop_loss:
                     old_sl = trade.stop_loss
@@ -358,7 +395,7 @@ class PaperTradingEngine:
                     logger.info(f"TRAILING SL (SHORT): {symbol} reached +{pnl_pct:.2f}%! Trailed SL from ₹{old_sl:.2f} to ₹{locked_sl:.2f}")
 
         # ── Exit Condition 1: Stop Loss Hit ───────────────────────────────────
-        sl_hit = (
+        sl_hit = has_sl and (
             (trade.direction == "LONG" and day_low <= trade.stop_loss) or
             (trade.direction == "SHORT" and day_high >= trade.stop_loss)
         )
@@ -378,7 +415,8 @@ class PaperTradingEngine:
             return
 
         # ── Exit Condition 2: Target Price Hit ────────────────────────────────
-        target_hit = (
+        has_target = bool(trade.target_price and trade.target_price > 0)
+        target_hit = has_target and (
             (trade.direction == "LONG" and day_high >= trade.target_price) or
             (trade.direction == "SHORT" and day_low <= trade.target_price)
         )
@@ -391,8 +429,12 @@ class PaperTradingEngine:
             logger.info(f"TARGET HIT: {symbol} filled @ limit ₹{fill_price:.2f} (day high: ₹{day_high:.2f}, tick: ₹{current_price:.2f})")
             return
 
-        # ── Exit Condition 3: RSI Extremes ──────────────────────────
+        # ── Exit Condition 3: RSI Extremes (Equities only) ──────────────────
         # Only fetch 3-month OHLCV if current_rsi is missing, avoiding heavy network latency on every 10s tick
+        if is_fno:
+            summary["updated"] += 1
+            return
+
         if trade.current_rsi is None:
             try:
                 df = await self.fetcher.fetch_price_history(symbol, period="3mo")
@@ -585,7 +627,11 @@ class PaperTradingEngine:
             return None
 
         if not exit_price:
-            exit_price = await self.fetcher.fetch_current_price(trade.symbol)
+            if self._is_fno_trade(trade):
+                q_ohlc = await self._fetch_fno_quote_ohlc(trade.symbol)
+                exit_price = q_ohlc["lp"] if q_ohlc else None
+            else:
+                exit_price = await self.fetcher.fetch_current_price(trade.symbol)
         if not exit_price:
             exit_price = trade.current_price or trade.entry_price
 

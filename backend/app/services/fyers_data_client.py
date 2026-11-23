@@ -369,6 +369,22 @@ class FyersDataClient:
             logger.error(f"Error fetching Fyers quotes: {e}")
             return {}
 
+    def fetch_option_chain(self, symbol: str, strikecount: int = 18, timestamp: str = "") -> dict:
+        """
+        Fetch full live Option Chain (spot, strikes, LTP, OI, OI change, volume, India VIX)
+        in ONE single Fyers API v3 call (eliminating 50+ per-strike depth requests).
+        """
+        if not self.fyers:
+            if not self.connect():
+                return {}
+        try:
+            return self.fyers.optionchain(
+                data={"symbol": symbol, "strikecount": strikecount, "timestamp": timestamp}
+            )
+        except Exception as e:
+            logger.error(f"Error fetching Fyers option chain for {symbol}: {e}")
+            return {}
+
     async def fetch_depth_concurrent(self, symbols: list, max_workers: int = 10) -> dict:
         """Fetch depth (OI, bid/ask) for multiple symbols concurrently."""
         import asyncio

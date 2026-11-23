@@ -93,6 +93,34 @@ export const predictKronos = async (symbol: string, pred_len: number = 5) => {
   }
 };
 
+export const fnoApi = {
+  getChain: (symbol: string, atmStrike?: number) => fetchOptionChain(symbol, atmStrike),
+  deployTrade: (data: {
+    underlying: string;
+    strategy_name: string;
+    lot_size: number;
+    lots?: number;
+    conviction_score?: number;
+    notes?: string;
+    legs: Array<{
+      symbol?: string;
+      action: string;
+      type: string;
+      strike: number;
+      entry: number;
+      sl?: number;
+      target?: number;
+      qty?: number;
+    }>;
+  }) => api.post("/fno/deploy-trade", data),
+  autoTrade: (symbol: string, minConviction: number = 62.0, lots?: number) =>
+    api.post(`/fno/auto-trade/${encodeURIComponent(symbol)}`, {
+      min_conviction: minConviction,
+      ...(lots ? { lots } : {}),
+    }),
+  getInstitutionalFlow: () => api.get("/fno/institutional-flow"),
+};
+
 export const dashboardApi = {
   getSummary: () => api.get("/dashboard/summary"),
   getPnlChart: (days: number = 30) => api.get(`/dashboard/pnl-chart?days=${days}`),

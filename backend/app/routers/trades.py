@@ -84,6 +84,8 @@ class CustomTradeRequest(BaseModel):
     notes: Optional[str] = None
     stop_loss: Optional[float] = 0.0
     target_price: Optional[float] = 0.0
+    sector: Optional[str] = "CUSTOM"
+    experiment_arm: Optional[str] = "CUSTOM_MANUAL"
 
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────
@@ -124,17 +126,22 @@ async def create_custom_trade(
             detail=f"Rigid Fund Limit: Trade requires ₹{invested:,.2f}, but only ₹{available_cash:,.2f} available cash remains in the ₹{total_capital:,.2f} pool."
         )
 
+    sl_val = float(request.stop_loss or 0.0)
+    tgt_val = float(request.target_price or 0.0)
+
     trade = PaperTrade(
         symbol=request.symbol,
         company_name=request.company_name,
+        sector=request.sector or "CUSTOM",
+        experiment_arm=request.experiment_arm or "CUSTOM_MANUAL",
         direction=request.direction,
         entry_date=date.today().strftime("%Y-%m-%d"),
         entry_price=request.entry_price,
         quantity=request.quantity,
         invested_amount=invested,
-        stop_loss=request.stop_loss,
-        stop_loss_fixed=request.stop_loss,
-        target_price=request.target_price,
+        stop_loss=sl_val,
+        stop_loss_fixed=sl_val,
+        target_price=tgt_val,
         current_price=request.entry_price,
         highest_price=request.entry_price,
         unrealized_pnl=0.0,

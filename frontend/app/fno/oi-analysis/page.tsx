@@ -2,22 +2,46 @@
 
 import React, { useState, useEffect } from "react";
 import { fetchOptionChain } from "@/lib/api";
-import { AlertCircle, BarChart2, TrendingUp, TrendingDown, Swords, Magnet } from "lucide-react";
-import Link from "next/link";
+import {
+  AlertCircle,
+  TrendingUp,
+  TrendingDown,
+  Swords,
+  Magnet,
+} from "lucide-react";
+import { FnoHeaderNav, getSavedFnoSymbol } from "@/components/FnoHeaderNav";
+
+const getBuildupBadge = (buildup: string) => {
+  if (buildup === "Long Buildup" || buildup === "Active Buying") {
+    return "bg-emerald-100 text-emerald-800 border-emerald-200";
+  }
+  if (buildup === "Short Buildup" || buildup === "Active Selling") {
+    return "bg-rose-100 text-rose-800 border-rose-200";
+  }
+  if (buildup === "Short Covering") {
+    return "bg-blue-100 text-blue-800 border-blue-200";
+  }
+  if (buildup === "Long Unwinding") {
+    return "bg-amber-100 text-amber-800 border-amber-200";
+  }
+  return "bg-slate-100 text-slate-600 border-slate-200";
+};
 
 export default function OiAnalysis() {
+  const [symbol, setSymbol] = useState<string>("NIFTY");
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const symbol = "NIFTY"; 
 
   useEffect(() => {
-    loadData();
+    const saved = getSavedFnoSymbol();
+    setSymbol(saved);
+    loadData(saved);
   }, []);
 
-  const loadData = async () => {
+  const loadData = async (targetSym: string = symbol) => {
     setLoading(true);
     try {
-      const res = await fetchOptionChain(symbol);
+      const res = await fetchOptionChain(targetSym);
       setData(res);
     } catch (e) {
       console.error(e);
@@ -25,31 +49,18 @@ export default function OiAnalysis() {
     setLoading(false);
   };
 
-  if (loading) {
-    return (
-      <div className="flex-1 min-h-screen bg-slate-50/50 p-6 flex items-center justify-center">
-        <div className="w-8 h-8 rounded-full border-4 border-slate-200 border-t-blue-600 animate-spin" />
-      </div>
-    );
-  }
+  const handleSymbolChange = (next: string) => {
+    setSymbol(next);
+    loadData(next);
+  };
 
-  if (data?.error) {
-    return (
-      <div className="flex-1 min-h-screen bg-slate-50/50 p-6">
-        <div className="bg-red-50 border border-red-200 p-6 rounded-xl flex items-start gap-4">
-          <AlertCircle className="text-red-600 mt-1" />
-          <div>
-            <h3 className="font-bold text-red-900">Failed to load OI Data</h3>
-            <p className="text-sm text-red-700 mt-1">{data.error}</p>
-          </div>
-        </div>
-      </div>
-    );
-  }
+  const analysis = data?.analysis || {};
+  const brain = data?.aladdin_option_brain || {};
+  const quotes = data?.quotes || [];
+  const atm_strike = data?.atm_strike || 0;
+  const spot_price = data?.spot_price || 0;
 
-  const { analysis, quotes, atm_strike, spot_price } = data;
-  
-  // Aggregate Data
+  // Aggregate Data per strike
   const oiByStrike: Record<number, any> = {};
   let totalCeChngOi = 0;
   let totalPeChngOi = 0;
@@ -58,233 +69,296 @@ export default function OiAnalysis() {
 
   quotes.forEach((q: any) => {
     if (!oiByStrike[q.strike]) {
-      oiByStrike[q.strike] = { strike: q.strike, ceOi: 0, peOi: 0, ceChngOi: 0, peChngOi: 0 };
+      oiByStrike[q.strike] = {
+        strike: q.strike,
+        ceOi: 0,
+        peOi: 0,
+        ceChngOi: 0,
+        peChngOi: 0,
+        ceBuildup: "Neutral",
+        peBuildup: "Neutral",
+        ceLtpChgPct: 0,
+        peLtpChgPct: 0,
+      };
     }
     if (q.type === "CE") {
-      oiByStrike[q.strike].ceOi += q.oi;
+      oiByStrike[q.strike].ceOi += q.oi || 0;
       oiByStrike[q.strike].ceChngOi += q.chng_oi || 0;
-      totalCeChngOi += Math.max(0, q.chng_oi || 0); // Only positive buildup for meter
-      totalCeOi += q.oi;
+      oiByStrike[q.strike].ceBuildup = q.buildup || "Neutral";
+      oiByStrike[q.strike].ceLtpChgPct = q.price_chg_pct || 0;
+      totalCeChngOi += Math.max(0, q.chng_oi || 0);
+      totalCeOi += q.oi || 0;
     } else {
-      oiByStrike[q.strike].peOi += q.oi;
+      oiByStrike[q.strike].peOi += q.oi || 0;
       oiByStrike[q.strike].peChngOi += q.chng_oi || 0;
-      totalPeChngOi += Math.max(0, q.chng_oi || 0); // Only positive buildup for meter
-      totalPeOi += q.oi;
+      oiByStrike[q.strike].peBuildup = q.buildup || "Neutral";
+      oiByStrike[q.strike].peLtpChgPct = q.price_chg_pct || 0;
+      totalPeChngOi += Math.max(0, q.chng_oi || 0);
+      totalPeOi += q.oi || 0;
     }
   });
 
-  const sortedStrikes = Object.keys(oiByStrike).map(Number).sort((a, b) => a - b);
-  const nearbyStrikes = sortedStrikes.filter(s => Math.abs(s - atm_strike) <= 400);
+  const sortedStrikes = Object.keys(oiByStrike)
+    .map(Number)
+    .sort((a, b) => a - b);
+  const atmIdx = sortedStrikes.indexOf(atm_strike);
+  const nearbyStrikes =
+    atmIdx >= 0
+      ? sortedStrikes.slice(Math.max(0, atmIdx - 7), Math.min(sortedStrikes.length, atmIdx + 8))
+      : sortedStrikes.slice(0, 15);
 
-  // Tug of War percentages
   const totalChngOi = totalCeChngOi + totalPeChngOi;
   const bearsPower = totalChngOi > 0 ? (totalCeChngOi / totalChngOi) * 100 : 50;
   const bullsPower = totalChngOi > 0 ? (totalPeChngOi / totalChngOi) * 100 : 50;
 
-  // Magnet / Gauge logic
   const resistance = analysis?.highest_call_oi_strike || atm_strike + 200;
   const support = analysis?.highest_put_oi_strike || atm_strike - 200;
   const range = resistance - support;
   const actualSpot = spot_price || atm_strike;
   const spotPosition = range > 0 ? ((actualSpot - support) / range) * 100 : 50;
 
-  // Buildup Logic (Proxy without price change)
-  const getBuildupStatus = (type: "CE" | "PE", chngOi: number, strike: number, atm: number) => {
-    if (chngOi > 10000) {
-      return type === "CE" ? "Short Buildup 🔴" : "Short Buildup 🟢"; // Option Selling is dominant
-    } else if (chngOi < -10000) {
-      return type === "CE" ? "Short Covering 🚀" : "Long Unwinding 🩸"; // Sellers running or Buyers booking
-    }
-    return "Neutral ⚪";
-  };
-
   return (
     <div className="flex-1 min-h-screen bg-slate-50/50 pb-12">
-      {/* HEADER */}
-      <div className="bg-white border-b border-slate-200 sticky top-0 z-30 shadow-sm">
-        <div className="px-6 py-4 flex justify-between items-center">
-          <div>
-            <h1 className="text-2xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
-              <BarChart2 size={24} className="text-blue-600" /> Pro OI Analysis
-            </h1>
-            <p className="text-sm text-slate-500 mt-1">Buildup & Footprint Tracking</p>
-          </div>
-          <div className="text-right">
-            <div className="text-sm font-bold text-slate-800 flex items-center justify-end gap-2">
-              ATM: {atm_strike}
+      <FnoHeaderNav
+        activeTab="oi"
+        title="Pro OI & Buildup Analysis"
+        subtitle="Real-time Intraday 4-Quadrant Footprint Tracking"
+        symbol={symbol}
+        onSymbolChange={handleSymbolChange}
+        spotPrice={data?.spot_price}
+        spotChangePct={data?.spot_change_pct}
+        atmStrike={data?.atm_strike}
+        lotSize={data?.lot_size}
+        dte={data?.dte}
+        convictionScore={brain?.conviction_score}
+        directionalBias={brain?.directional_bias}
+        onRefresh={() => loadData(symbol)}
+        isRefreshing={loading}
+      />
+
+      {loading ? (
+        <div className="p-12 flex items-center justify-center">
+          <div className="w-8 h-8 rounded-full border-4 border-slate-200 border-t-indigo-600 animate-spin" />
+        </div>
+      ) : data?.error ? (
+        <div className="p-6 max-w-4xl mx-auto">
+          <div className="bg-red-50 border border-red-200 p-6 rounded-xl flex items-start gap-4">
+            <AlertCircle className="text-red-600 mt-1" />
+            <div>
+              <h3 className="font-bold text-red-900">Failed to load OI Data</h3>
+              <p className="text-sm text-red-700 mt-1">{data.error}</p>
             </div>
-            <div className="text-xs text-slate-500">Current Market Center</div>
           </div>
         </div>
-        
-        {/* HORIZONTAL TAB NAVIGATION */}
-        <div className="px-6 flex items-center gap-6 overflow-x-auto border-t border-slate-100">
-          <Link href="/fno" className="py-3 border-b-2 border-transparent text-slate-600 hover:text-slate-900 font-medium text-sm whitespace-nowrap">
-            Option Chain
-          </Link>
-          <Link href="/fno/strategy-builder" className="py-3 border-b-2 border-transparent text-slate-600 hover:text-slate-900 font-medium text-sm whitespace-nowrap">
-            Strategy Builder
-          </Link>
-          <Link href="/fno/oi-analysis" className="py-3 border-b-2 border-blue-600 text-blue-600 font-semibold text-sm whitespace-nowrap">
-            Pro OI Analysis
-          </Link>
-          <Link href="/fno/pcr-analysis" className="py-3 border-b-2 border-transparent text-slate-600 hover:text-slate-900 font-medium text-sm whitespace-nowrap">
-            PCR & Volatility
-          </Link>
-          <Link href="/fno/option-analysis" className="py-3 border-b-2 border-transparent text-slate-600 hover:text-slate-900 font-medium text-sm whitespace-nowrap">
-            Pro Analytics
-          </Link>
-          <Link href="/fno/fii-dii" className="py-3 border-b-2 border-transparent text-slate-600 hover:text-slate-900 font-medium text-sm whitespace-nowrap">
-            FII / DII Data
-          </Link>
-        </div>
-      </div>
-
-      <div className="p-6 max-w-7xl mx-auto space-y-6">
-        
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* TUG OF WAR METER */}
-          <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-            <div className="flex justify-between items-end mb-6">
-              <div>
-                <h3 className="font-bold text-slate-800 flex items-center gap-2">
-                  <Swords size={20} className="text-amber-500" /> Tug of War (Intraday Bulls vs Bears)
-                </h3>
-                <p className="text-xs text-slate-500 mt-1">Comparing fresh Call Writing vs Put Writing today.</p>
-              </div>
-            </div>
-            
-            <div className="relative h-8 bg-slate-100 rounded-full overflow-hidden flex shadow-inner">
-              <div 
-                className="h-full bg-gradient-to-r from-red-600 to-red-400 flex items-center justify-start px-4 text-white font-bold text-sm transition-all duration-1000"
-                style={{ width: `${bearsPower}%` }}
-              >
-                {bearsPower > 15 && `Bears ${bearsPower.toFixed(0)}%`}
-              </div>
-              <div 
-                className="h-full bg-gradient-to-l from-emerald-600 to-emerald-400 flex items-center justify-end px-4 text-white font-bold text-sm transition-all duration-1000"
-                style={{ width: `${bullsPower}%` }}
-              >
-                {bullsPower > 15 && `Bulls ${bullsPower.toFixed(0)}%`}
-              </div>
-              
-              {/* Center Line */}
-              <div className="absolute left-1/2 top-0 bottom-0 w-1 bg-white shadow-[0_0_10px_rgba(0,0,0,0.3)]"></div>
-            </div>
-            
-            <div className="flex justify-between mt-3 text-xs font-semibold">
-              <span className="text-red-600 flex items-center gap-1"><TrendingDown size={14}/> Fresh Call OI: {(totalCeChngOi/100000).toFixed(1)}L</span>
-              <span className="text-slate-400">Total PCR: {(totalPeOi / totalCeOi).toFixed(2)}</span>
-              <span className="text-emerald-600 flex items-center gap-1">Fresh Put OI: {(totalPeChngOi/100000).toFixed(1)}L <TrendingUp size={14}/></span>
-            </div>
-          </div>
-
-          {/* MAGNET GAUGE */}
-          <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-            <div className="flex justify-between items-end mb-6">
-              <div>
-                <h3 className="font-bold text-slate-800 flex items-center gap-2">
-                  <Magnet size={20} className="text-blue-500" /> Market Magnet Test (Live)
-                </h3>
-                <p className="text-xs text-slate-500 mt-1">Distance between Spot Price and nearest Institutional Walls.</p>
-              </div>
-            </div>
-            
-            <div className="px-4 pt-2">
-              <div className="relative w-full h-2 bg-slate-200 rounded-full">
-                
-                {/* Support Point */}
-                <div className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-1/2 flex flex-col items-center">
-                  <div className="w-4 h-4 bg-emerald-500 rounded-full border-2 border-white shadow-md"></div>
-                  <div className="mt-2 text-xs font-bold text-emerald-600">S1: {support}</div>
+      ) : (
+        <div className="p-6 max-w-7xl mx-auto space-y-6">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* TUG OF WAR METER */}
+            <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+              <div className="flex justify-between items-end mb-6">
+                <div>
+                  <h3 className="font-bold text-slate-800 flex items-center gap-2">
+                    <Swords size={20} className="text-amber-500" /> Tug of War (Fresh Writers Flow)
+                  </h3>
+                  <p className="text-xs text-slate-500 mt-1">
+                    Comparing intraday Call OI addition vs Put OI addition on {symbol}.
+                  </p>
                 </div>
+              </div>
 
-                {/* Spot Price Pointer */}
-                <div 
-                  className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 flex flex-col items-center z-10 transition-all duration-500"
-                  style={{ left: `${Math.max(5, Math.min(95, spotPosition))}%` }}
+              <div className="relative h-8 bg-slate-100 rounded-full overflow-hidden flex shadow-inner">
+                <div
+                  className="h-full bg-gradient-to-r from-red-600 to-red-400 flex items-center justify-start px-4 text-white font-bold text-sm transition-all duration-1000"
+                  style={{ width: `${bearsPower}%` }}
                 >
-                  <div className="bg-slate-800 text-white text-xs font-bold px-2 py-1 rounded shadow-lg mb-1 relative top-[-24px]">
-                    LTP: {actualSpot.toFixed(2)}
-                    <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 border-4 border-transparent border-t-slate-800"></div>
-                  </div>
-                  <div className="w-3 h-3 bg-blue-600 rounded-full border-2 border-white shadow-md absolute top-1/2 -translate-y-1/2"></div>
+                  {bearsPower > 15 && `Bears ${bearsPower.toFixed(0)}%`}
                 </div>
+                <div
+                  className="h-full bg-gradient-to-l from-emerald-600 to-emerald-400 flex items-center justify-end px-4 text-white font-bold text-sm transition-all duration-1000"
+                  style={{ width: `${bullsPower}%` }}
+                >
+                  {bullsPower > 15 && `Bulls ${bullsPower.toFixed(0)}%`}
+                </div>
+                <div className="absolute left-1/2 top-0 bottom-0 w-1 bg-white shadow-[0_0_10px_rgba(0,0,0,0.3)]" />
+              </div>
 
-                {/* Resistance Point */}
-                <div className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-1/2 flex flex-col items-center">
-                  <div className="w-4 h-4 bg-red-500 rounded-full border-2 border-white shadow-md"></div>
-                  <div className="mt-2 text-xs font-bold text-red-600">R1: {resistance}</div>
-                </div>
+              <div className="flex justify-between mt-3 text-xs font-semibold">
+                <span className="text-red-600 flex items-center gap-1">
+                  <TrendingDown size={14} /> Fresh Call OI: {(totalCeChngOi / 100000).toFixed(2)}L
+                </span>
+                <span className="text-slate-600">
+                  OI PCR: {totalCeOi > 0 ? (totalPeOi / totalCeOi).toFixed(2) : "1.00"} | Vol PCR:{" "}
+                  {analysis?.vol_pcr ?? "-"}
+                </span>
+                <span className="text-emerald-600 flex items-center gap-1">
+                  Fresh Put OI: {(totalPeChngOi / 100000).toFixed(2)}L <TrendingUp size={14} />
+                </span>
               </div>
             </div>
-            
-            <div className="mt-10 text-center text-xs text-slate-500">
-              {spotPosition < 30 ? "⚠️ Market is heavily testing the Support Zone." : 
-               spotPosition > 70 ? "⚠️ Market is heavily testing the Resistance Zone." : 
-               "Market is trading safely in the middle of the range."}
+
+            {/* MAGNET GAUGE */}
+            <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+              <div className="flex justify-between items-end mb-6">
+                <div>
+                  <h3 className="font-bold text-slate-800 flex items-center gap-2">
+                    <Magnet size={20} className="text-blue-500" /> Call / Put Wall Magnet Test
+                  </h3>
+                  <p className="text-xs text-slate-500 mt-1">
+                    Live Spot relative to Highest Put Wall (Support) & Call Wall (Resistance).
+                  </p>
+                </div>
+              </div>
+
+              <div className="px-4 pt-2">
+                <div className="relative w-full h-2 bg-slate-200 rounded-full">
+                  <div className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-1/2 flex flex-col items-center">
+                    <div className="w-4 h-4 bg-emerald-500 rounded-full border-2 border-white shadow-md" />
+                    <div className="mt-2 text-xs font-bold text-emerald-600">S1: {support}</div>
+                  </div>
+
+                  <div
+                    className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 flex flex-col items-center z-10 transition-all duration-500"
+                    style={{ left: `${Math.max(5, Math.min(95, spotPosition))}%` }}
+                  >
+                    <div className="bg-slate-800 text-white text-xs font-bold px-2 py-1 rounded shadow-lg mb-1 relative top-[-24px]">
+                      {actualSpot.toFixed(2)}
+                      <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 border-4 border-transparent border-t-slate-800" />
+                    </div>
+                    <div className="w-3 h-3 bg-blue-600 rounded-full border-2 border-white shadow-md absolute top-1/2 -translate-y-1/2" />
+                  </div>
+
+                  <div className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-1/2 flex flex-col items-center">
+                    <div className="w-4 h-4 bg-red-500 rounded-full border-2 border-white shadow-md" />
+                    <div className="mt-2 text-xs font-bold text-red-600">R1: {resistance}</div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-10 text-center text-xs text-slate-600 font-medium">
+                {spotPosition < 30
+                  ? "Testing Institutional Put Support Wall (High Bounce / Breakdown Alert)."
+                  : spotPosition > 70
+                  ? "Testing Institutional Call Resistance Wall (Breakout or Rejection Zone)."
+                  : `Trading inside Institutional Range (Max Pain Anchor: ${analysis?.max_pain || atm_strike}).`}
+              </div>
+            </div>
+          </div>
+
+          {/* 4-QUADRANT BUILDUP ANALYZER TABLE */}
+          <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+            <div className="p-5 border-b border-slate-100 bg-slate-50 flex flex-wrap justify-between items-center gap-2">
+              <div>
+                <h3 className="font-bold text-slate-800">
+                  4-Quadrant OI Buildup Analyzer ({symbol})
+                </h3>
+                <p className="text-xs text-slate-500 mt-1">
+                  Combines real-time Exchange Change in OI + Option Price % change strike-by-strike.
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-2 text-[11px] font-semibold">
+                <span className="px-2 py-0.5 rounded bg-emerald-100 text-emerald-800">Long Buildup</span>
+                <span className="px-2 py-0.5 rounded bg-rose-100 text-rose-800">Short Buildup</span>
+                <span className="px-2 py-0.5 rounded bg-blue-100 text-blue-800">Short Covering</span>
+                <span className="px-2 py-0.5 rounded bg-amber-100 text-amber-800">Long Unwinding</span>
+              </div>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm text-center">
+                <thead>
+                  <tr className="bg-slate-100/60 text-slate-500 text-xs uppercase tracking-wider border-b border-slate-200">
+                    <th className="py-3 px-4 font-medium text-right">Call Total OI</th>
+                    <th className="py-3 px-4 font-medium text-right">Call OI Chg</th>
+                    <th className="py-3 px-4 font-bold text-red-600 text-right border-r border-slate-200">
+                      Call Footprint
+                    </th>
+                    <th className="py-3 px-4 font-black text-slate-800 bg-white border-r border-slate-200">
+                      STRIKE
+                    </th>
+                    <th className="py-3 px-4 font-bold text-emerald-600 text-left">Put Footprint</th>
+                    <th className="py-3 px-4 font-medium text-left">Put OI Chg</th>
+                    <th className="py-3 px-4 font-medium text-left">Put Total OI</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {nearbyStrikes.map((strike) => {
+                    const row = oiByStrike[strike];
+                    const isAtm = strike === atm_strike;
+
+                    return (
+                      <tr
+                        key={strike}
+                        className={`hover:bg-slate-50 transition-colors ${
+                          isAtm ? "bg-indigo-50/40" : ""
+                        }`}
+                      >
+                        <td className="py-3 px-4 text-right text-slate-600 font-medium">
+                          {(row.ceOi / 1000).toFixed(1)}k
+                        </td>
+                        <td
+                          className={`py-3 px-4 text-right font-semibold ${
+                            row.ceChngOi < 0
+                              ? "text-emerald-600"
+                              : row.ceChngOi > 0
+                              ? "text-rose-600"
+                              : "text-slate-400"
+                          }`}
+                        >
+                          {row.ceChngOi > 0 ? "+" : ""}
+                          {(row.ceChngOi / 1000).toFixed(1)}k
+                        </td>
+                        <td className="py-3 px-4 text-right border-r border-slate-200">
+                          <span
+                            className={`inline-block px-2 py-0.5 rounded text-xs font-bold border ${getBuildupBadge(
+                              row.ceBuildup
+                            )}`}
+                          >
+                            {row.ceBuildup}
+                          </span>
+                        </td>
+
+                        <td
+                          className={`py-3 px-4 font-black border-r border-slate-200 ${
+                            isAtm ? "bg-indigo-100 text-indigo-900" : "bg-slate-50 text-slate-800"
+                          }`}
+                        >
+                          {strike}{" "}
+                          {isAtm && <span className="text-[10px] ml-1 opacity-75">ATM</span>}
+                        </td>
+
+                        <td className="py-3 px-4 text-left">
+                          <span
+                            className={`inline-block px-2 py-0.5 rounded text-xs font-bold border ${getBuildupBadge(
+                              row.peBuildup
+                            )}`}
+                          >
+                            {row.peBuildup}
+                          </span>
+                        </td>
+                        <td
+                          className={`py-3 px-4 text-left font-semibold ${
+                            row.peChngOi > 0
+                              ? "text-emerald-600"
+                              : row.peChngOi < 0
+                              ? "text-rose-600"
+                              : "text-slate-400"
+                          }`}
+                        >
+                          {row.peChngOi > 0 ? "+" : ""}
+                          {(row.peChngOi / 1000).toFixed(1)}k
+                        </td>
+                        <td className="py-3 px-4 text-left text-slate-600 font-medium">
+                          {(row.peOi / 1000).toFixed(1)}k
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
             </div>
           </div>
         </div>
-
-        {/* BUILDUP ANALYZER TABLE */}
-        <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-          <div className="p-5 border-b border-slate-100 bg-slate-50">
-            <h3 className="font-bold text-slate-800 flex items-center gap-2">
-               The Buildup Analyzer (Near ATM)
-            </h3>
-            <p className="text-xs text-slate-500 mt-1">Tracks Intraday Smart Money Footprints strike-by-strike.</p>
-          </div>
-          
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm text-center">
-              <thead>
-                <tr className="bg-slate-100/50 text-slate-500 text-xs uppercase tracking-wider border-b border-slate-200">
-                  <th className="py-3 px-4 font-medium text-right">Call OI Chg</th>
-                  <th className="py-3 px-4 font-bold text-red-600 text-right border-r border-slate-200">Call Buildup</th>
-                  <th className="py-3 px-4 font-black text-slate-800 bg-white border-r border-slate-200">STRIKE</th>
-                  <th className="py-3 px-4 font-bold text-emerald-600 text-left">Put Buildup</th>
-                  <th className="py-3 px-4 font-medium text-left">Put OI Chg</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {nearbyStrikes.map((strike) => {
-                  const data = oiByStrike[strike];
-                  const ceStatus = getBuildupStatus("CE", data.ceChngOi, strike, atm_strike);
-                  const peStatus = getBuildupStatus("PE", data.peChngOi, strike, atm_strike);
-                  const isAtm = strike === atm_strike;
-                  
-                  return (
-                    <tr key={strike} className={`hover:bg-slate-50 transition-colors ${isAtm ? 'bg-amber-50/30' : ''}`}>
-                      {/* CE Side */}
-                      <td className={`py-3 px-4 text-right ${data.ceChngOi < 0 ? 'text-emerald-500 font-bold' : 'text-slate-500'}`}>
-                        {data.ceChngOi > 0 ? "+" : ""}{(data.ceChngOi/1000).toFixed(1)}k
-                      </td>
-                      <td className="py-3 px-4 text-right font-semibold text-slate-700 border-r border-slate-200">
-                        {ceStatus}
-                      </td>
-                      
-                      {/* STRIKE */}
-                      <td className={`py-3 px-4 font-black border-r border-slate-200 ${isAtm ? 'bg-amber-100 text-amber-900' : 'bg-slate-50 text-slate-800'}`}>
-                        {strike} {isAtm && <span className="text-[10px] ml-1 opacity-70">ATM</span>}
-                      </td>
-                      
-                      {/* PE Side */}
-                      <td className="py-3 px-4 text-left font-semibold text-slate-700">
-                        {peStatus}
-                      </td>
-                      <td className={`py-3 px-4 text-left ${data.peChngOi < 0 ? 'text-red-500 font-bold' : 'text-slate-500'}`}>
-                        {data.peChngOi > 0 ? "+" : ""}{(data.peChngOi/1000).toFixed(1)}k
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-      </div>
+      )}
     </div>
   );
 }

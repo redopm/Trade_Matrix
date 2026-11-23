@@ -35,7 +35,7 @@ class PaperTrade(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     signal_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, index=True)
-    symbol: Mapped[str] = mapped_column(String(20), nullable=False, index=True)
+    symbol: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
     company_name: Mapped[str] = mapped_column(String(200), nullable=False)
     sector: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     direction: Mapped[str] = mapped_column(

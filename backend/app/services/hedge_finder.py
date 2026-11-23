@@ -51,7 +51,7 @@ class HedgeFinder:
         # ─────────────────────────────────────────────────────────────────────────
         # 1. SAFE HEDGE + 2. PRO HEDGE (Directional)
         # ─────────────────────────────────────────────────────────────────────────
-        if sentiment in ["BULLISH", "OVERSOLD"]:
+        if "BULL" in sentiment or sentiment == "OVERSOLD":
             buy_leg  = get_quote_by_delta(ce_quotes, 0.60)  # ITM CE (lower strike)
             sell_leg = get_quote_by_delta(ce_quotes, 0.25)  # OTM CE (higher strike)
 
@@ -204,7 +204,7 @@ class HedgeFinder:
         # ─────────────────────────────────────────────────────────────────────────
         # 4. ZERO LOSS HEDGE — Ratio Backspread (Credit Structure)
         # ─────────────────────────────────────────────────────────────────────────
-        if sentiment in ["BULLISH", "OVERSOLD"]:
+        if "BULL" in sentiment or sentiment == "OVERSOLD":
             sell_rb = get_quote_by_delta(ce_quotes, 0.40)  # Slightly OTM CE SELL
             buy_rb  = get_quote_by_delta(ce_quotes, 0.15)  # Further OTM CE BUY x2
 
