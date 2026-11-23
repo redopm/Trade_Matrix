@@ -119,6 +119,7 @@ export const fnoApi = {
       ...(lots ? { lots } : {}),
     }),
   getInstitutionalFlow: () => api.get("/fno/institutional-flow"),
+  getRiskCircuit: () => api.get("/fno/risk-circuit"),
 };
 
 export const dashboardApi = {
@@ -299,12 +300,18 @@ export const aladdinApi = {
     api.get(`/aladdin/forecast/${encodeURIComponent(symbol)}`),
   getPredictionStats: () => api.get("/aladdin/predictions/stats"),
   evaluatePredictions: () => api.post("/aladdin/predictions/evaluate"),
+  getPatternEmpiricalStats: () => api.get("/aladdin/patterns/empirical-stats"),
+  scanPatternEmpirical: (maxSymbols: number = 250, years: number = 20) =>
+    api.post(`/aladdin/patterns/scan-empirical?max_symbols=${maxSymbols}&years=${years}`),
 };
 // Backward compatibility alias
 export const oracleApi = aladdinApi;
 
 export const dataStoreApi = {
   getStatus: () => api.get("/stocks/data-store/status"),
+  getHealth: () => api.get("/stocks/data-store/health"),
+  getWatchdog: () => api.get("/stocks/system-watchdog"),
+  runWatchdog: () => api.post("/stocks/system-watchdog/run"),
   sync2Y: (forceFull: boolean = false) =>
     api.post(`/stocks/data-store/sync?force_full=${forceFull}`),
   backfill20Y: (years: number = 20) =>

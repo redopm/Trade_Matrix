@@ -150,6 +150,53 @@ async def _run_fyers_daily_login() -> None:
         logger.error(f"Error during scheduled Fyers auto-login: {e}")
 
 
+async def _run_enterprise_watchdog_job(phase: str = "EOD") -> None:
+    """Enterprise pre-market & EOD health watchdog: self-heals gaps, refreshes 20Y pattern stats, and dispatches Telegram digest."""
+    import asyncio
+    import sys
+    from app.config import _BACKEND_DIR
+    from app.services.daily_history_store import DailyHistoryStore
+    from app.services.alert_manager import AlertManager
+
+    logger.info(f"[Watchdog Job] Running {phase} Enterprise Watchdog @ {datetime.now(IST).strftime('%H:%M IST')}")
+    try:
+        report = await asyncio.to_thread(DailyHistoryStore.run_enterprise_watchdog, True)
+        if phase == "EOD":
+            try:
+                if str(_BACKEND_DIR) not in sys.path:
+                    sys.path.insert(0, str(_BACKEND_DIR))
+                from advanced_dataset_generator import run_empirical_pattern_benchmark
+                await asyncio.to_thread(run_empirical_pattern_benchmark, 250, 20)
+                report["ai_calibration"]["empirical_stats_ready"] = True
+            except Exception as exc:
+                logger.warning(f"[Watchdog Job] EOD empirical pattern refresh skipped: {exc}")
+
+        ds = report.get("data_store") or {}
+        infra = report.get("infrastructure") or {}
+        broker = report.get("broker") or {}
+        pred = (report.get("ai_calibration") or {}).get("prediction_stats") or {}
+
+        logger.info(
+            f"[Watchdog Job] {phase} status={report.get('overall_status')} | "
+            f"Broker={broker.get('connected')} | Store={ds.get('stored_symbols')}/{ds.get('target_universe_size')} "
+            f"(20Y={ds.get('deep_10_20y_symbols')}) | DiskFree={infra.get('disk_free_gb')}GB"
+        )
+
+        alert_mgr = AlertManager()
+        if alert_mgr.enabled or report.get("overall_status") != "ENTERPRISE_HEALTHY":
+            status_emoji = "✅" if report.get("overall_status") == "ENTERPRISE_HEALTHY" else "🚨"
+            msg = (
+                f"{status_emoji} **[TradeMatrix {phase} Watchdog]** `{report.get('overall_status')}`\n\n"
+                f"• Broker TOTP: `{'CONNECTED' if broker.get('connected') else 'DISCONNECTED'}` ({broker.get('user')})\n"
+                f"• Data Store: `{ds.get('stored_symbols')}/{ds.get('target_universe_size')}` ({ds.get('coverage_pct')}%) | 20Y Deep: `{ds.get('deep_10_20y_symbols')}`\n"
+                f"• Prediction Hit Rate: `{pred.get('direction_hit_rate_pct', 0)}%` ({pred.get('verified_count', 0)} verified)\n"
+                f"• Infra: Free Disk `{infra.get('disk_free_gb')} GB` | Avail RAM `{infra.get('ram_available_mb')} MB`"
+            )
+            await alert_mgr.send_message(msg)
+    except Exception as e:
+        logger.error(f"[Watchdog Job] Failed ({phase}): {e}")
+
+
 async def check_forward_test_catchup_on_startup() -> None:
     """Executes on application startup to catch up any missed monthly freeze if server was offline."""
     await _run_forward_test_monthly_cohort()
@@ -263,7 +310,39 @@ def create_scheduler() -> AsyncIOScheduler:
         misfire_grace_time=3600,
     )
 
-    logger.info("Scheduler configured with 6 jobs (including Daily OHLCV Sync, Forward Test Freeze & Fyers Auto-Login)")
+    # Enterprise Pre-Market Watchdog at 9:05 AM IST (Mon-Fri)
+    _scheduler.add_job(
+        _run_enterprise_watchdog_job,
+        args=["PRE_MARKET"],
+        trigger=CronTrigger(
+            day_of_week="mon-fri",
+            hour=9,
+            minute=5,
+            timezone=IST,
+        ),
+        id="enterprise_premarket_watchdog",
+        name="Enterprise Pre-Market Health Watchdog (09:05 IST)",
+        replace_existing=True,
+        misfire_grace_time=1800,
+    )
+
+    # Enterprise Post-Market Watchdog + 20Y Empirical Pattern Refresh at 3:52 PM IST (Mon-Fri)
+    _scheduler.add_job(
+        _run_enterprise_watchdog_job,
+        args=["EOD"],
+        trigger=CronTrigger(
+            day_of_week="mon-fri",
+            hour=15,
+            minute=52,
+            timezone=IST,
+        ),
+        id="enterprise_eod_watchdog",
+        name="Enterprise EOD Health Watchdog & Pattern Refresh (15:52 IST)",
+        replace_existing=True,
+        misfire_grace_time=1800,
+    )
+
+    logger.info("Scheduler configured with 9 jobs (OHLCV Sync, Prediction Audit, Watchdogs, Screener & Auto-Login)")
     return _scheduler
 
 

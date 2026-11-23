@@ -34,6 +34,7 @@ export default function FnoDashboard() {
     text: string;
   } | null>(null);
   const [openFnoTrades, setOpenFnoTrades] = useState<any[]>([]);
+  const [riskCircuit, setRiskCircuit] = useState<any>(null);
   const [kronosPrediction, setKronosPrediction] = useState<any>(null);
   const [isPredicting, setIsPredicting] = useState(false);
   const [predictionDays, setPredictionDays] = useState(5);
@@ -53,7 +54,10 @@ export default function FnoDashboard() {
 
   const loadOpenFnoTrades = async () => {
     try {
-      const res = await tradesApi.getOpenTrades();
+      const [res, rcRes] = await Promise.all([
+        tradesApi.getOpenTrades(),
+        fnoApi.getRiskCircuit().catch(() => null),
+      ]);
       const list = (res.data || []).filter(
         (t: any) =>
           (t.symbol || "").endsWith("CE") ||
@@ -61,6 +65,7 @@ export default function FnoDashboard() {
           (t.sector || "").startsWith("F&O")
       );
       setOpenFnoTrades(list);
+      if (rcRes?.data) setRiskCircuit(rcRes.data);
     } catch {
       // ignore trade list errors
     }
@@ -357,7 +362,38 @@ export default function FnoDashboard() {
                         <ShieldCheck size={13} /> THETA SHIELD ACTIVE ({data.dte?.toFixed(1)}d Left)
                       </span>
                     )}
+                    {brain.vix_regime && (
+                      <span
+                        title={brain.vix_advisory || ""}
+                        className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold border ${
+                          brain.vix_regime === "HIGH_VIX_PANIC_GUARD"
+                            ? "bg-rose-500/25 border-rose-400/40 text-rose-200"
+                            : brain.vix_regime === "ELEVATED_VIX_CAUTION"
+                            ? "bg-amber-500/25 border-amber-400/40 text-amber-200"
+                            : "bg-cyan-500/20 border-cyan-400/30 text-cyan-200"
+                        }`}
+                      >
+                        VIX {brain.india_vix ?? data?.india_vix ?? "—"} &bull; {String(brain.vix_regime).replace(/_/g, " ")} (Max {brain.max_lots_allowed ?? 1}L)
+                      </span>
+                    )}
+                    {riskCircuit && (
+                      <span
+                        title={riskCircuit.reason || ""}
+                        className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold border ${
+                          riskCircuit.circuit_tripped
+                            ? "bg-red-600/30 border-red-400 text-red-200"
+                            : "bg-emerald-500/20 border-emerald-400/30 text-emerald-200"
+                        }`}
+                      >
+                        <ShieldCheck size={13} /> {riskCircuit.circuit_tripped ? "CIRCUIT LOCKED" : "RISK GUARD OK"} &bull; SL {riskCircuit.today_sl_hits}/{riskCircuit.max_daily_sl_hits} &bull; Cap {riskCircuit.max_drawdown_limit_pct}%
+                      </span>
+                    )}
                   </div>
+                  {brain.vix_advisory && (
+                    <div className="text-[11px] text-cyan-200/90 font-medium">
+                      {brain.vix_advisory}
+                    </div>
+                  )}
 
                   <div className="flex flex-wrap items-baseline gap-4 pt-1">
                     <div>

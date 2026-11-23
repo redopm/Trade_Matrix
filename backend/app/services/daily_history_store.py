@@ -11,9 +11,12 @@ Architecture:
 - Auto EOD Sync: Runs daily Mon-Fri at 15:38 IST and auto-resumes incomplete syncs on startup.
 """
 import asyncio
+import json
+import shutil
 import sqlite3
 import threading
 import time
+import urllib.request
 from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -873,3 +876,169 @@ class DailyHistoryStore:
 
         await asyncio.to_thread(_backfill_worker)
         return {"status": "COMPLETED", **cls.get_store_status()}
+
+    @classmethod
+    def validate_against_fyers_master(cls) -> Dict[str, Any]:
+        """Validate all 504 tracked symbols against Fyers official NSE_CM.csv symbol master."""
+        url = "https://public.fyers.in/sym_details/NSE_CM.csv"
+        text = urllib.request.urlopen(url, timeout=15).read().decode("utf-8", errors="ignore")
+        fyers_bases = set()
+        for line in text.splitlines():
+            parts = line.split(",")
+            if len(parts) > 9:
+                sym = parts[9].strip()
+                if sym.startswith("NSE:") and (sym.endswith("-EQ") or sym.endswith("-BE")):
+                    base = sym.replace("NSE:", "").split("-")[0].strip()
+                    if base:
+                        fyers_bases.add(base)
+
+        tracked = cls.get_all_tracked_fyers_symbols()
+        direct_count = 0
+        alias_count = 0
+        unmatched: List[str] = []
+
+        for fsym in tracked:
+            if fsym in CORE_INDEX_SYMBOLS:
+                direct_count += 1
+                continue
+            raw_base = (
+                fsym.replace("NSE:", "")
+                .replace("BSE:", "")
+                .replace("-EQ", "")
+                .replace("-BE", "")
+                .strip()
+            )
+            if raw_base in fyers_bases:
+                direct_count += 1
+            elif any(cand in fyers_bases for cand in cls._candidate_alias_bases(fsym)):
+                alias_count += 1
+            else:
+                unmatched.append(fsym)
+
+        return {
+            "status": "VALIDATED" if len(unmatched) == 0 else "PARTIAL",
+            "total_tracked_symbols": len(tracked),
+            "fyers_master_tickers_loaded": len(fyers_bases),
+            "direct_matches": direct_count,
+            "alias_resolved_matches": alias_count,
+            "unmatched_count": len(unmatched),
+            "unmatched_symbols": unmatched,
+            "validated_at": datetime.now(IST).isoformat(),
+        }
+
+    @classmethod
+    def run_enterprise_watchdog(cls, auto_heal: bool = True) -> Dict[str, Any]:
+        """Run enterprise diagnostics: Broker TOTP, Data Store self-healing, Disk/RAM, and AI stats."""
+        from app.services.fyers_data_client import FyersDataClient
+
+        fyers = FyersDataClient()
+        try:
+            broker_connected = bool(fyers.connect())
+        except Exception as e:
+            logger.warning(f"[Watchdog] Fyers connect check failed: {e}")
+            broker_connected = False
+        broker_user = fyers.user_name if broker_connected and fyers.user_name else "DISCONNECTED"
+
+        health = cls.get_health_report()
+        healed_symbols: List[str] = []
+        if (
+            auto_heal
+            and health.get("missing_count", 0) > 0
+            and not cls._sync_status.get("is_running")
+            and broker_connected
+        ):
+            today_dt = datetime.now(IST).date()
+            start_dt = today_dt - timedelta(days=FULL_SEED_DAYS)
+            for sym in (health.get("missing_symbols") or [])[:15]:
+                try:
+                    df = cls.get_or_sync_daily_df(fyers, sym, start_dt, today_dt)
+                    if df is not None and not df.empty:
+                        healed_symbols.append(sym)
+                except Exception as exc:
+                    logger.warning(f"[Watchdog] Self-heal failed for {sym}: {exc}")
+            health = cls.get_health_report()
+
+        usage = shutil.disk_usage(str(DB_DIR))
+        disk_total_gb = round(usage.total / (1024 ** 3), 2)
+        disk_free_gb = round(usage.free / (1024 ** 3), 2)
+        disk_used_pct = round((usage.used / max(usage.total, 1)) * 100.0, 1)
+
+        ram_total_mb = 0.0
+        ram_available_mb = 0.0
+        swap_total_mb = 0.0
+        swap_free_mb = 0.0
+        meminfo_path = Path("/proc/meminfo")
+        if meminfo_path.exists():
+            try:
+                mem_kv: Dict[str, int] = {}
+                for line in meminfo_path.read_text(encoding="utf-8", errors="ignore").splitlines():
+                    if ":" in line:
+                        k, rest = line.split(":", 1)
+                        val_kb = rest.strip().split()[0]
+                        if val_kb.isdigit():
+                            mem_kv[k.strip()] = int(val_kb)
+                ram_total_mb = round(mem_kv.get("MemTotal", 0) / 1024.0, 1)
+                ram_available_mb = round(mem_kv.get("MemAvailable", 0) / 1024.0, 1)
+                swap_total_mb = round(mem_kv.get("SwapTotal", 0) / 1024.0, 1)
+                swap_free_mb = round(mem_kv.get("SwapFree", 0) / 1024.0, 1)
+            except Exception:
+                pass
+
+        pred_stats: Dict[str, Any] = {}
+        try:
+            from app.services.prediction_ledger import PredictionLedger
+            pred_stats = PredictionLedger.get_global_prediction_stats()
+        except Exception as e:
+            logger.debug(f"[Watchdog] Prediction stats unavailable: {e}")
+
+        empirical_stats_path = Path(_BACKEND_DIR) / "data" / "pattern_empirical_stats.json"
+        overall_ok = (
+            broker_connected
+            and float(health.get("coverage_pct", 0.0)) >= 99.0
+            and disk_free_gb >= 1.5
+        )
+        overall_status = "ENTERPRISE_HEALTHY" if overall_ok else "ATTENTION_REQUIRED"
+
+        report = {
+            "overall_status": overall_status,
+            "checked_at": datetime.now(IST).isoformat(),
+            "broker": {
+                "connected": broker_connected,
+                "user": broker_user,
+            },
+            "data_store": {
+                "status": health.get("status"),
+                "coverage_pct": health.get("coverage_pct"),
+                "stored_symbols": health.get("stored_symbols"),
+                "target_universe_size": health.get("target_universe_size"),
+                "missing_count": health.get("missing_count"),
+                "deep_10_20y_symbols": health.get("deep_10_20y_symbols"),
+                "deep_coverage_pct": health.get("deep_coverage_pct"),
+                "fresh_eod_symbols": health.get("fresh_eod_symbols"),
+                "db_size_mb": (health.get("store_status") or {}).get("db_size_mb", 0.0),
+                "total_daily_candles": (health.get("store_status") or {}).get("total_daily_candles", 0),
+                "healed_symbols": healed_symbols,
+            },
+            "infrastructure": {
+                "disk_total_gb": disk_total_gb,
+                "disk_free_gb": disk_free_gb,
+                "disk_used_pct": disk_used_pct,
+                "ram_total_mb": ram_total_mb,
+                "ram_available_mb": ram_available_mb,
+                "swap_total_mb": swap_total_mb,
+                "swap_free_mb": swap_free_mb,
+            },
+            "ai_calibration": {
+                "prediction_stats": pred_stats,
+                "empirical_stats_ready": empirical_stats_path.exists(),
+            },
+        }
+
+        try:
+            snap_path = Path(_BACKEND_DIR) / "data" / "system_watchdog_latest.json"
+            snap_path.parent.mkdir(parents=True, exist_ok=True)
+            snap_path.write_text(json.dumps(report, indent=2), encoding="utf-8")
+        except Exception as e:
+            logger.warning(f"[Watchdog] Could not persist watchdog snapshot: {e}")
+
+        return report

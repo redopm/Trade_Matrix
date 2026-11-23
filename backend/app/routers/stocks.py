@@ -5,12 +5,17 @@ GET /api/v1/stocks/{symbol}/chart       → OHLCV chart data
 GET /api/v1/stocks/{symbol}/technicals  → Technical indicators only
 GET /api/v1/stocks/search               → Search stocks by name/symbol
 """
+import asyncio
+import json
+from datetime import datetime
+from pathlib import Path
 from typing import Optional
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import _BACKEND_DIR
 from app.database import get_db
 from app.models.stock import StockUniverse
 from app.services.data_fetcher import DataFetcher
@@ -69,6 +74,36 @@ async def get_data_store_health():
     """Get coverage %, missing symbols, EOD freshness, and 20Y deep history metrics for the local OHLCV store."""
     from app.services.daily_history_store import DailyHistoryStore
     return DailyHistoryStore.get_health_report()
+
+
+@router.get("/data-store/validate-master")
+async def validate_data_store_against_master():
+    """Validate all 504 tracked Nifty 500 + Index symbols against Fyers official NSE_CM.csv master."""
+    from app.services.daily_history_store import DailyHistoryStore
+    return await asyncio.to_thread(DailyHistoryStore.validate_against_fyers_master)
+
+
+@router.get("/system-watchdog")
+async def get_enterprise_system_watchdog():
+    """Return latest Enterprise Watchdog telemetry snapshot (cached 120s, or live read-only check)."""
+    from app.services.daily_history_store import DailyHistoryStore
+
+    snap_path = Path(_BACKEND_DIR) / "data" / "system_watchdog_latest.json"
+    if snap_path.exists():
+        try:
+            age_sec = datetime.now().timestamp() - snap_path.stat().st_mtime
+            if age_sec < 120.0:
+                return json.loads(snap_path.read_text(encoding="utf-8"))
+        except Exception:
+            pass
+    return await asyncio.to_thread(DailyHistoryStore.run_enterprise_watchdog, False)
+
+
+@router.post("/system-watchdog/run")
+async def run_enterprise_system_watchdog():
+    """Actively run Enterprise Watchdog with automated missing-symbol self-healing."""
+    from app.services.daily_history_store import DailyHistoryStore
+    return await asyncio.to_thread(DailyHistoryStore.run_enterprise_watchdog, True)
 
 
 @router.post("/data-store/sync")

@@ -364,6 +364,42 @@ class AladdinOptionBrain:
         else:
             recommended_mode = "DEBIT_SPREAD"
 
+        # ── INDIA VIX REGIME FILTER & POSITION CAP ────────────────────────────
+        india_vix = float(analysis.get("india_vix") or 0.0)
+        vix_val = india_vix if india_vix > 0 else avg_atm_iv
+        if vix_val < 12.5:
+            vix_regime = "LOW_VIX_COMPRESSION"
+            max_lots_allowed = 2
+            vix_advisory = (
+                f"Low VIX ({vix_val:.1f}) compression — Breakout follow-through is slower; "
+                "favor Credit Spreads or high-Delta ITM."
+            )
+            if recommended_mode == "OPTION_BUYING" and conviction_score < 70.0:
+                recommended_mode = "DEBIT_SPREAD"
+        elif vix_val <= 18.0:
+            vix_regime = "NORMAL_VIX_TRENDING"
+            max_lots_allowed = 3
+            vix_advisory = (
+                f"Optimal VIX ({vix_val:.1f}) regime — Balanced option premiums & directional follow-through."
+            )
+        elif vix_val <= 22.0:
+            vix_regime = "ELEVATED_VIX_CAUTION"
+            max_lots_allowed = 1
+            vix_advisory = (
+                f"Elevated VIX ({vix_val:.1f}) — Option premiums carry IV-crush risk; "
+                "capped at 1 lot & spreads preferred."
+            )
+            if recommended_mode == "OPTION_BUYING" and conviction_score < 74.0:
+                recommended_mode = "DEBIT_SPREAD"
+        else:
+            vix_regime = "HIGH_VIX_PANIC_GUARD"
+            max_lots_allowed = 1
+            vix_advisory = (
+                f"High VIX Panic Regime ({vix_val:.1f}) — Strict 1-lot risk cap & "
+                "defined-risk hedged spreads enforced."
+            )
+            recommended_mode = "DEBIT_SPREAD" if directional_bias != "RANGE_BOUND" else "IRON_CONDOR"
+
         # ── BUILD TOP 3 RANKED PICKS ──────────────────────────────────────────
         top_picks: List[Dict[str, Any]] = []
         hedge_sentiment = "BULLISH" if directional_bias == "BULLISH" else ("BEARISH" if directional_bias == "BEARISH" else "SIDEWAYS")
@@ -391,7 +427,7 @@ class AladdinOptionBrain:
                 t2_px = round(ltp + (risk_pts * 2.5), 2)
                 pop = round(min(78.0, max(44.0, (abs(delta_val) * 85.0) + (conviction_score - 55.0) * 0.35)), 1)
                 risk_per_lot = risk_pts * max(lot_size, 1)
-                rec_lots = max(1, min(3, int(5000.0 / max(risk_per_lot, 500.0))))
+                rec_lots = max(1, min(max_lots_allowed, int(5000.0 / max(risk_per_lot, 500.0))))
                 cap_req = round(ltp * max(lot_size, 1) * rec_lots, 2)
                 rr_str = "1 : 1.8"
 
@@ -540,8 +576,8 @@ class AladdinOptionBrain:
 
         # Ensure primary buyer/seller compatible dictionaries are always clean
         win_prob = top_picks[0]["pop_pct"] if top_picks else 55.0
-        if theta_shield_active and top_picks and len(top_picks) > 1 and top_picks[0].get("action") == "BUY":
-            # Promote Spread above naked buying during final expiry decay window
+        if (theta_shield_active or vix_regime == "HIGH_VIX_PANIC_GUARD") and top_picks and len(top_picks) > 1 and top_picks[0].get("action") == "BUY":
+            # Promote Spread above naked buying during final expiry decay window or high-VIX panic
             top_picks[0], top_picks[1] = top_picks[1], top_picks[0]
             top_picks[0]["rank"] = 1
             top_picks[1]["rank"] = 2
@@ -553,6 +589,10 @@ class AladdinOptionBrain:
             "directional_bias": directional_bias,
             "recommended_mode": recommended_mode,
             "theta_shield_active": theta_shield_active,
+            "india_vix": round(vix_val, 2),
+            "vix_regime": vix_regime,
+            "vix_advisory": vix_advisory,
+            "max_lots_allowed": max_lots_allowed,
             "iv_regime": iv_regime,
             "iv_hv_spread": iv_hv_spread,
             "expected_dte_move_pts": expected_dte_move_pts,

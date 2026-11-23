@@ -62,6 +62,7 @@ SYMBOLS = [
 
 LABELS_OUT = "data/advanced_labels.jsonl"
 SUMMARY_OUT = "data/classes_summary.json"
+EMPIRICAL_STATS_PATH = Path(_BACKEND_ROOT) / "data" / "pattern_empirical_stats.json"
 MAX_PER_CLASS = 500     # Balanced cap per pattern class
 PEAK_ORDER = 5          # Sensitivity of peak/trough detection
 
@@ -529,6 +530,167 @@ def main():
     for c in classes:
         print(f"  - {c}")
     print(f"\n[NEXT] Upload '{LABELS_OUT}' to Google Colab and Run All!")
+
+
+def run_empirical_pattern_benchmark(max_symbols: int = 150, years: int = 20) -> dict:
+    """
+    Scan up to `max_symbols` stocks across `years` of local SQLite DailyHistoryStore data,
+    verify post-pattern 5D & 10D candle outcomes, and calibrate empirical win rates.
+    """
+    end_dt = date.today()
+    start_dt = end_dt - timedelta(days=int(years * 365))
+
+    scan_list = []
+    use_store = False
+    try:
+        from app.services.daily_history_store import DailyHistoryStore
+        tracked = DailyHistoryStore.get_all_tracked_fyers_symbols()
+        eq_syms = [s for s in tracked if not s.endswith("-INDEX")][:max_symbols]
+        if eq_syms:
+            scan_list = eq_syms
+            use_store = True
+    except Exception:
+        scan_list = []
+
+    if not scan_list:
+        scan_list = SYMBOLS[:max_symbols]
+
+    pattern_groups = defaultdict(list)
+    symbols_scanned = 0
+    total_patterns = 0
+    total_verified = 0
+    total_dir_verified = 0
+    total_dir_hits = 0
+
+    for item in scan_list:
+        df = None
+        if use_store:
+            try:
+                from app.services.daily_history_store import DailyHistoryStore
+                df = DailyHistoryStore._read_df(item, start_dt, end_dt)
+            except Exception:
+                df = None
+        else:
+            df = _load_symbol_df(item, years=years)
+
+        if df is None or len(df) < 100:
+            continue
+        df = df[["Open", "High", "Low", "Close", "Volume"]].dropna()
+        if len(df) < 100:
+            continue
+
+        symbols_scanned += 1
+        sym_clean = item.replace("NSE:", "").replace("-EQ", "").replace("-BE", "")
+        lbls = detect_candlestick_patterns(df, sym_clean) + detect_macro_patterns(df, sym_clean)
+        total_patterns += len(lbls)
+        for lbl in lbls:
+            pattern_groups[lbl["pattern_name"]].append(lbl)
+            if lbl.get("outcome_verified"):
+                total_verified += 1
+                if lbl.get("is_bullish") is not None:
+                    total_dir_verified += 1
+                    if lbl.get("outcome_hit") is True:
+                        total_dir_hits += 1
+
+    patterns_summary = []
+    for pname, items in pattern_groups.items():
+        verified_items = [x for x in items if x.get("outcome_verified")]
+        dir_vals = [x.get("is_bullish") for x in items if x.get("is_bullish") is not None]
+        is_bullish = bool(dir_vals[0]) if dir_vals and len(set(dir_vals)) == 1 else None
+        if dir_vals and len(set(dir_vals)) > 1:
+            # Mixed class label; infer majority polarity if any
+            bull_c = sum(1 for v in dir_vals if v)
+            bear_c = len(dir_vals) - bull_c
+            is_bullish = True if bull_c > bear_c else (False if bear_c > bull_c else None)
+
+        r5 = [float(x["forward_5d_return_pct"]) for x in verified_items if x.get("forward_5d_return_pct") is not None]
+        r10 = [float(x["forward_10d_return_pct"]) for x in verified_items if x.get("forward_10d_return_pct") is not None]
+        avg_5d = round(float(np.mean(r5)), 2) if r5 else 0.0
+        avg_10d = round(float(np.mean(r10)), 2) if r10 else 0.0
+
+        ver_cnt = int(len(verified_items))
+        if is_bullish is not None and ver_cnt > 0:
+            hits = int(sum(1 for x in verified_items if x.get("outcome_hit") is True))
+            win_rate = round((hits / ver_cnt) * 100.0, 1)
+            expectancy_5d = avg_5d if is_bullish else round(-avg_5d, 2)
+            cal_conf = round(min(0.97, max(0.55, 0.45 + (win_rate / 100.0) * 0.55)), 3)
+            if win_rate >= 58.0:
+                tier = "INSTITUTIONAL_A+"
+            elif win_rate >= 52.0:
+                tier = "PROVEN_A"
+            elif win_rate >= 45.0:
+                tier = "MODERATE_B"
+            else:
+                tier = "CAUTION_C"
+        else:
+            hits = 0
+            win_rate = None
+            expectancy_5d = avg_5d
+            cal_conf = 0.85
+            tier = "NEUTRAL_ND"
+
+        patterns_summary.append(
+            {
+                "pattern_name": pname,
+                "is_bullish": is_bullish,
+                "total_occurrences": int(len(items)),
+                "verified_occurrences": ver_cnt,
+                "hits": hits,
+                "empirical_win_rate_pct": win_rate,
+                "avg_forward_5d_return_pct": avg_5d,
+                "avg_forward_10d_return_pct": avg_10d,
+                "expectancy_5d_pct": expectancy_5d,
+                "calibrated_confidence": cal_conf,
+                "reliability_tier": tier,
+            }
+        )
+
+    patterns_summary.sort(key=lambda x: (x["empirical_win_rate_pct"] or 0.0, x["verified_occurrences"]), reverse=True)
+    top_bullish = [
+        p for p in patterns_summary
+        if p["is_bullish"] is True and p["verified_occurrences"] >= 10
+    ][:5]
+    top_bearish = [
+        p for p in patterns_summary
+        if p["is_bullish"] is False and p["verified_occurrences"] >= 10
+    ][:5]
+
+    overall_hit_rate = round((total_dir_hits / total_dir_verified) * 100.0, 1) if total_dir_verified > 0 else 0.0
+    result = {
+        "symbols_scanned": int(symbols_scanned),
+        "lookback_years": int(years),
+        "total_patterns_detected": int(total_patterns),
+        "total_outcome_verified": int(total_verified),
+        "total_directional_verified": int(total_dir_verified),
+        "overall_directional_hit_rate_pct": overall_hit_rate,
+        "distinct_pattern_classes": int(len(patterns_summary)),
+        "top_bullish_patterns": top_bullish,
+        "top_bearish_patterns": top_bearish,
+        "patterns": patterns_summary,
+        "generated_at": datetime.now().isoformat(),
+    }
+
+    try:
+        EMPIRICAL_STATS_PATH.parent.mkdir(parents=True, exist_ok=True)
+        with open(EMPIRICAL_STATS_PATH, "w", encoding="utf-8") as f:
+            json.dump(result, f, indent=2)
+    except Exception:
+        pass
+
+    return result
+
+
+def get_cached_or_run_empirical_stats(max_symbols: int = 120) -> dict:
+    """Return cached empirical pattern statistics if available, else compute fresh benchmark."""
+    if EMPIRICAL_STATS_PATH.exists():
+        try:
+            with open(EMPIRICAL_STATS_PATH, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            if isinstance(data, dict) and data.get("patterns"):
+                return data
+        except Exception:
+            pass
+    return run_empirical_pattern_benchmark(max_symbols=max_symbols)
 
 
 if __name__ == "__main__":

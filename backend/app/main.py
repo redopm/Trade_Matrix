@@ -57,18 +57,25 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"Startup Fyers auto-connect scheduled: {e}")
 
-    # Auto-resume Nifty 500 + Indices local daily store if incomplete after restart
+    # Auto-resume Nifty 500 + Indices local daily store or 20Y backfill if incomplete after restart
     async def _auto_resume_daily_store():
         await asyncio.sleep(20)
         try:
             from app.services.daily_history_store import DailyHistoryStore
             st = DailyHistoryStore.get_store_status()
-            if st["stored_symbols"] < st["target_universe_size"] and not st["sync_job"].get("is_running"):
-                logger.info(
-                    f"Startup DailyStore auto-resume triggered: "
-                    f"{st['stored_symbols']}/{st['target_universe_size']} symbols cached."
-                )
-                await DailyHistoryStore.sync_full_universe(force_full=False)
+            if not st["sync_job"].get("is_running"):
+                if st["stored_symbols"] < st["target_universe_size"]:
+                    logger.info(
+                        f"Startup DailyStore auto-resume triggered: "
+                        f"{st['stored_symbols']}/{st['target_universe_size']} symbols cached."
+                    )
+                    await DailyHistoryStore.sync_full_universe(force_full=False)
+                elif st.get("deep_10_20y_symbols", 0) < 450:
+                    logger.info(
+                        f"Startup 20Y deep backfill auto-resume triggered: "
+                        f"{st.get('deep_10_20y_symbols', 0)}/504 deep symbols cached."
+                    )
+                    await DailyHistoryStore.backfill_deep_history(years=20)
         except Exception as e:
             logger.warning(f"Startup DailyStore auto-resume check failed: {e}")
 

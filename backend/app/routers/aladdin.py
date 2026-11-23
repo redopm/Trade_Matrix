@@ -230,3 +230,30 @@ async def evaluate_pending_predictions():
     import asyncio
     from app.services.prediction_ledger import PredictionLedger
     return await asyncio.to_thread(PredictionLedger.evaluate_all_pending_predictions)
+
+
+@router.get("/patterns/empirical-stats")
+async def get_empirical_pattern_stats():
+    """Return 20Y outcome-verified empirical win rates across all 28 chart and candlestick patterns."""
+    import asyncio
+    import sys
+    from app.config import _BACKEND_DIR
+    if str(_BACKEND_DIR) not in sys.path:
+        sys.path.insert(0, str(_BACKEND_DIR))
+    from advanced_dataset_generator import get_cached_or_run_empirical_stats
+    return await asyncio.to_thread(get_cached_or_run_empirical_stats, 120)
+
+
+@router.post("/patterns/scan-empirical")
+async def run_empirical_pattern_scan(
+    max_symbols: int = Query(200, ge=20, le=504, description="Number of Nifty 500 stocks to scan from local 20Y store"),
+    years: int = Query(20, ge=2, le=25, description="Lookback years in SQLite daily OHLCV store"),
+):
+    """Run fresh walk-forward outcome-verified empirical pattern benchmark over local 20Y SQLite history."""
+    import asyncio
+    import sys
+    from app.config import _BACKEND_DIR
+    if str(_BACKEND_DIR) not in sys.path:
+        sys.path.insert(0, str(_BACKEND_DIR))
+    from advanced_dataset_generator import run_empirical_pattern_benchmark
+    return await asyncio.to_thread(run_empirical_pattern_benchmark, max_symbols, years)

@@ -18,7 +18,10 @@ import {
   UploadCloud,
   ChevronRight,
   Zap,
-  Server
+  Server,
+  ShieldCheck,
+  Activity,
+  RefreshCw,
 } from "lucide-react";
 
 type Stage = "idle" | "download" | "labeling" | "training" | "done" | "error";
@@ -103,16 +106,23 @@ export default function TrainingPage() {
   const logRef = useRef<HTMLDivElement>(null);
   const [storeStatus, setStoreStatus] = useState<any>(null);
   const [predStats, setPredStats] = useState<any>(null);
+  const [watchdog, setWatchdog] = useState<any>(null);
+  const [empiricalStats, setEmpiricalStats] = useState<any>(null);
+  const [benchmarkRunning, setBenchmarkRunning] = useState(false);
   const [storeActionMsg, setStoreActionMsg] = useState<string | null>(null);
 
   const loadStoreAndPreds = async () => {
     try {
-      const [ds, ps] = await Promise.all([
+      const [ds, ps, wd, ep] = await Promise.all([
         dataStoreApi.getStatus().catch(() => null),
         aladdinApi.getPredictionStats().catch(() => null),
+        dataStoreApi.getWatchdog().catch(() => null),
+        aladdinApi.getPatternEmpiricalStats().catch(() => null),
       ]);
       if (ds?.data) setStoreStatus(ds.data);
       if (ps?.data) setPredStats(ps.data);
+      if (wd?.data) setWatchdog(wd.data);
+      if (ep?.data) setEmpiricalStats(ep.data);
     } catch {}
   };
 
@@ -296,6 +306,46 @@ export default function TrainingPage() {
             >
               <CheckCircle2 size={14} /> Verify Predictions vs Actual Candles
             </button>
+            <button
+              onClick={async () => {
+                setStoreActionMsg(null);
+                try {
+                  const res = await dataStoreApi.runWatchdog();
+                  setWatchdog(res.data);
+                  setStoreActionMsg(
+                    `Watchdog: ${res.data?.overall_status} | Store ${res.data?.data_store?.stored_symbols}/${res.data?.data_store?.target_universe_size} | Disk Free ${res.data?.infrastructure?.disk_free_gb} GB`
+                  );
+                  loadStoreAndPreds();
+                } catch (e: any) {
+                  setStoreActionMsg("Watchdog Error: " + e.message);
+                }
+              }}
+              className="px-3.5 py-2 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-bold flex items-center gap-1.5"
+            >
+              <ShieldCheck size={14} /> Run Watchdog Self-Heal
+            </button>
+            <button
+              onClick={async () => {
+                setBenchmarkRunning(true);
+                setStoreActionMsg(null);
+                try {
+                  const res = await aladdinApi.scanPatternEmpirical(250, 20);
+                  setEmpiricalStats(res.data);
+                  setStoreActionMsg(
+                    `20Y Benchmark: Scanned ${res.data?.symbols_scanned} stocks (${res.data?.total_patterns_detected?.toLocaleString?.("en-IN") || res.data?.total_patterns_detected} patterns, Overall Hit Rate ${res.data?.overall_directional_hit_rate_pct}%)`
+                  );
+                } catch (e: any) {
+                  setStoreActionMsg("Benchmark Error: " + e.message);
+                } finally {
+                  setBenchmarkRunning(false);
+                }
+              }}
+              disabled={benchmarkRunning}
+              className="px-3.5 py-2 rounded-lg bg-violet-600 hover:bg-violet-500 disabled:opacity-50 text-white text-xs font-bold flex items-center gap-1.5"
+            >
+              <RefreshCw size={14} className={benchmarkRunning ? "animate-spin" : ""} />
+              {benchmarkRunning ? "Benchmarking 20Y..." : "Benchmark 20Y Pattern Win Rates"}
+            </button>
           </div>
         </div>
 
@@ -369,6 +419,119 @@ export default function TrainingPage() {
                   }%`,
                 }}
               />
+            </div>
+          </div>
+        )}
+
+        {/* Enterprise Watchdog Health Strip */}
+        {watchdog && (
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 pt-2 border-t border-white/10">
+            <div className="bg-black/25 border border-white/10 rounded-xl px-3.5 py-2.5">
+              <div className="text-[10px] font-bold uppercase text-slate-400 flex items-center gap-1.5">
+                <Activity size={12} className="text-cyan-400" /> System Watchdog
+              </div>
+              <div className={`text-xs font-extrabold mt-1 ${watchdog.overall_status === "ENTERPRISE_HEALTHY" ? "text-emerald-400" : "text-amber-400"}`}>
+                {watchdog.overall_status}
+              </div>
+            </div>
+            <div className="bg-black/25 border border-white/10 rounded-xl px-3.5 py-2.5">
+              <div className="text-[10px] font-bold uppercase text-slate-400">Fyers TOTP Session</div>
+              <div className={`text-xs font-extrabold mt-1 ${watchdog.broker?.connected ? "text-emerald-400" : "text-rose-400"}`}>
+                {watchdog.broker?.connected ? `CONNECTED (${watchdog.broker.user})` : "DISCONNECTED"}
+              </div>
+            </div>
+            <div className="bg-black/25 border border-white/10 rounded-xl px-3.5 py-2.5">
+              <div className="text-[10px] font-bold uppercase text-slate-400">Universe Coverage</div>
+              <div className="text-xs font-extrabold text-cyan-300 mt-1">
+                {watchdog.data_store?.stored_symbols ?? 0} / {watchdog.data_store?.target_universe_size ?? 504} ({watchdog.data_store?.coverage_pct ?? 0}%)
+              </div>
+            </div>
+            <div className="bg-black/25 border border-white/10 rounded-xl px-3.5 py-2.5">
+              <div className="text-[10px] font-bold uppercase text-slate-400">VM Disk &amp; RAM Guard</div>
+              <div className="text-xs font-extrabold text-slate-200 mt-1">
+                {watchdog.infrastructure?.disk_free_gb ?? 0} GB Free | {watchdog.infrastructure?.ram_available_mb ?? 0} MB Avail
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Outcome-Verified 20Y Pattern Empirical Benchmark Table */}
+        {empiricalStats?.patterns?.length > 0 && (
+          <div className="bg-black/25 border border-white/10 rounded-xl p-4 space-y-3">
+            <div className="flex flex-wrap justify-between items-center gap-2">
+              <div className="text-xs font-extrabold uppercase tracking-wider text-violet-300">
+                Outcome-Verified {empiricalStats.lookback_years || 20}Y Pattern Empirical Benchmark
+              </div>
+              <div className="text-[11px] text-slate-300 font-semibold">
+                {empiricalStats.symbols_scanned} Stocks Scanned &bull;{" "}
+                {Number(empiricalStats.total_outcome_verified ?? 0).toLocaleString("en-IN")} Verified Samples &bull;{" "}
+                Overall Directional Hit Rate:{" "}
+                <span className="text-emerald-400 font-bold">{empiricalStats.overall_directional_hit_rate_pct}%</span>
+              </div>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead>
+                  <tr className="border-b border-white/10 text-slate-400 uppercase text-[10px]">
+                    <th className="py-2 pr-3">Pattern</th>
+                    <th className="py-2 pr-3">Polarity</th>
+                    <th className="py-2 pr-3">Verified Samples</th>
+                    <th className="py-2 pr-3">Empirical Win Rate</th>
+                    <th className="py-2 pr-3">Avg 5D Move</th>
+                    <th className="py-2 pr-3">Avg 10D Move</th>
+                    <th className="py-2">Tier</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-white/5">
+                  {empiricalStats.patterns.slice(0, 10).map((pat: any) => (
+                    <tr key={pat.pattern_name} className="hover:bg-white/5">
+                      <td className="py-2 pr-3 font-bold text-white capitalize">
+                        {String(pat.pattern_name).replace(/^cdl_/, "").replace(/_/g, " ")}
+                      </td>
+                      <td className="py-2 pr-3">
+                        <span
+                          className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                            pat.is_bullish === true
+                              ? "bg-emerald-500/20 text-emerald-300"
+                              : pat.is_bullish === false
+                              ? "bg-rose-500/20 text-rose-300"
+                              : "bg-slate-500/20 text-slate-300"
+                          }`}
+                        >
+                          {pat.is_bullish === true ? "BULLISH" : pat.is_bullish === false ? "BEARISH" : "NEUTRAL"}
+                        </span>
+                      </td>
+                      <td className="py-2 pr-3 text-slate-300">
+                        {Number(pat.verified_occurrences ?? 0).toLocaleString("en-IN")}
+                      </td>
+                      <td className="py-2 pr-3 font-bold text-emerald-300">
+                        {pat.empirical_win_rate_pct !== null && pat.empirical_win_rate_pct !== undefined
+                          ? `${pat.empirical_win_rate_pct}%`
+                          : "—"}
+                      </td>
+                      <td className="py-2 pr-3 font-mono text-slate-200">
+                        {pat.avg_forward_5d_return_pct > 0 ? `+${pat.avg_forward_5d_return_pct}%` : `${pat.avg_forward_5d_return_pct}%`}
+                      </td>
+                      <td className="py-2 pr-3 font-mono text-slate-200">
+                        {pat.avg_forward_10d_return_pct > 0 ? `+${pat.avg_forward_10d_return_pct}%` : `${pat.avg_forward_10d_return_pct}%`}
+                      </td>
+                      <td className="py-2">
+                        <span
+                          className={`px-2 py-0.5 rounded text-[10px] font-extrabold ${
+                            String(pat.reliability_tier).includes("INSTITUTIONAL")
+                              ? "bg-amber-400/20 text-amber-300 border border-amber-400/40"
+                              : String(pat.reliability_tier).includes("PROVEN")
+                              ? "bg-emerald-500/20 text-emerald-300"
+                              : "bg-slate-600/30 text-slate-300"
+                          }`}
+                        >
+                          {pat.reliability_tier}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           </div>
         )}

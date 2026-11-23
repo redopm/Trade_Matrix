@@ -50,6 +50,7 @@ class DeployFnoTradeRequest(BaseModel):
     lots: int = 1
     conviction_score: Optional[float] = None
     notes: Optional[str] = None
+    override_circuit_breaker: bool = False
     legs: List[DeployFnoLeg]
 
 
@@ -291,6 +292,7 @@ async def get_option_chain(symbol: str, atm_strike: Optional[int] = None, force_
     analysis["atm_ce_iv"] = atm_ce_iv
     analysis["atm_pe_iv"] = atm_pe_iv
     analysis["iv_skew"] = iv_skew
+    analysis["india_vix"] = india_vix
 
     reversals = ReversalEngine.calculate_fno_reversals(
         quotes=processed,
@@ -422,6 +424,70 @@ async def get_option_chain(symbol: str, atm_strike: Optional[int] = None, force_
     return response_payload
 
 
+async def _evaluate_fno_risk_circuit(db: AsyncSession) -> Dict[str, Any]:
+    """Compute live F&O daily drawdown (-3.5% max) & daily stop-loss streak (3 max) circuit breaker."""
+    from datetime import date as dt_date
+
+    res = await db.execute(select(PaperTrade))
+    all_trades = res.scalars().all()
+    today_str = dt_date.today().strftime("%Y-%m-%d")
+
+    fno_trades = [
+        t for t in all_trades
+        if (t.sector == "F&O_OPTIONS")
+        or (t.experiment_arm == "FNO_ALADDIN")
+        or str(t.symbol or "").endswith(("CE", "PE"))
+    ]
+
+    today_realized_pnl = 0.0
+    today_sl_hits = 0
+    open_fno_unrealized_pnl = 0.0
+    open_fno_count = 0
+
+    for t in fno_trades:
+        if t.status == TradeStatus.OPEN:
+            open_fno_count += 1
+            open_fno_unrealized_pnl += float(t.unrealized_pnl or 0.0)
+        else:
+            t_day = t.exit_date or t.entry_date
+            if t_day == today_str:
+                rpnl = float(t.realized_pnl or 0.0)
+                today_realized_pnl += rpnl
+                if rpnl < 0:
+                    today_sl_hits += 1
+
+    today_net_fno_pnl = round(today_realized_pnl + open_fno_unrealized_pnl, 2)
+    base_capital = float(settings.DEFAULT_CAPITAL or 100000.0)
+    daily_drawdown_pct = round(min(0.0, (today_net_fno_pnl / max(base_capital, 1.0)) * 100.0), 2)
+    max_drawdown_limit_pct = -3.5
+    max_daily_sl_hits = 3
+    circuit_tripped = (daily_drawdown_pct <= max_drawdown_limit_pct) or (today_sl_hits >= max_daily_sl_hits)
+
+    return {
+        "status": "CIRCUIT_LOCKED" if circuit_tripped else "ACTIVE_PROTECTED",
+        "circuit_tripped": circuit_tripped,
+        "today_realized_pnl": round(today_realized_pnl, 2),
+        "open_fno_unrealized_pnl": round(open_fno_unrealized_pnl, 2),
+        "today_net_fno_pnl": today_net_fno_pnl,
+        "daily_drawdown_pct": daily_drawdown_pct,
+        "max_drawdown_limit_pct": max_drawdown_limit_pct,
+        "today_sl_hits": today_sl_hits,
+        "max_daily_sl_hits": max_daily_sl_hits,
+        "open_fno_count": open_fno_count,
+        "reason": (
+            f"Circuit Breaker Tripped: Daily F&O P&L ({daily_drawdown_pct:.2f}%) or SL hits ({today_sl_hits}/3) exceeded safety threshold."
+            if circuit_tripped
+            else f"Risk Circuit Active & Healthy (Daily F&O P&L: ₹{today_net_fno_pnl:,.2f} | SL Hits: {today_sl_hits}/3 | Limit: -3.5%)"
+        ),
+    }
+
+
+@router.get("/risk-circuit")
+async def get_fno_risk_circuit(db: AsyncSession = Depends(get_db)):
+    """Return current F&O portfolio drawdown & stop-loss circuit breaker telemetry."""
+    return await _evaluate_fno_risk_circuit(db)
+
+
 @router.post("/deploy-trade", status_code=201)
 async def deploy_fno_trade(
     request: DeployFnoTradeRequest,
@@ -433,6 +499,10 @@ async def deploy_fno_trade(
     v2.1.2 ('TOOL_TOP10') remains 100% isolated.
     """
     from datetime import date as dt_date
+    circuit = await _evaluate_fno_risk_circuit(db)
+    if circuit["circuit_tripped"] and not request.override_circuit_breaker:
+        raise HTTPException(status_code=400, detail=circuit["reason"])
+
     fo_underlying, _, _ = normalize_underlying(request.underlying)
     if not request.legs:
         raise HTTPException(status_code=400, detail="At least one option leg is required.")
@@ -537,6 +607,7 @@ async def deploy_fno_trade(
         "underlying": fo_underlying,
         "legs_count": len(deployed),
         "total_capital_used": round(total_capital_needed, 2),
+        "risk_circuit": circuit,
         "trades": deployed,
     }
 
@@ -553,6 +624,14 @@ async def run_fno_auto_pilot(
     If conviction >= min_conviction and no open FNO_ALADDIN position exists for
     this underlying, automatically deploys Pick #1 into Paper Trading.
     """
+    circuit = await _evaluate_fno_risk_circuit(db)
+    if circuit["circuit_tripped"]:
+        return {
+            "status": "SKIPPED_CIRCUIT_BREAKER",
+            "reason": circuit["reason"],
+            "risk_circuit": circuit,
+        }
+
     min_conv = req.min_conviction if req else 62.0
     fo_underlying, _, _ = normalize_underlying(symbol)
 
