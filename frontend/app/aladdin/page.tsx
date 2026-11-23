@@ -30,6 +30,17 @@ import {
   X,
 } from "lucide-react";
 import Link from "next/link";
+import {
+  ResponsiveContainer,
+  ComposedChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
+  ReferenceLine,
+} from "recharts";
 
 interface PopularSymbol {
   symbol: string;
@@ -46,6 +57,11 @@ export default function AladdinPage() {
   const [deploying, setDeploying] = useState(false);
   const [deploySuccess, setDeploySuccess] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  // Forecast & closed-loop audit state
+  const [forecastData, setForecastData] = useState<any | null>(null);
+  const [evaluatingPreds, setEvaluatingPreds] = useState(false);
+  const [evalBanner, setEvalBanner] = useState<string | null>(null);
 
   // Backtest modal state
   const [showBacktestModal, setShowBacktestModal] = useState(false);
@@ -92,21 +108,49 @@ export default function AladdinPage() {
     setLoading(true);
     setErrorMsg(null);
     setDeploySuccess(null);
+    setEvalBanner(null);
+    setForecastData(null);
     setQuery(sym);
 
     try {
-      const res = await aladdinApi.diagnose(sym);
+      const [res, fcRes] = await Promise.all([
+        aladdinApi.diagnose(sym),
+        aladdinApi.getForecast(sym).catch(() => null),
+      ]);
       if (res.data.error) {
         setErrorMsg(res.data.error);
         setDiagnosis(null);
       } else {
         setDiagnosis(res.data);
+        if (fcRes?.data && !fcRes.data.error) {
+          setForecastData(fcRes.data);
+        }
       }
     } catch (err: any) {
       setErrorMsg(err.message || "Failed to analyze stock. Please check backend connection.");
       setDiagnosis(null);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleVerifyPredictions = async () => {
+    setEvaluatingPreds(true);
+    setEvalBanner(null);
+    try {
+      const res = await aladdinApi.evaluatePredictions();
+      const d = res.data;
+      setEvalBanner(
+        `Verified ${d.evaluated_now} new pending prediction(s). Global Hit Rate: ${d.direction_hit_rate_pct}% across ${d.verified_count} verified setups (${d.feedback_samples_logged} feedback logs saved).`
+      );
+      if (diagnosis?.symbol) {
+        const fcRes = await aladdinApi.getForecast(diagnosis.symbol).catch(() => null);
+        if (fcRes?.data && !fcRes.data.error) setForecastData(fcRes.data);
+      }
+    } catch (e: any) {
+      setEvalBanner("Verification failed: " + (e.message || "Unknown error"));
+    } finally {
+      setEvaluatingPreds(false);
     }
   };
 
@@ -538,6 +582,206 @@ export default function AladdinPage() {
               )}
             </div>
           </div>
+
+          {/* ── Predictive Price Chart & Actual vs Predicted Candle Audit ── */}
+          {forecastData && !forecastData.error && (
+            <div className="bg-white rounded-3xl border border-slate-200 p-6 sm:p-8 shadow-sm space-y-6">
+              <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 border-b border-slate-100 pb-5">
+                <div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="px-2.5 py-0.5 rounded-full text-[11px] font-black uppercase tracking-wider bg-indigo-50 text-indigo-700 border border-indigo-200">
+                      15-Day AI Trajectory &amp; Closed-Loop Audit
+                    </span>
+                    <span
+                      className={`px-2.5 py-0.5 rounded-full text-[11px] font-black border ${
+                        forecastData.predicted_direction === "BULLISH"
+                          ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                          : forecastData.predicted_direction === "BEARISH"
+                          ? "bg-rose-50 text-rose-700 border-rose-200"
+                          : "bg-slate-100 text-slate-700 border-slate-200"
+                      }`}
+                    >
+                      Bias: {forecastData.predicted_direction}
+                    </span>
+                  </div>
+                  <h3 className="text-xl font-black text-slate-900 mt-1.5">
+                    {forecastData.symbol} Direction Probability &amp; Predicted vs Actual Candles
+                  </h3>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    60D actual candle history + walk-forward 5D predicted checkpoints (orange dots) + 15D forward probability cone.
+                  </p>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-3">
+                  <div className="px-3.5 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs">
+                    <div className="text-slate-400 font-bold uppercase text-[10px]">5D / 15D Est. Price</div>
+                    <div className="font-mono font-black text-slate-900">
+                      ₹{forecastData.expected_5d_price} ({forecastData.expected_5d_return_pct >= 0 ? "+" : ""}
+                      {forecastData.expected_5d_return_pct}%) &bull; ₹{forecastData.expected_15d_price} (
+                      {forecastData.expected_15d_return_pct >= 0 ? "+" : ""}
+                      {forecastData.expected_15d_return_pct}%)
+                    </div>
+                  </div>
+                  <button
+                    onClick={handleVerifyPredictions}
+                    disabled={evaluatingPreds}
+                    className="px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold shadow-sm flex items-center gap-1.5 disabled:opacity-50"
+                  >
+                    <RefreshCw size={14} className={evaluatingPreds ? "animate-spin" : ""} />
+                    {evaluatingPreds ? "Verifying..." : "Verify Actual Candles & Log"}
+                  </button>
+                </div>
+              </div>
+
+              {evalBanner && (
+                <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-semibold">
+                  {evalBanner}
+                </div>
+              )}
+
+              {/* 3-WAY DIRECTION PROBABILITY METER */}
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-center">
+                <div className="md:col-span-3 space-y-2">
+                  <div className="flex justify-between text-xs font-bold">
+                    <span className="text-emerald-700">
+                      Bullish Upside: {forecastData.directional_probabilities?.bullish_pct}%
+                    </span>
+                    <span className="text-slate-600">
+                      Sideways: {forecastData.directional_probabilities?.sideways_pct}%
+                    </span>
+                    <span className="text-rose-600">
+                      Bearish Downside: {forecastData.directional_probabilities?.bearish_pct}%
+                    </span>
+                  </div>
+                  <div className="h-4 w-full rounded-full overflow-hidden flex bg-slate-100 border border-slate-200">
+                    <div
+                      className="bg-emerald-500 h-full transition-all"
+                      style={{ width: `${forecastData.directional_probabilities?.bullish_pct || 0}%` }}
+                    />
+                    <div
+                      className="bg-slate-400 h-full transition-all"
+                      style={{ width: `${forecastData.directional_probabilities?.sideways_pct || 0}%` }}
+                    />
+                    <div
+                      className="bg-rose-500 h-full transition-all"
+                      style={{ width: `${forecastData.directional_probabilities?.bearish_pct || 0}%` }}
+                    />
+                  </div>
+                </div>
+                <div className="bg-indigo-50/70 border border-indigo-100 rounded-xl p-3 text-center">
+                  <div className="text-[10px] font-bold text-indigo-700 uppercase">Walk-Forward Accuracy</div>
+                  <div className="text-lg font-black text-indigo-950 font-mono">
+                    {forecastData.symbol_accuracy_summary?.direction_hit_rate_pct ?? 0}% Hit
+                    <span className="text-xs font-bold text-indigo-600 ml-1.5">
+                      ({forecastData.symbol_accuracy_summary?.avg_accuracy_pct ?? 0}% Acc)
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* INTERACTIVE RECHARTS TRAJECTORY & CONFIDENCE CONE */}
+              <div className="bg-slate-50/60 border border-slate-200 rounded-2xl p-4">
+                <ResponsiveContainer width="100%" height={330}>
+                  <ComposedChart data={forecastData.chart_series || []} margin={{ top: 10, right: 16, left: -10, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                    <XAxis dataKey="date" tick={{ fontSize: 10 }} minTickGap={22} />
+                    <YAxis tick={{ fontSize: 11 }} domain={["auto", "auto"]} tickFormatter={(v) => `₹${v}`} />
+                    <Tooltip
+                      contentStyle={{ backgroundColor: "#0f172a", borderColor: "#334155", color: "#f8fafc", borderRadius: "10px", fontSize: "12px" }}
+                    />
+                    <Legend wrapperStyle={{ fontSize: "12px" }} />
+                    {forecastData.as_of_date && (
+                      <ReferenceLine
+                        x={forecastData.as_of_date}
+                        stroke="#6366f1"
+                        strokeDasharray="3 3"
+                        label={{ position: "top", value: "TODAY", fill: "#4f46e5", fontSize: 10, fontWeight: "bold" }}
+                      />
+                    )}
+                    <Line type="monotone" dataKey="actual_close" name="Actual Close" stroke="#0f172a" strokeWidth={2.5} dot={false} />
+                    <Line type="monotone" dataKey="ema_20" name="EMA 20" stroke="#3b82f6" strokeWidth={1.3} dot={false} />
+                    <Line type="monotone" dataKey="past_predicted_close" name="Past 5D Prediction" stroke="#f59e0b" strokeWidth={0} dot={{ r: 5, fill: "#f59e0b", stroke: "#78350f", strokeWidth: 1 }} />
+                    <Line type="monotone" dataKey="expected_close" name="15D Forecast" stroke="#6366f1" strokeWidth={2.5} strokeDasharray="5 5" dot={false} />
+                    <Line type="monotone" dataKey="upper_1sd" name="+1σ Upper Cone" stroke="#10b981" strokeWidth={1.4} strokeDasharray="2 3" dot={false} />
+                    <Line type="monotone" dataKey="lower_1sd" name="-1σ Lower Cone" stroke="#f43f5e" strokeWidth={1.4} strokeDasharray="2 3" dot={false} />
+                  </ComposedChart>
+                </ResponsiveContainer>
+              </div>
+
+              {/* ACTUAL VS PREDICTED CANDLE AUDIT TABLE */}
+              {forecastData.audit_history && forecastData.audit_history.length > 0 && (
+                <div className="border border-slate-200 rounded-2xl overflow-hidden">
+                  <div className="bg-slate-50 px-4 py-2.5 border-b border-slate-200 flex justify-between items-center text-xs font-bold text-slate-700">
+                    <span>Closed-Loop Prediction vs Actual 5-Day Candle Log ({forecastData.symbol})</span>
+                    <span className="text-slate-500 font-medium">
+                      MAE Avg: {forecastData.symbol_accuracy_summary?.avg_mae_pct ?? 0}% | Band Hit:{" "}
+                      {forecastData.symbol_accuracy_summary?.cone_hit_rate_pct ?? 0}%
+                    </span>
+                  </div>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-xs text-left">
+                      <thead className="bg-white text-slate-500 uppercase border-b border-slate-100">
+                        <tr>
+                          <th className="px-4 py-2.5">Pred Date</th>
+                          <th className="px-4 py-2.5">Base ₹</th>
+                          <th className="px-4 py-2.5">Predicted 5D ₹</th>
+                          <th className="px-4 py-2.5">Actual Candle ₹</th>
+                          <th className="px-4 py-2.5">Bias</th>
+                          <th className="px-4 py-2.5">Accuracy</th>
+                          <th className="px-4 py-2.5 text-right">Audit Result</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {forecastData.audit_history.slice(0, 7).map((row: any) => (
+                          <tr key={row.pred_date} className="hover:bg-slate-50">
+                            <td className="px-4 py-2 font-mono font-semibold text-slate-700">{row.pred_date}</td>
+                            <td className="px-4 py-2 font-mono">₹{row.base_price}</td>
+                            <td className="px-4 py-2 font-mono font-bold text-indigo-700">
+                              ₹{row.predicted_price_5d} ({row.predicted_return_5d_pct >= 0 ? "+" : ""}
+                              {row.predicted_return_5d_pct}%)
+                            </td>
+                            <td className="px-4 py-2 font-mono font-bold text-slate-900">
+                              {row.actual_price_5d ? (
+                                <>
+                                  ₹{row.actual_price_5d} (
+                                  <span className={row.actual_return_5d_pct >= 0 ? "text-emerald-600" : "text-rose-600"}>
+                                    {row.actual_return_5d_pct >= 0 ? "+" : ""}
+                                    {row.actual_return_5d_pct}%
+                                  </span>
+                                  )
+                                </>
+                              ) : (
+                                <span className="text-slate-400">Pending (5D)</span>
+                              )}
+                            </td>
+                            <td className="px-4 py-2 font-bold">{row.predicted_direction}</td>
+                            <td className="px-4 py-2 font-mono font-bold">
+                              {row.accuracy_pct !== null && row.accuracy_pct !== undefined ? `${row.accuracy_pct}%` : "—"}
+                            </td>
+                            <td className="px-4 py-2 text-right">
+                              {row.status === "VERIFIED_HIT" ? (
+                                <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-bold">
+                                  HIT {row.band_hit === 1 ? "(In 1σ)" : ""}
+                                </span>
+                              ) : row.status === "VERIFIED_MISS" ? (
+                                <span className="px-2 py-0.5 rounded-full bg-rose-100 text-rose-800 font-bold">
+                                  MISS
+                                </span>
+                              ) : (
+                                <span className="px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 font-bold">
+                                  TRACKING
+                                </span>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* 5 Deep Pillars Detailed Breakdown */}
           <div className="bg-white rounded-3xl border border-slate-200 p-8 shadow-sm">

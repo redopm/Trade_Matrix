@@ -390,6 +390,28 @@ export default function FnoDashboard() {
                           {brain.underlying_technicals?.ema_50}
                         </strong>
                       </span>
+                      {brain.underlying_technicals?.hv_20 !== undefined && (
+                        <>
+                          <span>•</span>
+                          <span>
+                            5Y HV(20):{" "}
+                            <strong className="text-cyan-300">
+                              {brain.underlying_technicals.hv_20}% (Pctl {brain.underlying_technicals.hv_percentile}%)
+                            </strong>
+                          </span>
+                        </>
+                      )}
+                      {brain.expected_dte_move_pts > 0 && brain.expected_1sd_range && (
+                        <>
+                          <span>•</span>
+                          <span>
+                            1σ Expiry Range:{" "}
+                            <strong className="text-amber-300">
+                              {brain.expected_1sd_range[0]} – {brain.expected_1sd_range[1]} (±{brain.expected_dte_move_pts} pts)
+                            </strong>
+                          </span>
+                        </>
+                      )}
                     </div>
                   </div>
                 </div>

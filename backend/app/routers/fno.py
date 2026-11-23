@@ -59,7 +59,7 @@ class AutoTradeRequest(BaseModel):
 
 
 def _compute_rsi_ema_sync(fetcher: OptionsDataFetcher, spot_fyers_sym: str, spot_price: float, day_chg_pct: float) -> Dict[str, Any]:
-    """Compute EMA-20, EMA-50, and Wilder RSI-14 on the F&O underlying."""
+    """Compute EMA-20, EMA-50, Wilder RSI-14, and 5Y Historical Volatility (HV-20 & Percentile) on underlying."""
     now = datetime.now()
     cached = _tech_cache.get(spot_fyers_sym)
     if cached and (time.time() - cached["ts"]) < 120:
@@ -71,11 +71,13 @@ def _compute_rsi_ema_sync(fetcher: OptionsDataFetcher, spot_fyers_sym: str, spot
         "ema_20": round(spot_price, 2),
         "ema_50": round(spot_price, 2),
         "rsi_14": 50.0,
+        "hv_20": 14.0,
+        "hv_percentile": 50.0,
         "day_change_pct": round(day_chg_pct, 2),
         "trend": "NEUTRAL",
     }
     try:
-        r_from = (now - timedelta(days=120)).strftime("%Y-%m-%d")
+        r_from = (now - timedelta(days=365 * 5)).strftime("%Y-%m-%d")
         r_to = now.strftime("%Y-%m-%d")
         df = fetcher.fyers_client.get_historical_data(symbol=spot_fyers_sym, resolution="D", range_from=r_from, range_to=r_to)
         if df is not None and not df.empty and "Close" in df.columns:
@@ -90,6 +92,13 @@ def _compute_rsi_ema_sync(fetcher: OptionsDataFetcher, spot_fyers_sym: str, spot
                 loss = (-delta.clip(upper=0.0)).ewm(com=13, adjust=False).mean()
                 rs = gain.iloc[-1] / loss.iloc[-1] if loss.iloc[-1] > 1e-9 else 10.0
                 rsi_14 = float(100.0 - (100.0 / (1.0 + rs)))
+
+                # 20-Day Annualized Historical Realized Volatility & Multi-Year HV Percentile
+                log_ret = np.log(closes / closes.shift(1)).dropna()
+                rolling_hv = log_ret.rolling(20).std() * np.sqrt(252.0) * 100.0
+                valid_hv = rolling_hv.dropna()
+                hv_20 = float(valid_hv.iloc[-1]) if len(valid_hv) > 0 else 14.0
+                hv_pct = float((valid_hv <= hv_20).mean() * 100.0) if len(valid_hv) >= 20 else 50.0
 
                 if spot_price > ema_20 and ema_20 > ema_50 and rsi_14 >= 54:
                     trend = "STRONG_BULLISH"
@@ -106,6 +115,8 @@ def _compute_rsi_ema_sync(fetcher: OptionsDataFetcher, spot_fyers_sym: str, spot
                     "ema_20": round(ema_20, 2),
                     "ema_50": round(ema_50, 2),
                     "rsi_14": round(rsi_14, 2),
+                    "hv_20": round(hv_20, 2),
+                    "hv_percentile": round(hv_pct, 1),
                     "day_change_pct": round(day_chg_pct, 2),
                     "trend": trend,
                 }

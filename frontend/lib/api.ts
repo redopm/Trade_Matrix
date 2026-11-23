@@ -295,9 +295,21 @@ export const aladdinApi = {
   }) => api.post("/aladdin/deploy", data),
   getBacktestReport: () => api.get("/aladdin/backtest"),
   getStressTestReport: () => api.get("/aladdin/stress-test"),
+  getForecast: (symbol: string) =>
+    api.get(`/aladdin/forecast/${encodeURIComponent(symbol)}`),
+  getPredictionStats: () => api.get("/aladdin/predictions/stats"),
+  evaluatePredictions: () => api.post("/aladdin/predictions/evaluate"),
 };
 // Backward compatibility alias
 export const oracleApi = aladdinApi;
+
+export const dataStoreApi = {
+  getStatus: () => api.get("/stocks/data-store/status"),
+  sync2Y: (forceFull: boolean = false) =>
+    api.post(`/stocks/data-store/sync?force_full=${forceFull}`),
+  backfill20Y: (years: number = 20) =>
+    api.post(`/stocks/data-store/backfill-20y?years=${years}`),
+};
 
 // ── WebSocket ─────────────────────────────────────────────────────────────────
 export const createScreenerWebSocket = (

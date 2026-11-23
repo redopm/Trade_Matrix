@@ -192,3 +192,41 @@ async def get_aladdin_stress_test_report():
     return {
         "error": "Stress test report not found. Run stress_test_and_harden.py first."
     }
+
+
+@router.get("/forecast/{symbol}")
+async def get_aladdin_forecast(symbol: str):
+    """
+    Returns 15-day trajectory forecast, ±1 SD probability cone, 3-way directional odds,
+    and walk-forward Predicted vs Actual Candle accuracy ledger for the symbol.
+    """
+    import asyncio
+    from app.services.prediction_ledger import PredictionLedger
+
+    clean_sym = symbol.strip().upper().replace(".NS", "").replace(".BO", "")
+    if not clean_sym:
+        raise HTTPException(status_code=400, detail="Invalid symbol provided.")
+
+    engine = AladdinBrainEngine()
+    diagnosis = await engine.diagnose_stock(clean_sym)
+    forecast = await asyncio.to_thread(
+        PredictionLedger.generate_forecast_and_audit,
+        clean_sym,
+        None if diagnosis.get("error") else diagnosis,
+    )
+    return forecast
+
+
+@router.get("/predictions/stats")
+async def get_prediction_accuracy_stats():
+    """Returns global Closed-Loop Prediction vs Actual Candle accuracy stats across all evaluated stocks."""
+    from app.services.prediction_ledger import PredictionLedger
+    return PredictionLedger.get_global_prediction_stats()
+
+
+@router.post("/predictions/evaluate")
+async def evaluate_pending_predictions():
+    """Evaluates all PENDING Aladdin predictions against newly closed actual daily candles and updates self-learning feedback."""
+    import asyncio
+    from app.services.prediction_ledger import PredictionLedger
+    return await asyncio.to_thread(PredictionLedger.evaluate_all_pending_predictions)

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { patternsApi } from "@/lib/api";
+import { patternsApi, dataStoreApi, aladdinApi } from "@/lib/api";
 import { 
   Brain, 
   Download, 
@@ -101,6 +101,20 @@ export default function TrainingPage() {
   const [activeTab, setActiveTab] = useState<"pipeline" | "labels" | "colab">("pipeline");
   const wsRef = useRef<WebSocket | null>(null);
   const logRef = useRef<HTMLDivElement>(null);
+  const [storeStatus, setStoreStatus] = useState<any>(null);
+  const [predStats, setPredStats] = useState<any>(null);
+  const [storeActionMsg, setStoreActionMsg] = useState<string | null>(null);
+
+  const loadStoreAndPreds = async () => {
+    try {
+      const [ds, ps] = await Promise.all([
+        dataStoreApi.getStatus().catch(() => null),
+        aladdinApi.getPredictionStats().catch(() => null),
+      ]);
+      if (ds?.data) setStoreStatus(ds.data);
+      if (ps?.data) setPredStats(ps.data);
+    } catch {}
+  };
 
   const loadStatus = async () => {
     try {
@@ -111,7 +125,16 @@ export default function TrainingPage() {
 
   useEffect(() => {
     loadStatus();
+    loadStoreAndPreds();
   }, []);
+
+  useEffect(() => {
+    if (!storeStatus?.sync_job?.is_running) return;
+    const t = setInterval(() => {
+      loadStoreAndPreds();
+    }, 5000);
+    return () => clearInterval(t);
+  }, [storeStatus?.sync_job?.is_running]);
 
   const startTraining = async () => {
     setIsRunning(true);
@@ -210,6 +233,145 @@ export default function TrainingPage() {
             {isRunning ? <><Square size={16} /> Cancel</> : <><Play size={16} /> Start Pipeline</>}
           </button>
         </div>
+      </div>
+
+      {/* 20-Year Local Historical Data Store & Self-Learning Prediction Audit */}
+      <div className="bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 text-white rounded-2xl p-6 border border-indigo-500/30 shadow-xl space-y-5">
+        <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 border-b border-white/10 pb-4">
+          <div>
+            <div className="text-xs font-extrabold uppercase tracking-wider text-indigo-300 flex items-center gap-2">
+              <HardDrive size={15} /> Nifty 500 + Indices 20Y Local Store &amp; Self-Learning Feedback
+            </div>
+            <h2 className="text-xl font-black mt-1">
+              Fyers EOD Sync (15:38 IST) + 20-Year NSE History + Actual Candle Verification
+            </h2>
+          </div>
+          <div className="flex flex-wrap gap-2.5">
+            <button
+              onClick={async () => {
+                setStoreActionMsg(null);
+                try {
+                  const res = await dataStoreApi.sync2Y(false);
+                  setStoreActionMsg(res.data?.message || "2Y Daily Sync triggered");
+                  loadStoreAndPreds();
+                } catch (e: any) {
+                  setStoreActionMsg("Error: " + e.message);
+                }
+              }}
+              disabled={storeStatus?.sync_job?.is_running}
+              className="px-3.5 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-xs font-bold flex items-center gap-1.5"
+            >
+              <Zap size={14} /> Sync Daily Fyers Data
+            </button>
+            <button
+              onClick={async () => {
+                setStoreActionMsg(null);
+                try {
+                  const res = await dataStoreApi.backfill20Y(20);
+                  setStoreActionMsg(res.data?.message || "20Y Backfill started");
+                  loadStoreAndPreds();
+                } catch (e: any) {
+                  setStoreActionMsg("Error: " + e.message);
+                }
+              }}
+              disabled={storeStatus?.sync_job?.is_running}
+              className="px-3.5 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-xs font-bold flex items-center gap-1.5"
+            >
+              <Database size={14} /> Backfill 20Y NSE History
+            </button>
+            <button
+              onClick={async () => {
+                setStoreActionMsg(null);
+                try {
+                  const res = await aladdinApi.evaluatePredictions();
+                  setStoreActionMsg(
+                    `Evaluated ${res.data.evaluated_now} pending predictions — Global Hit Rate: ${res.data.direction_hit_rate_pct}%`
+                  );
+                  loadStoreAndPreds();
+                } catch (e: any) {
+                  setStoreActionMsg("Error: " + e.message);
+                }
+              }}
+              className="px-3.5 py-2 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold flex items-center gap-1.5"
+            >
+              <CheckCircle2 size={14} /> Verify Predictions vs Actual Candles
+            </button>
+          </div>
+        </div>
+
+        {storeActionMsg && (
+          <div className="px-3.5 py-2 rounded-lg bg-white/10 border border-white/20 text-xs font-semibold text-emerald-300">
+            {storeActionMsg}
+          </div>
+        )}
+
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="bg-white/5 border border-white/10 rounded-xl p-4">
+            <div className="text-[11px] font-bold uppercase text-slate-400">Stored Symbols</div>
+            <div className="text-2xl font-black mt-1">
+              {storeStatus?.stored_symbols ?? 0}{" "}
+              <span className="text-sm text-slate-400">/ {storeStatus?.target_universe_size ?? 504}</span>
+            </div>
+            <div className="text-[11px] text-indigo-300 mt-1">
+              20Y Deep: {storeStatus?.deep_10_20y_symbols ?? 0} stocks
+            </div>
+          </div>
+
+          <div className="bg-white/5 border border-white/10 rounded-xl p-4">
+            <div className="text-[11px] font-bold uppercase text-slate-400">Candles &amp; Disk Size</div>
+            <div className="text-2xl font-black mt-1">
+              {Number(storeStatus?.total_daily_candles ?? 0).toLocaleString("en-IN")}
+            </div>
+            <div className="text-[11px] text-emerald-300 mt-1">
+              {storeStatus?.db_size_mb ?? 0} MB ({storeStatus?.min_date || "—"} to {storeStatus?.max_date || "—"})
+            </div>
+          </div>
+
+          <div className="bg-white/5 border border-white/10 rounded-xl p-4">
+            <div className="text-[11px] font-bold uppercase text-slate-400">Prediction Hit Rate</div>
+            <div className="text-2xl font-black text-emerald-400 mt-1">
+              {predStats?.direction_hit_rate_pct ?? 0}%
+            </div>
+            <div className="text-[11px] text-slate-300 mt-1">
+              {predStats?.verified_count ?? 0} verified | {predStats?.pending_count ?? 0} tracking
+            </div>
+          </div>
+
+          <div className="bg-white/5 border border-white/10 rounded-xl p-4">
+            <div className="text-[11px] font-bold uppercase text-slate-400">ML Self-Learning Log</div>
+            <div className="text-2xl font-black text-amber-300 mt-1">
+              {predStats?.avg_accuracy_pct ?? 0}% Acc
+            </div>
+            <div className="text-[11px] text-slate-300 mt-1">
+              {predStats?.feedback_samples_logged ?? 0} verified JSONL samples
+            </div>
+          </div>
+        </div>
+
+        {storeStatus?.sync_job?.is_running && (
+          <div className="bg-black/30 rounded-xl p-3 border border-indigo-400/30">
+            <div className="flex justify-between text-xs font-bold mb-1.5">
+              <span className="text-indigo-200">
+                Running {storeStatus.sync_job.mode}: {storeStatus.sync_job.current_symbol}
+              </span>
+              <span>
+                {storeStatus.sync_job.completed_symbols} / {storeStatus.sync_job.total_symbols}
+              </span>
+            </div>
+            <div className="w-full bg-white/10 h-2 rounded-full overflow-hidden">
+              <div
+                className="bg-emerald-400 h-full transition-all"
+                style={{
+                  width: `${
+                    storeStatus.sync_job.total_symbols > 0
+                      ? Math.round((storeStatus.sync_job.completed_symbols / storeStatus.sync_job.total_symbols) * 100)
+                      : 0
+                  }%`,
+                }}
+              />
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Model Status Cards */}

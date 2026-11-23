@@ -35,6 +35,19 @@ async def _run_daily_ohlcv_sync() -> None:
         logger.error(f"[Scheduler] Daily OHLCV sync error: {e}")
 
 
+async def _run_daily_prediction_audit() -> None:
+    """Background job: Compare past Aladdin predictions vs today's actual candles at 3:42 PM IST."""
+    from app.services.prediction_ledger import PredictionLedger
+    try:
+        res = await asyncio.to_thread(PredictionLedger.evaluate_all_pending_predictions)
+        logger.info(
+            f"[Scheduler] Prediction Audit done: evaluated={res.get('evaluated_now')}, "
+            f"global_hit_rate={res.get('direction_hit_rate_pct')}%"
+        )
+    except Exception as e:
+        logger.warning(f"[Scheduler] Daily prediction audit error: {e}")
+
+
 async def _run_daily_screener() -> None:
     """Background job: Run Alpha Screener at 3:45 PM IST."""
     from app.services.screener import AlphaScreener
@@ -158,6 +171,21 @@ def create_scheduler() -> AsyncIOScheduler:
         ),
         id="daily_ohlcv_eod_sync",
         name="Daily Nifty 500 EOD Data Store Sync (15:38 IST)",
+        replace_existing=True,
+        misfire_grace_time=1800,
+    )
+
+    # Closed-loop Prediction vs Actual Candle verification at 3:42 PM IST (Mon-Fri)
+    _scheduler.add_job(
+        _run_daily_prediction_audit,
+        CronTrigger(
+            day_of_week="mon-fri",
+            hour=15,
+            minute=42,
+            timezone=IST,
+        ),
+        id="daily_prediction_audit",
+        name="Daily Aladdin Prediction Accuracy Audit (15:42 IST)",
         replace_existing=True,
         misfire_grace_time=1800,
     )

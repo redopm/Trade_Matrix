@@ -1,3 +1,4 @@
+import math
 from typing import List, Dict, Any, Optional
 from app.utils.logger import get_logger
 from app.services.hedge_finder import HedgeFinder
@@ -187,6 +188,8 @@ class AladdinOptionBrain:
         rsi = float(tech.get("rsi_14") or 50.0)
         ema_20 = float(tech.get("ema_20") or spot_price)
         ema_50 = float(tech.get("ema_50") or spot_price)
+        hv_20 = float(tech.get("hv_20") or 14.0)
+        hv_percentile = float(tech.get("hv_percentile") or 50.0)
         day_chg_pct = float(tech.get("day_change_pct") or 0.0)
         tech_trend = str(tech.get("trend") or "NEUTRAL")
 
@@ -301,20 +304,25 @@ class AladdinOptionBrain:
             p3_score = 14.0
             p3_status = f"Balanced Greeks Window (DTE {dte_days:.1f}d)"
 
-        # ── 4. PILLAR 4: VOLATILITY & IV SKEW REGIME (Max 15) ──────────────────
+        # ── 4. PILLAR 4: VOLATILITY, IV SKEW & 5Y HV EDGE REGIME (Max 15) ──────
+        iv_hv_spread = round(avg_atm_iv - hv_20, 2)
+        blended_vol = 0.6 * avg_atm_iv + 0.4 * hv_20
+        expected_dte_move_pts = round(spot_price * (blended_vol / 100.0) * math.sqrt(max(dte_days, 0.5) / 365.0), 1) if spot_price > 0 else 0.0
+        expected_1sd_range = [round(spot_price - expected_dte_move_pts, 1), round(spot_price + expected_dte_move_pts, 1)] if spot_price > 0 else [0.0, 0.0]
+
         iv_regime = "NORMAL"
-        if avg_atm_iv > 19.0:
-            iv_regime = "HIGH_IV"
-            p4_score = 12.5
-            p4_status = f"Elevated IV ({avg_atm_iv:.1f}%) — Sellers & Credit Spreads Edge"
-        elif avg_atm_iv < 11.5:
-            iv_regime = "LOW_IV"
-            p4_score = 14.0 if directional_bias != "RANGE_BOUND" else 10.5
-            p4_status = f"Cheap IV ({avg_atm_iv:.1f}%) — High Buyer Expansion Edge"
+        if avg_atm_iv > 19.0 or iv_hv_spread >= 3.0:
+            iv_regime = "HIGH_IV_OVERPRICED" if iv_hv_spread >= 3.0 else "HIGH_IV"
+            p4_score = 13.0 if directional_bias == "RANGE_BOUND" else 12.0
+            p4_status = f"Rich IV {avg_atm_iv:.1f}% vs HV {hv_20:.1f}% (+{iv_hv_spread:.1f}%) — Sellers/Spreads Edge"
+        elif avg_atm_iv < 11.5 or iv_hv_spread <= -1.0:
+            iv_regime = "CHEAP_IV_BUYER_EDGE"
+            p4_score = 14.5 if directional_bias != "RANGE_BOUND" else 10.5
+            p4_status = f"Cheap IV {avg_atm_iv:.1f}% vs HV {hv_20:.1f}% (Pctl {hv_percentile:.0f}%) — Buyers Edge"
         else:
             iv_regime = "OPTIMAL_IV"
             p4_score = 14.0
-            p4_status = f"Healthy IV ({avg_atm_iv:.1f}%, Skew {iv_skew:+.1f}%) — All Setups Viable"
+            p4_status = f"Balanced IV {avg_atm_iv:.1f}% | HV20 {hv_20:.1f}% (Pctl {hv_percentile:.0f}%)"
 
         # ── 5. PILLAR 5: REVERSAL WALLS & ZERO GAMMA CLEARANCE (Max 15) ─────────
         zero_gamma_regime = "POSITIVE_GAMMA" if spot_price >= zero_gamma else "NEGATIVE_GAMMA"
@@ -546,6 +554,9 @@ class AladdinOptionBrain:
             "recommended_mode": recommended_mode,
             "theta_shield_active": theta_shield_active,
             "iv_regime": iv_regime,
+            "iv_hv_spread": iv_hv_spread,
+            "expected_dte_move_pts": expected_dte_move_pts,
+            "expected_1sd_range": expected_1sd_range,
             "win_probability_pct": win_prob,
             "confluence_agree": confluence_agree,
             "lot_size": lot_size,
@@ -553,6 +564,8 @@ class AladdinOptionBrain:
                 "rsi_14": round(rsi, 2),
                 "ema_20": round(ema_20, 2),
                 "ema_50": round(ema_50, 2),
+                "hv_20": round(hv_20, 2),
+                "hv_percentile": round(hv_percentile, 1),
                 "day_change_pct": round(day_chg_pct, 2),
                 "trend": tech_trend,
                 "zero_gamma_regime": zero_gamma_regime,
