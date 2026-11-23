@@ -457,15 +457,25 @@ class DailyHistoryStore:
                     if not force_full and cls._is_fresh(meta, start_dt, target_eod, now_ist):
                         cls._sync_status["cached_skipped"] += 1
                     else:
+                        is_cold = (meta is None) or force_full or ((meta[2] or 0) < 100)
                         df = cls.get_or_sync_daily_df(
                             fyers, fsym, start_dt, today_dt, force_refresh=force_full
                         )
                         if df is not None and not df.empty:
                             cls._sync_status["updated_symbols"] += 1
                         else:
-                            cls._sync_status["failed_symbols"] += 1
-                        # Safe pace (~2.5 symbols/sec max) to stay well below Fyers 5 req/sec burst limit
-                        time.sleep(0.42)
+                            # Brief 15s cooldown in case Fyers 50 req/min limit was approached, then retry once
+                            time.sleep(15.0)
+                            df_retry = cls.get_or_sync_daily_df(
+                                fyers, fsym, start_dt, today_dt, force_refresh=force_full
+                            )
+                            if df_retry is not None and not df_retry.empty:
+                                cls._sync_status["updated_symbols"] += 1
+                            else:
+                                cls._sync_status["failed_symbols"] += 1
+                        # Fyers Standard plan cap is 50 req/min (~1.2s/req):
+                        # 2-year download uses 2 chunks (~2.8s); incremental delta uses 1 chunk (~1.4s).
+                        time.sleep(2.8 if is_cold else 1.4)
                 except Exception as exc:
                     cls._sync_status["failed_symbols"] += 1
                     cls._sync_status["last_error"] = f"{fsym}: {exc}"
