@@ -66,15 +66,18 @@ class OptionsDataFetcher:
 
         logger.info("Downloading Fyers NSE F&O Symbol Master...")
         try:
-            loop = asyncio.get_running_loop()
-            # Wrap in a lambda to pass the timeout argument
-            resp = await loop.run_in_executor(None, lambda: requests.get(FYERS_SYM_URL, timeout=15))
-            if resp.status_code == 200:
-                _cached_sym_df = pd.read_csv(io.StringIO(resp.text), header=None, low_memory=False)
+            def _download_and_parse():
+                resp = requests.get(FYERS_SYM_URL, timeout=15)
+                if resp.status_code == 200:
+                    return pd.read_csv(io.StringIO(resp.text), header=None, low_memory=False)
+                logger.error(f"Failed to fetch Fyers symbols: {resp.status_code}")
+                return None
+
+            parsed_df = await asyncio.to_thread(_download_and_parse)
+            if parsed_df is not None:
+                _cached_sym_df = parsed_df
                 _last_sym_fetch = now
                 logger.info(f"Loaded {len(_cached_sym_df)} F&O symbols.")
-            else:
-                logger.error(f"Failed to fetch Fyers symbols: {resp.status_code}")
         except Exception as e:
             logger.error(f"Error fetching symbol master: {e}")
 

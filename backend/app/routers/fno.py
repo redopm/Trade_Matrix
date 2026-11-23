@@ -115,6 +115,19 @@ def _compute_rsi_ema_sync(fetcher: OptionsDataFetcher, spot_fyers_sym: str, spot
     return result
 
 
+async def _fetch_optionchain_with_retry(fetcher: OptionsDataFetcher, spot_fyers_sym: str) -> dict:
+    """Call Fyers optionchain v3 with automatic backoff retry on 5 req/sec / 429 burst limits."""
+    for attempt in range(3):
+        oc_raw = await asyncio.to_thread(fetcher.fyers_client.fetch_option_chain, spot_fyers_sym, 18, "")
+        if oc_raw and oc_raw.get("s") == "error":
+            msg = str(oc_raw.get("message") or "").lower()
+            if (oc_raw.get("code") == 429 or "limit" in msg) and attempt < 2:
+                await asyncio.sleep(1.2 * (attempt + 1))
+                continue
+        return oc_raw or {}
+    return {}
+
+
 @router.get("/chain/{symbol}")
 async def get_option_chain(symbol: str, atm_strike: Optional[int] = None, force_refresh: bool = False):
     fetcher = OptionsDataFetcher()
@@ -127,7 +140,7 @@ async def get_option_chain(symbol: str, atm_strike: Optional[int] = None, force_
 
     # Fetch native Fyers v3 Option Chain (Spot + Strikes + LTP + OI + OI Change + Volume + VIX in 1 call!)
     # Run symbol master CSV load (for exact NSE lot size) in parallel.
-    oc_task = asyncio.to_thread(fetcher.fyers_client.fetch_option_chain, spot_fyers_sym, 18, "")
+    oc_task = _fetch_optionchain_with_retry(fetcher, spot_fyers_sym)
     df_task = fetcher.get_nearest_expiry_chain_df(fo_underlying)
     oc_raw, df = await asyncio.gather(oc_task, df_task)
 
@@ -592,14 +605,13 @@ async def get_institutional_flow():
     option chains (Put vs Call writing flow, OI dominance, IV Skew, Max Pain, and Money Flow Bias).
     """
     global _inst_flow_cache
-    if _inst_flow_cache["data"] and (time.time() - _inst_flow_cache["ts"]) < 90:
+    if _inst_flow_cache["data"] and (time.time() - _inst_flow_cache["ts"]) < 120:
         return _inst_flow_cache["data"]
 
-    nifty_res, bank_res = await asyncio.gather(
-        get_option_chain("NIFTY"),
-        get_option_chain("BANKNIFTY"),
-        return_exceptions=True,
-    )
+    # Sequential with brief spacing to respect Fyers 5 req/sec burst limit
+    nifty_res = await get_option_chain("NIFTY")
+    await asyncio.sleep(0.4)
+    bank_res = await get_option_chain("BANKNIFTY")
 
     indices_summary = []
     total_put_oi = 0
