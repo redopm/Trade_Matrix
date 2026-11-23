@@ -307,23 +307,10 @@ class PaperTradingEngine:
         if not is_fno and trade.entry_price > 100 and current_price < (trade.entry_price * 0.40):
             logger.error(
                 f"DATA ANOMALY BLOCKED for {symbol}: current_price ₹{current_price} is >60% below "
-                f"entry ₹{trade.entry_price}. Tagging trade DATA_SUSPECT and alerting admin."
+                f"entry ₹{trade.entry_price}. Tagging trade DATA_SUSPECT."
             )
             if "DATA_SUSPECT" not in (trade.notes or ""):
                 trade.notes = f"{trade.notes or ''} | [DATA_SUSPECT: tick ₹{current_price} rejected (>60% drop)]".strip(" |")
-            try:
-                from app.services.alert_manager import AlertManager
-                alert_mgr = AlertManager()
-                await alert_mgr.send_message(
-                    f"⚠️ **[TradeMatrix ALERT] DATA_SUSPECT Detected**\n\n"
-                    f"• Symbol: `{symbol}`\n"
-                    f"• Entry: ₹{trade.entry_price:,.2f}\n"
-                    f"• Rejected Tick: ₹{current_price:,.2f}\n"
-                    f"• Drop: {((current_price / trade.entry_price) - 1) * 100:.1f}%\n"
-                    f"• Reason: Circuit-breaker violation (>40% drop). False SL prevented."
-                )
-            except Exception as e_alert:
-                logger.warning(f"Could not dispatch DATA_SUSPECT alert to Telegram: {e_alert}")
             return
 
         # Use full intraday Open/High/Low only for trades entered prior to today
@@ -364,54 +351,92 @@ class PaperTradingEngine:
             pass
 
         # ── Dynamic Trailing Stop Loss Logic ──────────────────────────────────
-        # Equities: +3.5% -> Breakeven, +6.0% -> Lock 50% peak gain.
+        # Positional Equities: +12.0% -> Breakeven, +18.0% -> Wide Chandelier 2.8x ATR / 55% peak gain lock.
         # F&O Options: +15.0% -> Breakeven, +30.0% -> Lock 50% peak gain (higher gamma volatility).
-        be_trigger = 15.0 if is_fno else 3.5
-        trail_trigger = 30.0 if is_fno else 6.0
+        be_trigger = 15.0 if is_fno else 12.0
+        trail_trigger = 30.0 if is_fno else 18.0
         has_sl = bool(trade.stop_loss and trade.stop_loss > 0)
 
         if has_sl and trade.direction == "LONG":
-            if pnl_pct >= be_trigger and trade.stop_loss < trade.entry_price:
-                old_sl = trade.stop_loss
-                trade.stop_loss = round(trade.entry_price, 2)
-                logger.info(f"TRAILING SL: {symbol} reached +{pnl_pct:.2f}%! Moved SL from ₹{old_sl:.2f} to Breakeven ₹{trade.entry_price:.2f}")
-            elif pnl_pct >= trail_trigger:
+            if pnl_pct >= trail_trigger:
                 peak_price = trade.highest_price or current_price
-                locked_sl = round(trade.entry_price + ((peak_price - trade.entry_price) * 0.5), 2)
+                atr_val = float(trade.atr_at_entry or 0.0)
+                lock_frac = 0.50 if is_fno else 0.55
+                profit_lock = trade.entry_price + ((peak_price - trade.entry_price) * lock_frac)
+                if not is_fno and atr_val > 0:
+                    atr_trail = current_price - (2.8 * atr_val)
+                    locked_sl = round(max(trade.entry_price * 1.005, atr_trail, profit_lock), 2)
+                else:
+                    locked_sl = round(profit_lock, 2)
                 if locked_sl > trade.stop_loss:
                     old_sl = trade.stop_loss
                     trade.stop_loss = locked_sl
                     logger.info(f"TRAILING SL: {symbol} reached +{pnl_pct:.2f}%! Trailed SL from ₹{old_sl:.2f} to ₹{locked_sl:.2f}")
-        elif has_sl and trade.direction == "SHORT":
-            if pnl_pct >= be_trigger and trade.stop_loss > trade.entry_price:
+            elif pnl_pct >= be_trigger and trade.stop_loss < trade.entry_price:
                 old_sl = trade.stop_loss
-                trade.stop_loss = round(trade.entry_price, 2)
-                logger.info(f"TRAILING SL (SHORT): {symbol} reached +{pnl_pct:.2f}%! Moved SL from ₹{old_sl:.2f} to Breakeven ₹{trade.entry_price:.2f}")
-            elif pnl_pct >= trail_trigger:
+                be_price = round(trade.entry_price * (1.0 if is_fno else 1.005), 2)
+                trade.stop_loss = be_price
+                logger.info(f"TRAILING SL: {symbol} reached +{pnl_pct:.2f}%! Moved SL from ₹{old_sl:.2f} to Breakeven ₹{be_price:.2f}")
+        elif has_sl and trade.direction == "SHORT":
+            if pnl_pct >= trail_trigger:
                 locked_sl = round(trade.entry_price - ((trade.entry_price - current_price) * 0.5), 2)
                 if locked_sl < trade.stop_loss:
                     old_sl = trade.stop_loss
                     trade.stop_loss = locked_sl
                     logger.info(f"TRAILING SL (SHORT): {symbol} reached +{pnl_pct:.2f}%! Trailed SL from ₹{old_sl:.2f} to ₹{locked_sl:.2f}")
+            elif pnl_pct >= be_trigger and trade.stop_loss > trade.entry_price:
+                old_sl = trade.stop_loss
+                trade.stop_loss = round(trade.entry_price, 2)
+                logger.info(f"TRAILING SL (SHORT): {symbol} reached +{pnl_pct:.2f}%! Moved SL from ₹{old_sl:.2f} to Breakeven ₹{trade.entry_price:.2f}")
 
         # ── Exit Condition 1: Stop Loss Hit ───────────────────────────────────
-        sl_hit = has_sl and (
-            (trade.direction == "LONG" and day_low <= trade.stop_loss) or
-            (trade.direction == "SHORT" and day_high >= trade.stop_loss)
+        # Positional Equities use EOD-confirmed SL (>= 15:15 IST) to avoid noisy morning wicks,
+        # paired with an immediate -15.0% catastrophic intraday crash guard.
+        import pytz
+        now_ist = datetime.now(pytz.timezone("Asia/Kolkata"))
+        is_closing_or_post = (
+            now_ist.weekday() >= 5
+            or now_ist.hour > 15
+            or (now_ist.hour == 15 and now_ist.minute >= 15)
+            or now_ist.hour < 9
         )
+        catastrophic_sl = (not is_fno) and (
+            (trade.direction == "LONG" and current_price <= trade.entry_price * 0.850)
+            or (trade.direction == "SHORT" and current_price >= trade.entry_price * 1.150)
+        )
+        if is_fno:
+            sl_hit = has_sl and (
+                (trade.direction == "LONG" and day_low <= trade.stop_loss)
+                or (trade.direction == "SHORT" and day_high >= trade.stop_loss)
+            )
+        else:
+            eod_sl_hit = has_sl and is_closing_or_post and (
+                (trade.direction == "LONG" and current_price <= trade.stop_loss)
+                or (trade.direction == "SHORT" and current_price >= trade.stop_loss)
+            )
+            sl_hit = catastrophic_sl or eod_sl_hit
+
         if sl_hit:
-            if is_prior_day_trade and (
+            if catastrophic_sl and (not has_sl or (trade.direction == "LONG" and current_price < trade.stop_loss) or (trade.direction == "SHORT" and current_price > trade.stop_loss)):
+                fill_price = round(current_price, 2)
+                sl_reason = "Stop loss hit (Catastrophic Guard -15.0%)"
+            elif not is_fno:
+                fill_price = round(current_price, 2)
+                sl_reason = "Stop loss hit (EOD Confirmed)"
+            elif is_prior_day_trade and (
                 (trade.direction == "LONG" and day_open < trade.stop_loss)
                 or (trade.direction == "SHORT" and day_open > trade.stop_loss)
             ):
                 fill_price = round(day_open, 2)
+                sl_reason = "Stop loss hit"
             else:
                 fill_price = trade.stop_loss
+                sl_reason = "Stop loss hit"
             await self._close_trade(
-                db, trade, fill_price, TradeStatus.CLOSED_SL, "Stop loss hit"
+                db, trade, fill_price, TradeStatus.CLOSED_SL, sl_reason
             )
             summary["sl_hits"] += 1
-            logger.info(f"SL HIT: {symbol} filled @ ₹{fill_price:.2f} (intraday low/high checked, tick: ₹{current_price:.2f})")
+            logger.info(f"SL HIT: {symbol} filled @ ₹{fill_price:.2f} ({sl_reason}, tick: ₹{current_price:.2f})")
             return
 
         # ── Exit Condition 2: Target Price Hit ────────────────────────────────

@@ -485,11 +485,26 @@ class FundamentalAnalyzer:
         return any(s.lower() in sector.lower() for s in CAPITAL_INTENSIVE_SECTORS)
 
     @staticmethod
-    def _empty_result(symbol: str) -> dict[str, Any]:
+    def _infer_nse_sector(symbol: str) -> str:
+        """Infer NSE sector from SECTOR_UNIVERSE when yfinance info times out or omits metadata."""
+        try:
+            from app.services.data_fetcher import SECTOR_UNIVERSE
+            clean = symbol.upper().replace(".NS", "").replace(".BO", "").replace("NSE:", "").replace("-EQ", "").strip()
+            for sec, syms in SECTOR_UNIVERSE.items():
+                if any(s.replace(".NS", "").upper() == clean for s in syms):
+                    return sec
+        except Exception:
+            pass
+        return ""
+
+    @classmethod
+    def _empty_result(cls, symbol: str) -> dict[str, Any]:
+        sec = cls._infer_nse_sector(symbol)
         return {
             "symbol": symbol,
             "company_name": symbol,
-            "sector": None,
+            "sector": sec or None,
+            "is_banking": cls._is_banking(sec) if sec else False,
             "fundamentals_passed": False,
             "error": "No data available",
         }

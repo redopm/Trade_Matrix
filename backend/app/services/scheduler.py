@@ -104,36 +104,21 @@ async def _run_weekly_self_learning() -> None:
 
 
 async def _run_forward_test_monthly_cohort() -> None:
-    """Background job: Run or catch up Forward Validation monthly cohort freeze (Protocol v2.1.1)."""
+    """Background job: Run or catch up Forward Validation monthly cohort freeze (Protocol v2.1.2)."""
     from app.services.forward_test import ForwardTestEngine
-    from app.services.alert_manager import AlertManager
 
     logger.info(f"[Scheduler] Checking Forward Test monthly cohort status @ {datetime.now(IST).strftime('%H:%M IST')}")
     try:
         async with AsyncSessionLocal() as db:
             res = await ForwardTestEngine.check_and_freeze_monthly_cohort_if_due(db)
             if res:
-                logger.info(f"[Scheduler] Forward Cohort successfully frozen: {res.get('batch_id')}")
-                try:
-                    alert_mgr = AlertManager()
-                    await alert_mgr.send_message(
-                        f"🎯 **[TradeMatrix] Forward Cohort Frozen**\n\n"
-                        f"• Batch: `{res.get('batch_id')}`\n"
-                        f"• Cohort Type: `{res.get('cohort_type')}`\n"
-                        f"• Market Regime: `{res.get('regime')}`\n"
-                        f"• Scored Universe: `{res.get('eligible_universe_count')}` scrips\n"
-                        f"• Capital Deployed: ₹{res.get('total_invested_inr', 0):,.2f}"
-                    )
-                except Exception as alert_err:
-                    logger.warning(f"Could not dispatch success alert to Telegram: {alert_err}")
+                logger.info(
+                    f"[Scheduler] Forward Cohort frozen: {res.get('batch_id')} | "
+                    f"Type={res.get('cohort_type')} | Regime={res.get('regime')} | "
+                    f"Universe={res.get('eligible_universe_count')}"
+                )
     except Exception as e:
-        err_msg = f"🚨 **[TradeMatrix ALERT] Forward Test Freeze Failed**\n\nError: `{e}`"
-        logger.error(f"[Scheduler ALERT] Forward Test monthly freeze check failed: {e}")
-        try:
-            alert_mgr = AlertManager()
-            await alert_mgr.send_message(err_msg)
-        except Exception as alert_err:
-            logger.warning(f"Could not dispatch failure alert to Telegram: {alert_err}")
+        logger.error(f"[Scheduler] Forward Test monthly freeze check failed: {e}")
 
 
 async def _run_fyers_daily_login() -> None:
@@ -151,12 +136,11 @@ async def _run_fyers_daily_login() -> None:
 
 
 async def _run_enterprise_watchdog_job(phase: str = "EOD") -> None:
-    """Enterprise pre-market & EOD health watchdog: self-heals gaps, refreshes 20Y pattern stats, and dispatches Telegram digest."""
+    """Enterprise pre-market & EOD health watchdog: self-heals gaps & refreshes pattern stats in background logs."""
     import asyncio
     import sys
     from app.config import _BACKEND_DIR
     from app.services.daily_history_store import DailyHistoryStore
-    from app.services.alert_manager import AlertManager
 
     logger.info(f"[Watchdog Job] Running {phase} Enterprise Watchdog @ {datetime.now(IST).strftime('%H:%M IST')}")
     try:
@@ -166,7 +150,7 @@ async def _run_enterprise_watchdog_job(phase: str = "EOD") -> None:
                 if str(_BACKEND_DIR) not in sys.path:
                     sys.path.insert(0, str(_BACKEND_DIR))
                 from advanced_dataset_generator import run_empirical_pattern_benchmark
-                await asyncio.to_thread(run_empirical_pattern_benchmark, 250, 20)
+                await asyncio.to_thread(run_empirical_pattern_benchmark, 80, 5)
                 report["ai_calibration"]["empirical_stats_ready"] = True
             except Exception as exc:
                 logger.warning(f"[Watchdog Job] EOD empirical pattern refresh skipped: {exc}")
@@ -174,25 +158,12 @@ async def _run_enterprise_watchdog_job(phase: str = "EOD") -> None:
         ds = report.get("data_store") or {}
         infra = report.get("infrastructure") or {}
         broker = report.get("broker") or {}
-        pred = (report.get("ai_calibration") or {}).get("prediction_stats") or {}
 
         logger.info(
             f"[Watchdog Job] {phase} status={report.get('overall_status')} | "
             f"Broker={broker.get('connected')} | Store={ds.get('stored_symbols')}/{ds.get('target_universe_size')} "
             f"(20Y={ds.get('deep_10_20y_symbols')}) | DiskFree={infra.get('disk_free_gb')}GB"
         )
-
-        alert_mgr = AlertManager()
-        if alert_mgr.enabled or report.get("overall_status") != "ENTERPRISE_HEALTHY":
-            status_emoji = "✅" if report.get("overall_status") == "ENTERPRISE_HEALTHY" else "🚨"
-            msg = (
-                f"{status_emoji} **[TradeMatrix {phase} Watchdog]** `{report.get('overall_status')}`\n\n"
-                f"• Broker TOTP: `{'CONNECTED' if broker.get('connected') else 'DISCONNECTED'}` ({broker.get('user')})\n"
-                f"• Data Store: `{ds.get('stored_symbols')}/{ds.get('target_universe_size')}` ({ds.get('coverage_pct')}%) | 20Y Deep: `{ds.get('deep_10_20y_symbols')}`\n"
-                f"• Prediction Hit Rate: `{pred.get('direction_hit_rate_pct', 0)}%` ({pred.get('verified_count', 0)} verified)\n"
-                f"• Infra: Free Disk `{infra.get('disk_free_gb')} GB` | Avail RAM `{infra.get('ram_available_mb')} MB`"
-            )
-            await alert_mgr.send_message(msg)
     except Exception as e:
         logger.error(f"[Watchdog Job] Failed ({phase}): {e}")
 

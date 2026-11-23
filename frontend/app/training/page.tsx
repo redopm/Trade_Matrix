@@ -329,10 +329,10 @@ export default function TrainingPage() {
                 setBenchmarkRunning(true);
                 setStoreActionMsg(null);
                 try {
-                  const res = await aladdinApi.scanPatternEmpirical(250, 20);
+                  const res = await aladdinApi.scanPatternEmpirical(80, 5);
                   setEmpiricalStats(res.data);
                   setStoreActionMsg(
-                    `20Y Benchmark: Scanned ${res.data?.symbols_scanned} stocks (${res.data?.total_patterns_detected?.toLocaleString?.("en-IN") || res.data?.total_patterns_detected} patterns, Overall Hit Rate ${res.data?.overall_directional_hit_rate_pct}%)`
+                    `Pattern Benchmark: Scanned ${res.data?.symbols_scanned} stocks (${res.data?.total_patterns_detected?.toLocaleString?.("en-IN") || res.data?.total_patterns_detected} patterns, Overall Hit Rate ${res.data?.overall_directional_hit_rate_pct}%)`
                   );
                 } catch (e: any) {
                   setStoreActionMsg("Benchmark Error: " + e.message);
@@ -344,7 +344,7 @@ export default function TrainingPage() {
               className="px-3.5 py-2 rounded-lg bg-violet-600 hover:bg-violet-500 disabled:opacity-50 text-white text-xs font-bold flex items-center gap-1.5"
             >
               <RefreshCw size={14} className={benchmarkRunning ? "animate-spin" : ""} />
-              {benchmarkRunning ? "Benchmarking 20Y..." : "Benchmark 20Y Pattern Win Rates"}
+              {benchmarkRunning ? "Benchmarking..." : "Benchmark 5Y Pattern Win Rates"}
             </button>
           </div>
         </div>

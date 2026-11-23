@@ -34,7 +34,7 @@ logger = get_logger(__name__)
 # Frozen Statutory Equity Delivery Friction Schedule (Discount Broker Standard)
 # STT: 0.20% round-trip | Stamp: 0.015% | Exch+SEBI: 0.006% | GST: 0.001% | DP: 0.063% | Slippage: 0.10%
 FROZEN_DELIVERY_FRICTION_PCT: float = 0.00385  # 0.385%
-SCORING_FORMULA_VERSION: str = "ALADDIN_V2_2_INSTITUTIONAL_UPGRADE"
+SCORING_FORMULA_VERSION: str = "ALADDIN_V3_0_INSTITUTIONAL_PRE_DEC1"
 
 # All files that directly define the stock scoring algorithm (excludes forward_test.py harness)
 SCORING_CRITICAL_CODE_FILES: List[str] = [
@@ -51,6 +51,8 @@ SCORING_WEIGHTS_FILES: List[str] = [
     "backend/models/aladdin_classifier.pkl",
     "backend/models/aladdin_regressor.pkl",
     "backend/models/aladdin_feature_names.json",
+    "backend/models/aladdin_xs_classifier.pkl",
+    "backend/models/aladdin_xs_features.json",
     "backend/models/expert_model_weights.pth",
 ]
 
@@ -177,6 +179,89 @@ class ForwardTestEngine:
         return round(stt + stamp + exchange_turnover + gst + dp_charges + slippage, 2)
 
     @classmethod
+    def _apply_cross_sectional_v3_blend(cls, universe_scores: List[Dict[str, Any]]) -> None:
+        """
+        Applies the empirically validated V3 50/50 Cross-Sectional Rank Blend:
+          - 50% Cross-Sectional Structural Factors (12M-1M Mom, 52W-Low Recovery, 10D Pullback, ATR Balance)
+          - 50% Cross-Sectional Regularized XGBoost Ranker (percentile-ranked Cohort 63D Outperformer Prob)
+          - Soft 15% tiebreaker from 5-Pillar Fundamental/F&O Score + Altman distress guard
+        Updates composite_score in-place before Top-10 selection.
+        """
+        if not universe_scores or len(universe_scores) < 5:
+            return
+
+        try:
+            import joblib
+            import pandas as pd
+            from app.config import _BACKEND_DIR
+
+            raw_map = [
+                ("mom_ex_1m", "pct_mom_ex_1m", 0.0),
+                ("dist_52w_low", "pct_dist_l52", 0.0),
+                ("ret_10d", "pct_r10", 0.0),
+                ("ret_20d", "pct_r20", 0.0),
+                ("atr_pct", "pct_atr_pct", 2.0),
+                ("dist_ema_200", "pct_dist_ema_200", 0.0),
+                ("ema200_slope_20d", "pct_ema200_slope", 0.0),
+                ("rsi", "pct_rsi_14", 50.0),
+                ("pct_from_52w_high", "pct_dist_h52", -10.0),
+            ]
+            pct_df = pd.DataFrame(
+                {
+                    pct_col: pd.Series(
+                        [float(item.get(raw_key) if item.get(raw_key) is not None else default_val) for item in universe_scores],
+                        dtype=float,
+                    ).rank(pct=True)
+                    for raw_key, pct_col, default_val in raw_map
+                }
+            )
+
+            struct_raw = (
+                0.45 * pct_df["pct_mom_ex_1m"]
+                + 0.30 * pct_df["pct_dist_l52"]
+                + 0.15 * (1.0 - pct_df["pct_r10"])
+                + 0.10 * pct_df["pct_atr_pct"]
+            )
+            pct_struct = struct_raw.rank(pct=True).to_numpy(dtype=float) * 100.0
+
+            model_dirs = [
+                Path("backend/models"),
+                Path("models"),
+                Path("/app/models"),
+                Path(_BACKEND_DIR) / "models",
+            ]
+            clf_path = next((d / "aladdin_xs_classifier.pkl" for d in model_dirs if (d / "aladdin_xs_classifier.pkl").exists()), None)
+            feat_path = next((d / "aladdin_xs_features.json" for d in model_dirs if (d / "aladdin_xs_features.json").exists()), None)
+
+            xs_probs = np.zeros(len(universe_scores), dtype=float)
+            if clf_path is not None and feat_path is not None:
+                xs_clf = joblib.load(clf_path)
+                with open(feat_path, "r", encoding="utf-8") as f:
+                    xs_feats = json.load(f)
+                X_xs = pct_df[xs_feats].to_numpy(dtype=np.float32)
+                xs_probs = xs_clf.predict_proba(X_xs)[:, 1]
+                pct_ml = pd.Series(xs_probs).rank(pct=True).to_numpy(dtype=float) * 100.0
+                xs_blend = 0.50 * pct_struct + 0.50 * pct_ml
+            else:
+                logger.warning("ForwardTestEngine: XS classifier weights not found; using pure XS structural rank blend.")
+                xs_blend = pct_struct
+
+            for idx, stock in enumerate(universe_scores):
+                orig_score = float(stock.get("composite_score") or 50.0)
+                blended = (0.85 * float(xs_blend[idx])) + (0.15 * orig_score)
+                altman_z = stock.get("altman_z_score")
+                is_banking = bool(stock.get("is_banking"))
+                if (not is_banking) and (altman_z is not None) and float(altman_z) < 1.8:
+                    blended -= 8.0
+
+                stock["base_composite_score"] = round(orig_score, 1)
+                stock["xs_structural_score"] = round(float(pct_struct[idx]), 1)
+                stock["xs_ml_prob"] = round(float(xs_probs[idx]) * 100.0, 2)
+                stock["composite_score"] = round(max(5.0, min(98.0, blended)), 1)
+        except Exception as exc:
+            logger.warning(f"ForwardTestEngine: Cross-sectional V3 blend fallback to base scores: {exc}")
+
+    @classmethod
     async def freeze_cohort(
         cls,
         db: AsyncSession,
@@ -222,26 +307,44 @@ class ForwardTestEngine:
             try:
                 diag = await brain.diagnose_stock(sym, force_refresh=True, as_of_date=as_of_date)
                 if not diag.get("error") and diag.get("current_price"):
+                    pillars = diag.get("pillars") or {}
+                    p1 = pillars.get("pillar_1_geometry") or {}
+                    p2 = pillars.get("pillar_2_technical") or {}
+                    p3 = pillars.get("pillar_3_fundamental") or {}
                     universe_scores.append({
                         "symbol": sym,
                         "company_name": diag.get("company_name") or sym,
                         "sector": diag.get("sector") or "General",
                         "composite_score": float(diag.get("composite_score") or 50.0),
                         "current_price": float(diag.get("current_price")),
-                        "stop_loss": float(diag.get("stop_loss") or (diag.get("current_price") * 0.95)),
+                        "stop_loss": float(diag.get("stop_loss") or (diag.get("current_price") * 0.855)),
                         "target_price": float(diag.get("target_1") or (diag.get("current_price") * 1.12)),
                         "target_2": float(diag.get("target_2") or (diag.get("current_price") * 1.18)),
                         "atr": float(
                             diag.get("atr_at_entry")
-                            or diag.get("pillars", {}).get("pillar_2_technical", {}).get("atr")
+                            or p2.get("atr")
                             or 0.0
                         ),
+                        "mom_ex_1m": float(p2.get("mom_ex_1m") or 0.0),
+                        "dist_52w_low": float(p2.get("pct_from_52w_low") or 0.0),
+                        "ret_10d": float(p2.get("ret_10d") or 0.0),
+                        "ret_20d": float(p2.get("ret_20d") or 0.0),
+                        "atr_pct": float(p2.get("atr_pct") or 2.0),
+                        "dist_ema_200": float(p2.get("dist_ema_200") or 0.0),
+                        "ema200_slope_20d": float(p2.get("ema200_slope_20d") or 0.0),
+                        "rsi": float(p2.get("rsi") or 50.0),
+                        "pct_from_52w_high": float(p1.get("pct_from_52w_high") or -10.0),
+                        "altman_z_score": p3.get("altman_z_score"),
+                        "is_banking": bool(p3.get("is_banking")),
                     })
             except Exception as e:
                 logger.warning(f"ForwardTestEngine: Failed scoring {sym}: {e}")
 
         if len(universe_scores) < 10:
             raise RuntimeError(f"Insufficient universe scored ({len(universe_scores)} stocks). Market data stream required.")
+
+        # Apply Cross-Sectional V3 Rank Blend across entire cohort before Top-10 cut
+        cls._apply_cross_sectional_v3_blend(universe_scores)
 
         # Sort universe by composite score descending
         universe_scores.sort(key=lambda x: x["composite_score"], reverse=True)
@@ -259,7 +362,7 @@ class ForwardTestEngine:
                 composite_score=stock["composite_score"],
                 is_top10=is_top,
                 entry_price=stock["current_price"],
-                notes=f"Frozen at T=0. Score: {stock['composite_score']:.1f}%"
+                notes=f"Frozen at T=0. XS V3 Score: {stock['composite_score']:.1f}% (Base: {stock.get('base_composite_score', stock['composite_score']):.1f}%)"
             )
             db.add(rec)
             snapshot_records.append(rec)
@@ -347,7 +450,7 @@ class ForwardTestEngine:
                 quantity=qty,
                 invested_amount=invested,
                 stop_loss=stock["stop_loss"],
-                stop_loss_fixed=round(p * 0.95, 2),
+                stop_loss_fixed=round(p * 0.855, 2),
                 target_price=stock["target_price"],
                 atr_at_entry=stock.get("atr") or 0.0,
                 nifty_entry_price=nifty_price,

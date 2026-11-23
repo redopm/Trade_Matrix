@@ -167,14 +167,6 @@ class AlphaScreener:
                                 f"Score={signal.get('composite_score')} | "
                                 f"Pattern: {signal.get('pattern_name')} ({signal.get('pattern_confidence', 0):.0%})"
                             )
-                            
-                            # Phase 3: Send Live Alerts for Confluence Signals
-                            if signal.get("pattern_name") != "no_pattern" and signal.get("pattern_confidence", 0) >= 0.70:
-                                asyncio.create_task(
-                                    self.alert_manager.send_signal_alert(
-                                        signal, chart_path=signal.get("chart_image_path")
-                                    )
-                                )
                         else:
                             self._update_failure_counts(run, signal)
                     else:

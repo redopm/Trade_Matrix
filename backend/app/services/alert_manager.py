@@ -6,17 +6,19 @@ from app.utils.logger import get_logger
 logger = get_logger(__name__)
 
 class AlertManager:
+    AUTOMATED_ALERTS_DISABLED = True
+
     def __init__(self):
-        self.enabled = settings.LIVE_ALERTS_ENABLED
+        self.enabled = False if self.AUTOMATED_ALERTS_DISABLED else settings.LIVE_ALERTS_ENABLED
         self.bot_token = settings.TELEGRAM_BOT_TOKEN
         self.chat_id = settings.TELEGRAM_CHAT_ID
 
     async def send_signal_alert(self, signal: dict, chart_path: str = None) -> bool:
         """
-        Sends a Telegram alert for a high-conviction signal.
+        Sends a Telegram alert for a high-conviction signal (currently silenced by user config).
         """
-        if not self.enabled or not self.bot_token or not self.chat_id:
-            logger.debug("Telegram alerts are disabled or missing config.")
+        if self.AUTOMATED_ALERTS_DISABLED or not self.enabled or not self.bot_token or not self.chat_id:
+            logger.debug("Automated Telegram alerts are disabled.")
             return False
 
         # Format message
@@ -77,10 +79,10 @@ class AlertManager:
 
     async def send_message(self, message: str) -> bool:
         """
-        Sends a general text notification to Telegram (markdown supported).
+        Sends a general text notification to Telegram (silenced when AUTOMATED_ALERTS_DISABLED=True).
         """
-        if not self.enabled or not self.bot_token or not self.chat_id:
-            logger.debug("Telegram alerts are disabled or missing config.")
+        if self.AUTOMATED_ALERTS_DISABLED or not self.enabled or not self.bot_token or not self.chat_id:
+            logger.debug("Automated Telegram notifications are disabled.")
             return False
 
         try:

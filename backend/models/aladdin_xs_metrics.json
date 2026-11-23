@@ -1,0 +1,77 @@
+{
+  "evaluation_date": "2026-11-23T21:37:30.787638",
+  "split": {
+    "train_period": "2008-01-01 to 2023-09-25",
+    "train_rows": 92049,
+    "blind_oos_period": "2024-01-15 to 2026-08-05",
+    "blind_oos_rows": 21134,
+    "blind_oos_cohorts": 43
+  },
+  "in_sample": {
+    "auc": 0.5559,
+    "accuracy": 0.5396
+  },
+  "blind_holdout": {
+    "auc": 0.5325,
+    "accuracy": 0.5272,
+    "accuracy_gap_pct": 1.24,
+    "overfit_passed": true
+  },
+  "cross_sectional_alpha": {
+    "universe_mean_63d_pct": 2.17,
+    "structural_top10_63d_pct": 2.85,
+    "xgboost_top10_63d_pct": 3.58,
+    "blend_50_50_top10_63d_pct": 5.4,
+    "excess_alpha_per_quarter_pct": 3.23,
+    "cohort_beat_rate_pct": 67.4,
+    "oos_xgb_mean_spearman_rho": 0.0671,
+    "oos_blend_mean_spearman_rho": 0.0614
+  },
+  "top_features": [
+    {
+      "rank": 1,
+      "feature": "pct_ema200_slope",
+      "importance_pct": 26.15
+    },
+    {
+      "rank": 2,
+      "feature": "pct_mom_ex_1m",
+      "importance_pct": 17.91
+    },
+    {
+      "rank": 3,
+      "feature": "pct_dist_l52",
+      "importance_pct": 12.39
+    },
+    {
+      "rank": 4,
+      "feature": "pct_dist_h52",
+      "importance_pct": 12.07
+    },
+    {
+      "rank": 5,
+      "feature": "pct_atr_pct",
+      "importance_pct": 7.28
+    },
+    {
+      "rank": 6,
+      "feature": "pct_dist_ema_200",
+      "importance_pct": 6.66
+    },
+    {
+      "rank": 7,
+      "feature": "pct_r20",
+      "importance_pct": 6.08
+    },
+    {
+      "rank": 8,
+      "feature": "pct_rsi_14",
+      "importance_pct": 5.84
+    },
+    {
+      "rank": 9,
+      "feature": "pct_r10",
+      "importance_pct": 5.62
+    }
+  ]
+}

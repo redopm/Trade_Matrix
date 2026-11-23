@@ -155,18 +155,19 @@ async def get_popular_symbols():
 @router.get("/backtest")
 async def get_aladdin_backtest_report():
     """
-    Returns official 5.7-year institutional portfolio backtest scorecard:
-    1-Year CAGR (27.17%), 1-Month CAGR (2.02%), Net Return (+294.85%),
-    Max Drawdown (11.56%), Sharpe Ratio (1.82), Win Rate (49.9%), and Year-by-Year breakdown.
+    Returns official multi-year institutional portfolio backtest scorecard.
     """
     import json
     from pathlib import Path
-    from app.config import BASE_DIR
+    from app.config import BASE_DIR, _BACKEND_DIR
 
-    report_path = Path(BASE_DIR) / "backend" / "models" / "aladdin_backtest_report.json"
-    if report_path.exists():
-        with open(report_path, "r", encoding="utf-8") as f:
-            return json.load(f)
+    for report_path in (
+        Path(_BACKEND_DIR) / "models" / "aladdin_backtest_report.json",
+        Path(BASE_DIR) / "backend" / "models" / "aladdin_backtest_report.json",
+    ):
+        if report_path.exists():
+            with open(report_path, "r", encoding="utf-8") as f:
+                return json.load(f)
     return {
         "error": "Backtest report not found. Run backtest_aladdin_model.py first."
     }
@@ -175,20 +176,19 @@ async def get_aladdin_backtest_report():
 @router.get("/stress-test")
 async def get_aladdin_stress_test_report():
     """
-    Returns deep institutional stress testing and Monte Carlo analysis:
-    - 1,000 Monte Carlo bootstrap simulations (Ruin Risk, Worst 5% luck CAGR, VaR Drawdown)
-    - Slippage & transaction friction tests (0.05% to 0.30%)
-    - Alpha diversification across 50 top Nifty stocks
-    - Consecutive streak and max drawdown recovery statistics
+    Returns deep institutional stress testing and Monte Carlo analysis.
     """
     import json
     from pathlib import Path
-    from app.config import BASE_DIR
+    from app.config import BASE_DIR, _BACKEND_DIR
 
-    report_path = Path(BASE_DIR) / "backend" / "models" / "aladdin_stress_test_report.json"
-    if report_path.exists():
-        with open(report_path, "r", encoding="utf-8") as f:
-            return json.load(f)
+    for report_path in (
+        Path(_BACKEND_DIR) / "models" / "aladdin_stress_test_report.json",
+        Path(BASE_DIR) / "backend" / "models" / "aladdin_stress_test_report.json",
+    ):
+        if report_path.exists():
+            with open(report_path, "r", encoding="utf-8") as f:
+                return json.load(f)
     return {
         "error": "Stress test report not found. Run stress_test_and_harden.py first."
     }
@@ -234,20 +234,20 @@ async def evaluate_pending_predictions():
 
 @router.get("/patterns/empirical-stats")
 async def get_empirical_pattern_stats():
-    """Return 20Y outcome-verified empirical win rates across all 28 chart and candlestick patterns."""
+    """Return 5Y outcome-verified empirical win rates across chart and candlestick patterns."""
     import asyncio
     import sys
     from app.config import _BACKEND_DIR
     if str(_BACKEND_DIR) not in sys.path:
         sys.path.insert(0, str(_BACKEND_DIR))
     from advanced_dataset_generator import get_cached_or_run_empirical_stats
-    return await asyncio.to_thread(get_cached_or_run_empirical_stats, 120)
+    return await asyncio.to_thread(get_cached_or_run_empirical_stats, 80)
 
 
 @router.post("/patterns/scan-empirical")
 async def run_empirical_pattern_scan(
-    max_symbols: int = Query(200, ge=20, le=504, description="Number of Nifty 500 stocks to scan from local 20Y store"),
-    years: int = Query(20, ge=2, le=25, description="Lookback years in SQLite daily OHLCV store"),
+    max_symbols: int = Query(80, ge=20, le=120, description="Number of Nifty stocks to scan safely within memory budget"),
+    years: int = Query(5, ge=2, le=10, description="Lookback years in SQLite daily OHLCV store"),
 ):
     """Run fresh walk-forward outcome-verified empirical pattern benchmark over local 20Y SQLite history."""
     import asyncio

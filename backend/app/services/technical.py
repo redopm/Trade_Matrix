@@ -154,8 +154,13 @@ class TechnicalAnalyzer:
         df["PCT_FROM_52W_LOW"] = (close / close.rolling(252).min() - 1) * 100
 
         df["RET_5D"] = close.pct_change(5) * 100.0
+        df["RET_10D"] = close.pct_change(10) * 100.0
         df["RET_20D"] = close.pct_change(20) * 100.0
         df["RET_60D"] = close.pct_change(60) * 100.0
+        df["RET_120D"] = close.pct_change(120) * 100.0
+        df["RET_250D"] = close.pct_change(250) * 100.0
+        df["MOM_EX_1M"] = df["RET_250D"] - df["RET_20D"]
+        df["EMA200_SLOPE_20D"] = (df["EMA_200"] / df["EMA_200"].shift(20) - 1.0) * 100.0
 
         is_up = (close >= close.shift(1)).astype(float)
         up_vol_20 = (volume * is_up).rolling(20).sum()
@@ -269,8 +274,13 @@ class TechnicalAnalyzer:
             "week_52_high": safe(df["High"].rolling(252).max().iloc[-1]),
             "week_52_low": safe(df["Low"].rolling(252).min().iloc[-1]),
             "ret_5d": safe(latest.get("RET_5D")),
+            "ret_10d": safe(latest.get("RET_10D")),
             "ret_20d": safe(latest.get("RET_20D")),
             "ret_60d": safe(latest.get("RET_60D")),
+            "ret_120d": safe(latest.get("RET_120D")),
+            "ret_250d": safe(latest.get("RET_250D")),
+            "mom_ex_1m": safe(latest.get("MOM_EX_1M")),
+            "ema200_slope_20d": safe(latest.get("EMA200_SLOPE_20D")),
             "up_down_vol_ratio": safe(latest.get("UP_DOWN_VOL_RATIO")),
             "vcp_squeeze_ratio": safe(latest.get("VCP_SQUEEZE_RATIO")),
             "risk_adj_momentum": (

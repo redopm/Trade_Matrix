@@ -17,6 +17,7 @@ CANDLESTICK PATTERNS (9 types):
   Morning Star, Evening Star, Spinning Top
 """
 
+import gc
 import os
 import sys
 import json
@@ -532,7 +533,7 @@ def main():
     print(f"\n[NEXT] Upload '{LABELS_OUT}' to Google Colab and Run All!")
 
 
-def run_empirical_pattern_benchmark(max_symbols: int = 150, years: int = 20) -> dict:
+def run_empirical_pattern_benchmark(max_symbols: int = 80, years: int = 5) -> dict:
     """
     Scan up to `max_symbols` stocks across `years` of local SQLite DailyHistoryStore data,
     verify post-pattern 5D & 10D candle outcomes, and calibrate empirical win rates.
@@ -582,6 +583,7 @@ def run_empirical_pattern_benchmark(max_symbols: int = 150, years: int = 20) -> 
         symbols_scanned += 1
         sym_clean = item.replace("NSE:", "").replace("-EQ", "").replace("-BE", "")
         lbls = detect_candlestick_patterns(df, sym_clean) + detect_macro_patterns(df, sym_clean)
+        del df
         total_patterns += len(lbls)
         for lbl in lbls:
             pattern_groups[lbl["pattern_name"]].append(lbl)
@@ -591,6 +593,8 @@ def run_empirical_pattern_benchmark(max_symbols: int = 150, years: int = 20) -> 
                     total_dir_verified += 1
                     if lbl.get("outcome_hit") is True:
                         total_dir_hits += 1
+        if symbols_scanned % 15 == 0:
+            gc.collect()
 
     patterns_summary = []
     for pname, items in pattern_groups.items():
