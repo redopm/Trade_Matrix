@@ -64,6 +64,13 @@ async def get_data_store_status():
     return DailyHistoryStore.get_store_status()
 
 
+@router.get("/data-store/health")
+async def get_data_store_health():
+    """Get coverage %, missing symbols, EOD freshness, and 20Y deep history metrics for the local OHLCV store."""
+    from app.services.daily_history_store import DailyHistoryStore
+    return DailyHistoryStore.get_health_report()
+
+
 @router.post("/data-store/sync")
 async def trigger_data_store_sync(
     background_tasks: BackgroundTasks,

@@ -42,22 +42,99 @@ CORE_INDEX_SYMBOLS: List[str] = [
 ]
 
 # Handle common NSE ticker renames / Fyers vs Yahoo Finance symbol differences
-_SYMBOL_ALIASES: Dict[str, str] = {
-    "NSE:ZOMATO-EQ": "ETERNAL",
-    "NSE:TATAMOTORS-EQ": "TATAMOTORS",
-    "NSE:MCDOWELL-N-EQ": "UNITDSPR",
-    "NSE:AMBUJACEMENT-EQ": "AMBUJACEM",
-    "NSE:TVSMOTORS-EQ": "TVSMOTOR",
-    "NSE:ADANITRANS-EQ": "ADANIENSOL",
-    "NSE:AMARAJABAT-EQ": "ARE&M",
-    "NSE:GMRINFRA-EQ": "GMRAIRPORT",
-    "NSE:KALPATARPOWER-EQ": "KPIL",
-    "NSE:ADANIWILMAR-EQ": "AWL",
-    "NSE:SUNCLAYLTD-EQ": "SUNDRMFAST",
-    "NSE:WELSPUN-EQ": "WELSPUNLIV",
-    "NSE:BAJAJ-AUTO-EQ": "BAJAJ-AUTO",
-    "NSE:M&M-EQ": "M&M",
-    "NSE:M&MFIN-EQ": "M&MFIN",
+_SYMBOL_ALIASES: Dict[str, Any] = {
+    "NSE:ZOMATO-EQ": ("ETERNAL", "ZOMATO"),
+    "NSE:TATAMOTORS-EQ": ("TATAMOTORS",),
+    "NSE:MCDOWELL-N-EQ": ("UNITDSPR",),
+    "NSE:AMBUJACEMENT-EQ": ("AMBUJACEM",),
+    "NSE:TVSMOTORS-EQ": ("TVSMOTOR",),
+    "NSE:ADANITRANS-EQ": ("ADANIENSOL",),
+    "NSE:AMARAJABAT-EQ": ("ARE&M",),
+    "NSE:GMRINFRA-EQ": ("GMRAIRPORT",),
+    "NSE:KALPATARPOWER-EQ": ("KPIL",),
+    "NSE:ADANIWILMAR-EQ": ("AWL",),
+    "NSE:SUNCLAYLTD-EQ": ("SUNDRMFAST",),
+    "NSE:WELSPUN-EQ": ("WELSPUNLIV",),
+    "NSE:BAJAJ-AUTO-EQ": ("BAJAJ-AUTO",),
+    "NSE:M&M-EQ": ("M&M",),
+    "NSE:M&MFIN-EQ": ("M&MFIN",),
+    # ── 76 Legacy / Informal / Renamed / Merged Tickers in SECTOR_UNIVERSE ──
+    "NSE:ACME-EQ": ("ACMESOLAR",),
+    "NSE:AEGASIND-EQ": ("AEGISLOG",),
+    "NSE:AKZONOBEL-EQ": ("AKZOINDIA", "KANSAINER", "BERGEPAINT"),
+    "NSE:AMBATTUR-EQ": ("PAGEIND",),
+    "NSE:APCOTEX-EQ": ("APCOTEXIND",),
+    "NSE:ASAHI-EQ": ("ASAHIINDIA",),
+    "NSE:AVAADA-EQ": ("TATAPOWER",),
+    "NSE:BAJAJELECTR-EQ": ("BAJAJELEC",),
+    "NSE:BARBEQUE-EQ": ("UFBL", "DEVYANI"),
+    "NSE:BATA-EQ": ("BATAINDIA",),
+    "NSE:BIRLASOFT-EQ": ("BSOFT",),
+    "NSE:CAMLIN-EQ": ("CAMLINFINE", "KOKUYOCMLN"),
+    "NSE:DAAWAT-EQ": ("LTFOODS",),
+    "NSE:DALMIACEM-EQ": ("DALBHARAT",),
+    "NSE:DATAPATTERNSIND-EQ": ("DATAPATTNS",),
+    "NSE:DECCAN-EQ": ("DECCANCE",),
+    "NSE:DHARAMDAS-EQ": ("DCMSHRIRAM",),
+    "NSE:FIEM-EQ": ("FIEMIND",),
+    "NSE:FINOLEX-EQ": ("FINCABLES", "FINPIPE"),
+    "NSE:GMDC-EQ": ("GMDCLTD",),
+    "NSE:GUJGASLTD-EQ": ("GUJGASLTD", "GSPL", "IGL"),
+    "NSE:HBLPOWER-EQ": ("HBLENGINE",),
+    "NSE:HEXAWARE-EQ": ("HEXT", "COFORGE"),
+    "NSE:HINDMOTORS-EQ": ("HINDMOTORS", "FORCEMOT"),
+    "NSE:HOMEFIRSTFIN-EQ": ("HOMEFIRST",),
+    "NSE:HPCL-EQ": ("HINDPETRO",),
+    "NSE:INDIABULLS-EQ": ("SAMMAANCAP", "EMBDL"),
+    "NSE:INFOEDGE-EQ": ("NAUKRI",),
+    "NSE:INTERGLOBE-EQ": ("INDIGO",),
+    "NSE:ISEC-EQ": ("ICICIBANK",),
+    "NSE:JAMNA-EQ": ("JAMNAAUTO",),
+    "NSE:JSPL-EQ": ("JINDALSTEL",),
+    "NSE:KEYSTONE-EQ": ("RUSTOMJEE",),
+    "NSE:KTIL-EQ": ("KPRMILL",),
+    "NSE:LAURUS-EQ": ("LAURUSLABS",),
+    "NSE:LTIM-EQ": ("LTM", "LTIM", "LTTS"),
+    "NSE:MAFATLAL-EQ": ("ARVIND",),
+    "NSE:MAS-EQ": ("MASFIN",),
+    "NSE:MINDA-EQ": ("UNOMINDA",),
+    "NSE:MINDAIND-EQ": ("MINDACORP", "UNOMINDA"),
+    "NSE:MTAR-EQ": ("MTARTECH",),
+    "NSE:NATESTEELS-EQ": ("TATASTEEL",),
+    "NSE:NBLGIL-EQ": ("NBCC",),
+    "NSE:NITIN-EQ": ("NITINSPIN",),
+    "NSE:PANACEA-EQ": ("PANACEABIO",),
+    "NSE:PONDY-EQ": ("POCL",),
+    "NSE:PRSMJOHNS-EQ": ("PRSMJOHNSN",),
+    "NSE:RATTANINDIA-EQ": ("RTNINDIA", "RTNPOWER"),
+    "NSE:REC-EQ": ("RECLTD",),
+    "NSE:SANGHI-EQ": ("SANGHIIND", "AMBUJACEM"),
+    "NSE:SAPPHIREFDS-EQ": ("SAPPHIRE",),
+    "NSE:SEQUENT-EQ": ("ONESOURCE", "LAURUSLABS"),
+    "NSE:SHFL-EQ": ("SHRIRAMFIN",),
+    "NSE:SHYAMSTL-EQ": ("SHYAMMETL",),
+    "NSE:SMRUTHI-EQ": ("IOLCP",),
+    "NSE:SPANDEXP-EQ": ("SPORTKING", "SPANDANA"),
+    "NSE:SPICEJET-EQ": ("INDIGO",),
+    "NSE:STATIC-EQ": ("BOSCHLTD",),
+    "NSE:STEELHCL-EQ": ("JSWSTEEL",),
+    "NSE:STRIDES-EQ": ("STAR",),
+    "NSE:SUBEX-EQ": ("SUBEXLTD",),
+    "NSE:TASTYBIT-EQ": ("TASTYBITE",),
+    "NSE:TCNS-EQ": ("ABFRL",),
+    "NSE:THANGAMAYIL-EQ": ("THANGAMAYL",),
+    "NSE:TPCL-EQ": ("TPLPLASTEH",),
+    "NSE:TV18BRDCST-EQ": ("NETWORK18",),
+    "NSE:UCALFUEL-EQ": ("UCAL",),
+    "NSE:UJJIVANSF-EQ": ("UJJIVANSFB",),
+    "NSE:VARDHMAN-EQ": ("VTL",),
+    "NSE:VARUN-EQ": ("VBL",),
+    "NSE:VEDANT-EQ": ("MANYAVAR",),
+    "NSE:VIJAYALAB-EQ": ("VIJAYA",),
+    "NSE:VIMTA-EQ": ("VIMTALABS",),
+    "NSE:VRL-EQ": ("VRLLOG",),
+    "NSE:VST-EQ": ("VSTIND",),
+    "NSE:WOCKHARDT-EQ": ("WOCKPHARMA",),
 }
 
 _YF_INDEX_MAP: Dict[str, str] = {
@@ -130,13 +207,44 @@ class DailyHistoryStore:
             finally:
                 conn.close()
 
+    @classmethod
+    def _candidate_alias_bases(cls, fyers_sym: str) -> List[str]:
+        raw_clean = (
+            fyers_sym.replace("NSE:", "")
+            .replace("BSE:", "")
+            .replace("-EQ", "")
+            .replace("-BE", "")
+            .strip()
+        )
+        raw_val = _SYMBOL_ALIASES.get(fyers_sym)
+        ordered: List[str] = []
+        if isinstance(raw_val, (tuple, list)):
+            ordered.extend(str(v).strip() for v in raw_val if v)
+        elif isinstance(raw_val, str) and raw_val.strip():
+            ordered.append(raw_val.strip())
+        if raw_clean and raw_clean not in ordered:
+            ordered.append(raw_clean)
+        deduped: List[str] = []
+        for item in ordered:
+            if item not in deduped:
+                deduped.append(item)
+        return deduped
+
     @staticmethod
     def _to_yf_symbol(fyers_sym: str) -> str:
         if fyers_sym in _YF_INDEX_MAP:
             return _YF_INDEX_MAP[fyers_sym]
         if fyers_sym in _SYMBOL_ALIASES:
-            return f"{_SYMBOL_ALIASES[fyers_sym]}.NS"
-        clean = fyers_sym.replace("NSE:", "").replace("BSE:", "").replace("-EQ", "").strip()
+            val = _SYMBOL_ALIASES[fyers_sym]
+            first = val[0] if isinstance(val, (tuple, list)) else val
+            return f"{first}.NS"
+        clean = (
+            fyers_sym.replace("NSE:", "")
+            .replace("BSE:", "")
+            .replace("-EQ", "")
+            .replace("-BE", "")
+            .strip()
+        )
         return f"{clean}.NS"
 
     @classmethod
@@ -145,10 +253,10 @@ class DailyHistoryStore:
         Fetch corporate-action-adjusted NSE daily history via Yahoo Finance (.NS / ^NSEI).
         Used automatically for 3Y–20Y deep historical backfills and zero-fail Fyers fallback.
         """
-        candidates = [cls._to_yf_symbol(fyers_sym)]
-        raw_clean = fyers_sym.replace("NSE:", "").replace("-EQ", "").strip()
-        if fyers_sym not in _YF_INDEX_MAP and f"{raw_clean}.NS" not in candidates:
-            candidates.append(f"{raw_clean}.NS")
+        if fyers_sym in _YF_INDEX_MAP:
+            candidates = [_YF_INDEX_MAP[fyers_sym]]
+        else:
+            candidates = [f"{cand}.NS" for cand in cls._candidate_alias_bases(fyers_sym)]
 
         end_plus = (end_date + timedelta(days=1)).strftime("%Y-%m-%d")
         start_s = start_date.strftime("%Y-%m-%d")
@@ -394,12 +502,21 @@ class DailyHistoryStore:
         df = fyers_client._fetch_raw_historical_df(fyers_sym, "D", start_dt, end_dt)
         if df is not None and not df.empty:
             return df
-        alias_clean = _SYMBOL_ALIASES.get(fyers_sym)
-        if alias_clean:
-            alt_fyers = f"NSE:{alias_clean}-EQ"
+        if fyers_sym in _YF_INDEX_MAP:
+            return pd.DataFrame()
+        bases = cls._candidate_alias_bases(fyers_sym)
+        for cand in bases:
+            alt_fyers = f"NSE:{cand}-EQ"
+            if alt_fyers == fyers_sym:
+                continue
             df_alt = fyers_client._fetch_raw_historical_df(alt_fyers, "D", start_dt, end_dt)
             if df_alt is not None and not df_alt.empty:
                 return df_alt
+        for cand in bases[:2]:
+            alt_be = f"NSE:{cand}-BE"
+            df_be = fyers_client._fetch_raw_historical_df(alt_be, "D", start_dt, end_dt)
+            if df_be is not None and not df_be.empty:
+                return df_be
         return pd.DataFrame()
 
     @classmethod
@@ -534,6 +651,63 @@ class DailyHistoryStore:
             "min_date": bounds[0] if bounds else None,
             "max_date": bounds[1] if bounds else None,
             "sync_job": dict(cls._sync_status),
+        }
+
+    @classmethod
+    def get_health_report(cls) -> Dict[str, Any]:
+        """Diagnostic health report for local Nifty 500 + Index OHLCV coverage and freshness."""
+        cls._ensure_schema()
+        tracked = cls.get_all_tracked_fyers_symbols()
+        with cls._db_lock:
+            conn = cls._connect()
+            try:
+                rows = conn.execute(
+                    "SELECT fyers_sym, min_dt, max_dt, rows_count, last_synced_at FROM symbol_sync_meta"
+                ).fetchall()
+            finally:
+                conn.close()
+
+        meta_map = {r[0]: (r[1], r[2], r[3], r[4]) for r in rows}
+        missing_symbols = [s for s in tracked if s not in meta_map or (meta_map[s][2] or 0) < 30]
+        now_ist = datetime.now(IST)
+        target_eod_str = cls._latest_closed_trading_date(now_ist).strftime("%Y-%m-%d")
+
+        fresh_eod_symbols = sum(
+            1
+            for s in tracked
+            if s in meta_map
+            and meta_map[s][1]
+            and meta_map[s][1] >= target_eod_str
+            and (meta_map[s][2] or 0) >= 30
+        )
+        present_count = len(tracked) - len(missing_symbols)
+        stale_eod_symbols = max(0, present_count - fresh_eod_symbols)
+        store_status = cls.get_store_status()
+        target_size = max(1, len(tracked))
+        coverage_pct = round(present_count / target_size * 100.0, 2)
+        deep_coverage_pct = round(store_status["deep_10_20y_symbols"] / target_size * 100.0, 2)
+
+        if coverage_pct >= 99.0 and fresh_eod_symbols >= int(len(tracked) * 0.95):
+            status = "HEALTHY"
+        elif coverage_pct >= 99.0:
+            status = "PARTIAL_STALE"
+        else:
+            status = "SYNC_NEEDED"
+
+        return {
+            "status": status,
+            "coverage_pct": coverage_pct,
+            "stored_symbols": present_count,
+            "target_universe_size": len(tracked),
+            "missing_count": len(missing_symbols),
+            "missing_symbols": missing_symbols,
+            "deep_10_20y_symbols": store_status["deep_10_20y_symbols"],
+            "deep_coverage_pct": deep_coverage_pct,
+            "fresh_eod_symbols": fresh_eod_symbols,
+            "stale_eod_symbols": stale_eod_symbols,
+            "target_eod_date": target_eod_str,
+            "alias_mappings_configured": len(_SYMBOL_ALIASES),
+            "store_status": store_status,
         }
 
     @classmethod

@@ -18,16 +18,22 @@ CANDLESTICK PATTERNS (9 types):
 """
 
 import os
+import sys
 import json
 import random
 import logging
+from pathlib import Path
 import numpy as np
 import pandas as pd
 import yfinance as yf
 from scipy.signal import argrelextrema
 from scipy.stats import linregress
 from collections import defaultdict
-from datetime import datetime
+from datetime import date, datetime, timedelta
+
+_BACKEND_ROOT = str(Path(__file__).resolve().parent)
+if _BACKEND_ROOT not in sys.path:
+    sys.path.insert(0, _BACKEND_ROOT)
 
 logging.basicConfig(level=logging.WARNING, format="%(message)s")
 
@@ -83,16 +89,40 @@ def pct_diff(a, b):
     return abs(a - b) / a
 
 def make_label(sym, df, start_idx, end_idx, name, is_bullish, confidence=0.92):
-    """Helper to build a label dict."""
+    """Helper to build a label dict with causal post-pattern outcome verification."""
+    n = len(df)
+    end_close = float(df["Close"].iloc[end_idx]) if 0 <= end_idx < n else 0.0
+    fwd_5d_ret = None
+    fwd_10d_ret = None
+    outcome_verified = False
+    outcome_hit = None
+
+    if end_close > 0 and (end_idx + 5) < n:
+        outcome_verified = True
+        fwd_5_close = float(df["Close"].iloc[end_idx + 5])
+        fwd_5d_ret = round(((fwd_5_close - end_close) / end_close) * 100.0, 2)
+        if (end_idx + 10) < n:
+            fwd_10_close = float(df["Close"].iloc[end_idx + 10])
+            fwd_10d_ret = round(((fwd_10_close - end_close) / end_close) * 100.0, 2)
+
+        if is_bullish is True:
+            outcome_hit = (fwd_5d_ret > 0.5) or (fwd_10d_ret is not None and fwd_10d_ret > 0.5)
+        elif is_bullish is False:
+            outcome_hit = (fwd_5d_ret < -0.5) or (fwd_10d_ret is not None and fwd_10d_ret < -0.5)
+
     return {
-        "symbol":       sym,
-        "pattern_name": name,
-        "window_start": df.index[start_idx].strftime("%Y-%m-%d"),
-        "window_end":   df.index[end_idx].strftime("%Y-%m-%d"),
-        "confidence":   confidence,
-        "is_bullish":   bool(is_bullish) if is_bullish is not None else None,
-        "label_source": "algorithmic",
-        "created_at":   datetime.now().isoformat(),
+        "symbol":               sym,
+        "pattern_name":         name,
+        "window_start":         df.index[start_idx].strftime("%Y-%m-%d"),
+        "window_end":           df.index[end_idx].strftime("%Y-%m-%d"),
+        "confidence":           confidence,
+        "is_bullish":           bool(is_bullish) if is_bullish is not None else None,
+        "forward_5d_return_pct":  fwd_5d_ret,
+        "forward_10d_return_pct": fwd_10d_ret,
+        "outcome_verified":     outcome_verified,
+        "outcome_hit":          outcome_hit,
+        "label_source":         "algorithmic",
+        "created_at":           datetime.now().isoformat(),
     }
 
 
@@ -409,15 +439,33 @@ def detect_macro_patterns(df, sym):
 #  MAIN RUNNER
 # ═══════════════════════════════════════════════════════════════════════════════
 
+def _load_symbol_df(sym, years=20):
+    """Load up to 20Y OHLCV history from local SQLite DailyHistoryStore first, else fallback to yfinance."""
+    clean = sym.replace(".NS", "").replace(".BO", "").replace("NSE:", "").replace("-EQ", "").strip().upper()
+    fyers_sym = sym if sym.startswith(("NSE:", "BSE:")) else f"NSE:{clean}-EQ"
+    end_dt = date.today()
+    start_dt = end_dt - timedelta(days=int(years * 365))
+
+    try:
+        from app.services.daily_history_store import DailyHistoryStore
+        df_local = DailyHistoryStore._read_df(fyers_sym, start_dt, end_dt)
+        if df_local is not None and len(df_local) >= 100:
+            return df_local[["Open", "High", "Low", "Close", "Volume"]].dropna()
+    except Exception:
+        pass
+
+    df = yf.download(sym, period="5y", progress=False)
+    if df is None or df.empty:
+        return pd.DataFrame()
+    if isinstance(df.columns, pd.MultiIndex):
+        df.columns = df.columns.droplevel(1)
+    return df[['Open', 'High', 'Low', 'Close', 'Volume']].dropna()
+
+
 def process_symbol(sym):
     try:
-        df = yf.download(sym, period="5y", progress=False)
-        if df is None or df.empty:
-            return []
-        if isinstance(df.columns, pd.MultiIndex):
-            df.columns = df.columns.droplevel(1)
-        df = df[['Open','High','Low','Close','Volume']].dropna()
-        if len(df) < 100:
+        df = _load_symbol_df(sym)
+        if df is None or df.empty or len(df) < 100:
             return []
 
         result  = detect_candlestick_patterns(df, sym)
