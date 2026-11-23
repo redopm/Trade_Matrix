@@ -79,7 +79,8 @@ _SYMBOL_ALIASES: Dict[str, Any] = {
     "NSE:FIEM-EQ": ("FIEMIND",),
     "NSE:FINOLEX-EQ": ("FINCABLES", "FINPIPE"),
     "NSE:GMDC-EQ": ("GMDCLTD",),
-    "NSE:GUJGASLTD-EQ": ("GUJGASLTD", "GSPL", "IGL"),
+    "NSE:GSPL-EQ": ("GSPLEQ", "GSPLTRANS", "IGL"),
+    "NSE:GUJGASLTD-EQ": ("GSPLEQ", "GSPLTRANS", "IGL"),
     "NSE:HBLPOWER-EQ": ("HBLENGINE",),
     "NSE:HEXAWARE-EQ": ("HEXT", "COFORGE"),
     "NSE:HINDMOTORS-EQ": ("HINDMOTORS", "FORCEMOT"),
@@ -90,6 +91,7 @@ _SYMBOL_ALIASES: Dict[str, Any] = {
     "NSE:INTERGLOBE-EQ": ("INDIGO",),
     "NSE:ISEC-EQ": ("ICICIBANK",),
     "NSE:JAMNA-EQ": ("JAMNAAUTO",),
+    "NSE:JBCHEPHARM-EQ": ("TORNTPHARM",),
     "NSE:JSPL-EQ": ("JINDALSTEL",),
     "NSE:KEYSTONE-EQ": ("RUSTOMJEE",),
     "NSE:KTIL-EQ": ("KPRMILL",),
@@ -260,6 +262,8 @@ class DailyHistoryStore:
 
         end_plus = (end_date + timedelta(days=1)).strftime("%Y-%m-%d")
         start_s = start_date.strftime("%Y-%m-%d")
+        min_accept = 10 if (end_date - start_date).days >= 60 else 1
+        best_df = pd.DataFrame()
 
         for yf_sym in candidates:
             try:
@@ -292,10 +296,13 @@ class DailyHistoryStore:
                     df.index.name = "datetime"
                     df = df.sort_index()
                     df = df[~df.index.duplicated(keep="last")]
-                    return df
+                    if len(df) >= min_accept:
+                        return df
+                    if len(df) > len(best_df):
+                        best_df = df
             except Exception as e:
                 logger.debug(f"YF fallback failed for {yf_sym}: {e}")
-        return pd.DataFrame()
+        return best_df
 
     @staticmethod
     def _latest_closed_trading_date(now_ist: Optional[datetime] = None) -> date:
@@ -499,11 +506,15 @@ class DailyHistoryStore:
 
     @classmethod
     def _fetch_fyers_with_alias(cls, fyers_client: Any, fyers_sym: str, start_dt: date, end_dt: date) -> pd.DataFrame:
+        min_accept = 10 if (end_dt - start_dt).days >= 60 else 1
+        best_df = pd.DataFrame()
         df = fyers_client._fetch_raw_historical_df(fyers_sym, "D", start_dt, end_dt)
         if df is not None and not df.empty:
-            return df
+            if len(df) >= min_accept:
+                return df
+            best_df = df
         if fyers_sym in _YF_INDEX_MAP:
-            return pd.DataFrame()
+            return best_df
         bases = cls._candidate_alias_bases(fyers_sym)
         for cand in bases:
             alt_fyers = f"NSE:{cand}-EQ"
@@ -511,13 +522,19 @@ class DailyHistoryStore:
                 continue
             df_alt = fyers_client._fetch_raw_historical_df(alt_fyers, "D", start_dt, end_dt)
             if df_alt is not None and not df_alt.empty:
-                return df_alt
+                if len(df_alt) >= min_accept:
+                    return df_alt
+                if len(df_alt) > len(best_df):
+                    best_df = df_alt
         for cand in bases[:2]:
             alt_be = f"NSE:{cand}-BE"
             df_be = fyers_client._fetch_raw_historical_df(alt_be, "D", start_dt, end_dt)
             if df_be is not None and not df_be.empty:
-                return df_be
-        return pd.DataFrame()
+                if len(df_be) >= min_accept:
+                    return df_be
+                if len(df_be) > len(best_df):
+                    best_df = df_be
+        return best_df
 
     @classmethod
     def get_or_sync_daily_df(
@@ -603,12 +620,16 @@ class DailyHistoryStore:
                 cls._touch_meta_synced_at(fyers_sym)
         else:
             seed_start = min(start_date, two_yr_start)
-            full_df = cls._fetch_fyers_with_alias(fyers_client, fyers_sym, seed_start, max(end_date, today_dt))
-            if full_df.empty:
+            seed_end = max(end_date, today_dt)
+            full_df = cls._fetch_fyers_with_alias(fyers_client, fyers_sym, seed_start, seed_end)
+            if len(full_df) < 10 and (seed_end - seed_start).days >= 60:
                 # Zero-fail fallback: fetch official .NS daily history directly
-                full_df = cls._fetch_yf_nse_daily_df(fyers_sym, seed_start, max(end_date, today_dt))
+                yf_df = cls._fetch_yf_nse_daily_df(fyers_sym, seed_start, seed_end)
+                if len(yf_df) > len(full_df):
+                    full_df = yf_df
             if full_df is not None and not full_df.empty:
-                cls._upsert_df(fyers_sym, full_df, replace_all=force_refresh, ignore_existing=False)
+                stale_stub = meta is not None and (meta[2] or 0) < 10
+                cls._upsert_df(fyers_sym, full_df, replace_all=(force_refresh or stale_stub), ignore_existing=False)
 
         return cls._read_df(fyers_sym, start_date, end_date)
 
