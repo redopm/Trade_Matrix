@@ -122,7 +122,8 @@ To prevent distorted performance metrics from anomalous market ticks, latency, o
   3. **Positional Disaster-Stop & Chandelier Trailing (`paper_trading.py`, `aladdin_brain.py`):** Replaced tight short-term stops on positional equities with `-11.0% to -14.5%` SL clamp (`3.5 * ATR`), `EOD-confirmed` SL check (`>= 15:15 IST`), `-15.0%` catastrophic intraday crash guard, `BE +12.0%`, `Trail +18.0%` (`2.8 * ATR` / `55%` peak lock), and `T1 >= +14%` / `T2 >= +32%`. (F&O Options rules untouched.)
   4. **Causal Walk-Forward Verification (`aladdin_backtest_report.json`):** Zero-lookahead expanding yearly simulation (`2021-01-04 to 2026-11-23`, `₹1,00,000 -> ₹4,67,547.64`, `+367.55%` net return after `0.385%` delivery friction, `30.57%` 1Y CAGR, `2.47` Profit Factor, `60.42%` Win Rate, **6/6 profitable calendar years** `2021–2026`).
   5. **Operational Hardening & Zero Automated Alerts (`alert_manager.py`, `scheduler.py`, `screener.py`, `aladdin.py`, `advanced_dataset_generator.py`, `training/page.tsx`):** Disabled automated Telegram alerts (`AUTOMATED_ALERTS_DISABLED = True`), fixed Docker `/app/models/` report lookup paths in `aladdin.py`, and bounded empirical pattern benchmarks to `<= 80–120` symbols / `5–10Y` with `gc.collect()`.
+  6. **Pre-Dec-1 Production Reliability Audit & 100/100 Universe Lock (`24 Nov 2026` — `3f82ebb`):** Replaced delisted `TATAMOTORS` with `TMPV`, corrected `HAVELLES -> HAVELLS` typo, added `PFC` to achieve exact `100/100` Nifty-100 universe coverage with canonical SQLite alias routing (`TVSMOTOR/AMBUJACEM`), added batched Fyers `/quotes` + `429/1015` retry backoff, guarded cohort/positional trades against premature `RSI >= 70` exits (`CLOSED_RSI`), aligned Runner BE threshold to `+12.0%`, and hardened `AlphaScreener` `.info` fallback.
 - **Authoritative Pre-Dec-1 Primary Series Fingerprint (`ALADDIN_V3_0_INSTITUTIONAL_PRE_DEC1`):**
-  - **Scoring Code Hash:** `42b2e7f`
+  - **Scoring Code Hash:** `3f82ebb`
   - **Scoring Weights SHA256:** `cbf965df`
-  - **Combined Fingerprint:** **`42b2e7f+cbf965df`**
+  - **Combined Fingerprint:** **`3f82ebb+cbf965df`**

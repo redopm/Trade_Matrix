@@ -30,10 +30,10 @@ LOCKED_COMMITS:
   - Base Implementation Commit: a014fdd
   - Protocol v2.1.1 Prior Locked Scoring Code Commit: 50f7c60 (Fingerprint: 50f7c60+34f27003)
   - Protocol v2.1.2 Route A Upgraded Scoring Commit: 45077c2 (DataFetcher 2Y Fyers Update: 1960773+e381b6b4)
-  - Protocol v2.1.2 Pre-Dec-1 V3 Cross-Sectional Upgrade Commit: 42b2e7f
-  - Scoring Code Hash: 42b2e7f
+  - Protocol v2.1.2 Pre-Dec-1 V3 Cross-Sectional Upgrade Commit: 42b2e7f (Hardened 100/100 Universe & Quote Batching: 3f82ebb)
+  - Scoring Code Hash: 3f82ebb
   - Scoring Weights SHA256: cbf965df
-  - Combined Scoring Fingerprint: 42b2e7f+cbf965df
+  - Combined Scoring Fingerprint: 3f82ebb+cbf965df
 
 AUTHORITATIVE SPECIFICATION:
   - docs/forward_testing_protocol_v2_1_1_amendment.md (Authoritative over conflicting text)
