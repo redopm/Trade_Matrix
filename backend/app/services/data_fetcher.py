@@ -74,7 +74,7 @@ SECTOR_UNIVERSE: dict[str, list[str]] = {
         # NBFCs
         "BAJFINANCE.NS", "BAJAJFINSV.NS", "MUTHOOTFIN.NS", "CHOLAFIN.NS",
         "SHRIRAMFIN.NS", "M&MFIN.NS", "MANAPPURAM.NS", "SUNDARMFIN.NS",
-        "BAJAJHLDNG.NS", "LICHSGFIN.NS", "PNBHOUSING.NS",
+        "BAJAJHLDNG.NS", "LICHSGFIN.NS", "PNBHOUSING.NS", "PFC.NS", "RECLTD.NS",
         "AAVAS.NS", "HOMEFIRSTFIN.NS", "CANFINHOME.NS",
         "APTUS.NS", "CREDITACC.NS", "SPANDANA.NS", "SATIN.NS", "UJJIVANSF.NS",
         "MAS.NS", "PAISALO.NS", "INDIGRID.NS",
@@ -122,7 +122,7 @@ SECTOR_UNIVERSE: dict[str, list[str]] = {
     # ── 5. Automobile & Auto Components (~45) ────────────────────────────────
     "Automobile & Auto Components": [
         # OEMs
-        "MARUTI.NS", "M&M.NS", "HEROMOTOCO.NS", "BAJAJ-AUTO.NS",
+        "MARUTI.NS", "M&M.NS", "TMPV.NS", "HEROMOTOCO.NS", "BAJAJ-AUTO.NS",
         "EICHERMOT.NS", "TVSMOTORS.NS", "ASHOKLEY.NS", "ESCORTS.NS", "FORCEMOT.NS",
         "OLECTRA.NS",
         # Tyres
@@ -188,7 +188,7 @@ SECTOR_UNIVERSE: dict[str, list[str]] = {
         "RVNL.NS", "IRCON.NS", "NBCC.NS", "NCC.NS", "PNCINFRA.NS",
         "KNRCON.NS", "ASHOKA.NS", "GMRINFRA.NS",
         "HGINFRA.NS", "JKIL.NS", "AHLUCONT.NS", "GPPL.NS",
-        "IRFC.NS", "PFC.NS", "REC.NS",
+        "IRFC.NS", "REC.NS",
         # Real Estate
         "DLF.NS", "GODREJPROP.NS", "PRESTIGE.NS", "OBEROIRLTY.NS", "PHOENIXLTD.NS",
         "SOBHA.NS", "BRIGADE.NS", "MAHLIFE.NS", "SUNTECK.NS", "KOLTEPATIL.NS",
@@ -257,7 +257,7 @@ SECTOR_UNIVERSE: dict[str, list[str]] = {
 
     # ── 13. Cement & Construction Materials (~15) ─────────────────────────────
     "Cement & Construction Materials": [
-        "ULTRACEMCO.NS", "SHREECEM.NS", "AMBUJACEMENT.NS", "RAMCOCEM.NS",
+        "ULTRACEMCO.NS", "SHREECEM.NS", "AMBUJACEMENT.NS", "ACC.NS", "RAMCOCEM.NS",
         "DALMIACEM.NS", "JKCEMENT.NS", "JKLAKSHMI.NS", "BIRLACORPN.NS",
         "NCLIND.NS", "HEIDELBERG.NS", "DECCAN.NS", "PRSMJOHNS.NS",
         "SANGHI.NS", "SAGCEM.NS",
@@ -626,6 +626,63 @@ class DataFetcher:
             except Exception as e:
                 logger.warning(f"Failed to fetch price for {symbol}: {e}")
                 return None
+
+    async def fetch_batch_quotes_ohlc(self, symbols: list[str]) -> dict[str, dict[str, float]]:
+        """
+        Batch-fetch intraday OHLC quotes for up to 50 equity symbols per Fyers API call,
+        preventing HTTP 429 / code 1015 rate-limit bursts during 5-minute paper trade updates.
+        Falls back per-symbol to fetch_quote_ohlc for any missing ticker.
+        """
+        out: dict[str, dict[str, float]] = {}
+        if not symbols:
+            return out
+
+        clean_to_orig: dict[str, list[str]] = {}
+        fyers_syms: list[str] = []
+        for orig in symbols:
+            c = orig.replace(".NS", "").replace(".BO", "").replace("NSE:", "").replace("BSE:", "").replace("-EQ", "").strip().upper()
+            if not c:
+                continue
+            clean_to_orig.setdefault(c, []).append(orig)
+            fs = f"NSE:{c}-EQ"
+            if fs not in fyers_syms:
+                fyers_syms.append(fs)
+
+        fyers = _get_fyers_client()
+        if fyers is not None and fyers_syms:
+            for idx in range(0, len(fyers_syms), 45):
+                chunk = fyers_syms[idx:idx + 45]
+                try:
+                    quotes = await asyncio.get_event_loop().run_in_executor(
+                        None, fyers.fetch_quotes, chunk
+                    )
+                    if quotes and quotes.get("s") == "ok" and quotes.get("d"):
+                        for item in quotes["d"]:
+                            n = str(item.get("n") or "")
+                            c_key = n.replace("NSE:", "").replace("BSE:", "").replace("-EQ", "").strip().upper()
+                            v = item.get("v") or {}
+                            lp = float(v.get("lp") or 0)
+                            if lp > 0 and c_key in clean_to_orig:
+                                high_p = float(v.get("high_price") or v.get("h") or lp)
+                                low_p = float(v.get("low_price") or v.get("l") or lp)
+                                open_p = float(v.get("open_price") or v.get("o") or lp)
+                                payload = {
+                                    "lp": lp,
+                                    "high": high_p if high_p > 0 else lp,
+                                    "low": low_p if low_p > 0 else lp,
+                                    "open": open_p if open_p > 0 else lp,
+                                }
+                                for orig_sym in clean_to_orig[c_key]:
+                                    out[orig_sym] = payload
+                except Exception as e:
+                    logger.debug(f"Batch Fyers OHLC quote chunk failed: {e}")
+
+        for orig in symbols:
+            if orig not in out:
+                q_single = await self.fetch_quote_ohlc(orig)
+                if q_single:
+                    out[orig] = q_single
+        return out
 
     async def fetch_quote_ohlc(self, symbol: str) -> Optional[dict[str, float]]:
         """Fetch latest price along with intraday Open/High/Low for accurate SL/Target evaluation."""

@@ -20,6 +20,8 @@ logger = get_logger(__name__)
 
 class FyersDataClient:
     _login_lock = threading.Lock()
+    _quotes_lock = threading.Lock()
+    _last_quote_ts: float = 0.0
     _shared_fyers: Optional[fyersModel.FyersModel] = None
     _shared_user_name: Optional[str] = None
     _shared_token_date: Optional[date] = None
@@ -378,16 +380,58 @@ class FyersDataClient:
 
         return self._fetch_raw_historical_df(fyers_sym, resolution, start_date, end_date)
 
+    _QUOTE_SYM_REWRITES = {
+        "NSE:TATAMOTORS-EQ": "NSE:TMPV-EQ",
+        "NSE:TVSMOTORS-EQ": "NSE:TVSMOTOR-EQ",
+        "NSE:AMBUJACEMENT-EQ": "NSE:AMBUJACEM-EQ",
+        "NSE:HAVELLES-EQ": "NSE:HAVELLS-EQ",
+    }
+
     def fetch_quotes(self, symbols: list) -> dict:
-        """Fetch live quotes for up to 50 symbols from Fyers."""
+        """Fetch live quotes for up to 50 symbols from Fyers with rate-limit pacing and 429/1015 retry."""
+        if not symbols:
+            return {}
         if not self.fyers:
             if not self.connect():
                 return {}
-        try:
-            return self.fyers.quotes(data={"symbols": ",".join(symbols)})
-        except Exception as e:
-            logger.error(f"Error fetching Fyers quotes: {e}")
-            return {}
+
+        req_syms = [self._QUOTE_SYM_REWRITES.get(s, s) for s in symbols]
+        rev_map = {
+            self._QUOTE_SYM_REWRITES[s]: s
+            for s in symbols
+            if s in self._QUOTE_SYM_REWRITES and self._QUOTE_SYM_REWRITES[s] not in symbols
+        }
+
+        for attempt in range(3):
+            try:
+                with FyersDataClient._quotes_lock:
+                    elapsed = time.time() - FyersDataClient._last_quote_ts
+                    if elapsed < 0.22:
+                        time.sleep(0.22 - elapsed)
+                    res = self.fyers.quotes(data={"symbols": ",".join(req_syms)})
+                    FyersDataClient._last_quote_ts = time.time()
+
+                if isinstance(res, dict) and res.get("s") == "ok":
+                    if rev_map and res.get("d"):
+                        for item in res["d"]:
+                            n = item.get("n")
+                            if n in rev_map:
+                                item["n"] = rev_map[n]
+                    return res
+
+                code = res.get("code") if isinstance(res, dict) else None
+                msg = str(res).lower()
+                if (code in (429, 1015, -429) or "too many requests" in msg or "limit" in msg) and attempt < 2:
+                    time.sleep(0.75 * (attempt + 1))
+                    continue
+                return res if isinstance(res, dict) else {}
+            except Exception as e:
+                if attempt < 2 and ("429" in str(e) or "1015" in str(e)):
+                    time.sleep(0.75 * (attempt + 1))
+                    continue
+                logger.error(f"Error fetching Fyers quotes: {e}")
+                return {}
+        return {}
 
     def fetch_option_chain(self, symbol: str, strikecount: int = 18, timestamp: str = "") -> dict:
         """

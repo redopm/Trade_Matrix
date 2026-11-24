@@ -253,12 +253,12 @@ class PaperTradingEngine:
         )
         return trade
 
+    _daily_rsi_cache: dict[tuple[str, str], Optional[float]] = {}
+
     async def update_open_trades(self, db: AsyncSession) -> dict[str, Any]:
         """
         Update all open trades with current prices and check exit conditions.
-        Called daily at market open (or on-demand).
-        
-        Returns summary of updates performed.
+        Batches equity quotes into a single Fyers call to eliminate 429 rate limits.
         """
         stmt = select(PaperTrade).where(PaperTrade.status == TradeStatus.OPEN)
         result = await db.execute(stmt)
@@ -272,9 +272,14 @@ class PaperTradingEngine:
             "errors": 0,
         }
 
+        eq_syms = list({t.symbol for t in open_trades if not self._is_fno_trade(t)})
+        prefetched_quotes = await self.fetcher.fetch_batch_quotes_ohlc(eq_syms) if eq_syms else {}
+
         for trade in open_trades:
             try:
-                await self._update_single_trade(db, trade, summary)
+                await self._update_single_trade(
+                    db, trade, summary, prefetched_quote=prefetched_quotes.get(trade.symbol)
+                )
             except Exception as e:
                 logger.error(f"Failed to update trade {trade.id} ({trade.symbol}): {e}")
                 summary["errors"] += 1
@@ -288,16 +293,17 @@ class PaperTradingEngine:
         db: AsyncSession,
         trade: PaperTrade,
         summary: dict,
+        prefetched_quote: Optional[dict[str, float]] = None,
     ) -> None:
         """Update a single trade with current market data and check exits."""
         symbol = trade.symbol
         is_fno = self._is_fno_trade(trade)
 
-        # Fetch current OHLC quote (F&O direct Fyers contract vs Equity fetcher)
+        # Fetch current OHLC quote (F&O direct Fyers contract vs batched/single Equity fetcher)
         if is_fno:
             quote_ohlc = await self._fetch_fno_quote_ohlc(symbol)
         else:
-            quote_ohlc = await self.fetcher.fetch_quote_ohlc(symbol)
+            quote_ohlc = prefetched_quote or await self.fetcher.fetch_quote_ohlc(symbol)
         current_price = quote_ohlc["lp"] if quote_ohlc else None
         if current_price is None or current_price <= 0:
             logger.warning(f"Could not fetch price for {symbol}")
@@ -454,25 +460,39 @@ class PaperTradingEngine:
             logger.info(f"TARGET HIT: {symbol} filled @ limit ₹{fill_price:.2f} (day high: ₹{day_high:.2f}, tick: ₹{current_price:.2f})")
             return
 
-        # ── Exit Condition 3: RSI Extremes (Equities only) ──────────────────
-        # Only fetch 3-month OHLCV if current_rsi is missing, avoiding heavy network latency on every 10s tick
+        # ── Exit Condition 3: RSI Extremes (Legacy Screener Dip Trades Only) ──
+        # Refresh daily RSI once per day from local 1y SQLite history (200+ bars required by TechnicalAnalyzer).
+        # Forward Cohort & Aladdin V3 positional momentum trades NEVER exit on RSI >= 70 so leaders ride to Target/Trail.
         if is_fno:
             summary["updated"] += 1
             return
 
-        if trade.current_rsi is None:
+        today_key = (symbol, date.today().strftime("%Y-%m-%d"))
+        if today_key in PaperTradingEngine._daily_rsi_cache:
+            cached_rsi = PaperTradingEngine._daily_rsi_cache[today_key]
+            if cached_rsi is not None:
+                trade.current_rsi = cached_rsi
+        else:
             try:
-                df = await self.fetcher.fetch_price_history(symbol, period="3mo")
-                if df is not None and not df.empty:
+                df = await self.fetcher.fetch_price_history(symbol, period="1y")
+                if df is not None and len(df) >= 200:
                     tech = self.technical.analyze(symbol, df)
-                    trade.current_rsi = tech.get("rsi")
+                    rsi_val = tech.get("rsi")
+                    PaperTradingEngine._daily_rsi_cache[today_key] = rsi_val
+                    if rsi_val is not None:
+                        trade.current_rsi = rsi_val
+                else:
+                    PaperTradingEngine._daily_rsi_cache[today_key] = trade.current_rsi
             except Exception:
                 pass
 
-        if trade.current_rsi:
+        notes_str = trade.notes or ""
+        is_positional_cohort = bool(trade.batch_id) or ("Aladdin" in notes_str) or ("Protocol" in notes_str)
+
+        if trade.current_rsi and not is_positional_cohort:
             rsi_exit = False
             rsi_reason = ""
-            
+
             if trade.direction == "LONG" and trade.current_rsi >= self.cfg.TARGET_RSI_OVERBOUGHT:
                 rsi_exit = True
                 rsi_reason = f"RSI overbought ({trade.current_rsi:.1f} > {self.cfg.TARGET_RSI_OVERBOUGHT})"

@@ -47,10 +47,14 @@ CORE_INDEX_SYMBOLS: List[str] = [
 # Handle common NSE ticker renames / Fyers vs Yahoo Finance symbol differences
 _SYMBOL_ALIASES: Dict[str, Any] = {
     "NSE:ZOMATO-EQ": ("ETERNAL", "ZOMATO"),
-    "NSE:TATAMOTORS-EQ": ("TATAMOTORS",),
+    "NSE:TATAMOTORS-EQ": ("TMPV", "TATAMOTORS"),
+    "NSE:TMPV-EQ": ("TMPV",),
     "NSE:MCDOWELL-N-EQ": ("UNITDSPR",),
     "NSE:AMBUJACEMENT-EQ": ("AMBUJACEM",),
+    "NSE:AMBUJACEM-EQ": ("AMBUJACEM", "AMBUJACEMENT"),
     "NSE:TVSMOTORS-EQ": ("TVSMOTOR",),
+    "NSE:TVSMOTOR-EQ": ("TVSMOTOR", "TVSMOTORS"),
+    "NSE:HAVELLES-EQ": ("HAVELLS",),
     "NSE:ADANITRANS-EQ": ("ADANIENSOL",),
     "NSE:AMARAJABAT-EQ": ("ARE&M",),
     "NSE:GMRINFRA-EQ": ("GMRAIRPORT",),
@@ -368,9 +372,44 @@ class DailyHistoryStore:
                 return True
         return False
 
+    # Canonical DB key redirects for legacy/synonym symbols already stored in SQLite
+    _CANONICAL_DB_REDIRECTS: Dict[str, str] = {
+        "NSE:TATAMOTORS-EQ": "NSE:TMPV-EQ",
+        "NSE:HAVELLES-EQ": "NSE:HAVELLS-EQ",
+        "NSE:TVSMOTOR-EQ": "NSE:TVSMOTORS-EQ",
+        "NSE:AMBUJACEM-EQ": "NSE:AMBUJACEMENT-EQ",
+    }
+
+    @classmethod
+    def _resolve_stored_fyers_sym(cls, fyers_sym: str) -> str:
+        """Redirect synonym/demerged NSE keys to their canonical SQLite key if present."""
+        if fyers_sym in ("NSE:TATAMOTORS-EQ", "NSE:HAVELLES-EQ"):
+            return cls._CANONICAL_DB_REDIRECTS[fyers_sym]
+        alt = cls._CANONICAL_DB_REDIRECTS.get(fyers_sym)
+        if not alt:
+            return fyers_sym
+        cls._ensure_schema()
+        with cls._db_lock:
+            conn = cls._connect()
+            try:
+                direct = conn.execute(
+                    "SELECT rows_count FROM symbol_sync_meta WHERE fyers_sym = ?", (fyers_sym,)
+                ).fetchone()
+                if direct and (direct[0] or 0) >= 200:
+                    return fyers_sym
+                mapped = conn.execute(
+                    "SELECT rows_count FROM symbol_sync_meta WHERE fyers_sym = ?", (alt,)
+                ).fetchone()
+                if mapped and (mapped[0] or 0) >= 30:
+                    return alt
+            finally:
+                conn.close()
+        return fyers_sym
+
     @classmethod
     def _read_df(cls, fyers_sym: str, start_date: date, end_date: date) -> pd.DataFrame:
         cls._ensure_schema()
+        fyers_sym = cls._resolve_stored_fyers_sym(fyers_sym)
         start_s = start_date.strftime("%Y-%m-%d")
         end_s = end_date.strftime("%Y-%m-%d")
         with cls._db_lock:
@@ -554,6 +593,7 @@ class DailyHistoryStore:
         or fetches deep >2Y history smoothly via adjusted .NS NSE history.
         """
         cls._ensure_schema()
+        fyers_sym = cls._resolve_stored_fyers_sym(fyers_sym)
         now_ist = datetime.now(IST)
         target_eod = cls._latest_closed_trading_date(now_ist)
         meta, stored_max_close, stored_min_close = cls._get_meta_and_overlap_close(fyers_sym)
@@ -638,14 +678,18 @@ class DailyHistoryStore:
 
     @classmethod
     def get_all_tracked_fyers_symbols(cls) -> List[str]:
-        """Return 4 core NSE Index symbols + full Nifty 500 equity symbols in Fyers format."""
+        """Return 4 core NSE Index symbols + full Nifty 500 + Nifty 100 eligible symbols in Fyers format."""
         from app.services.data_fetcher import NIFTY500_SYMBOLS
+        try:
+            from app.services.forward_test import NIFTY100_ELIGIBLE_UNIVERSE
+        except Exception:
+            NIFTY100_ELIGIBLE_UNIVERSE = []
 
         out: List[str] = list(CORE_INDEX_SYMBOLS)
         seen = set(out)
-        for s in NIFTY500_SYMBOLS:
+        for s in list(NIFTY500_SYMBOLS) + list(NIFTY100_ELIGIBLE_UNIVERSE):
             clean = s.replace(".NS", "").replace(".BO", "").replace("NSE:", "").replace("-EQ", "").strip().upper()
-            fsym = f"NSE:{clean}-EQ"
+            fsym = cls._resolve_stored_fyers_sym(f"NSE:{clean}-EQ")
             if fsym not in seen:
                 seen.add(fsym)
                 out.append(fsym)

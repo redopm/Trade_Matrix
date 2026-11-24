@@ -47,7 +47,7 @@ class FundamentalAnalyzer:
         if not info:
             return self._empty_result(symbol)
 
-        sector = info.get("sector", "") or ""
+        sector = info.get("sector") or self._infer_nse_sector(symbol) or ""
         is_banking = self._is_banking(sector)
         is_capital_intensive = self._is_capital_intensive(sector)
 
@@ -490,8 +490,18 @@ class FundamentalAnalyzer:
         try:
             from app.services.data_fetcher import SECTOR_UNIVERSE
             clean = symbol.upper().replace(".NS", "").replace(".BO", "").replace("NSE:", "").replace("-EQ", "").strip()
+            alias_map = {
+                "TVSMOTOR": "TVSMOTORS",
+                "AMBUJACEM": "AMBUJACEMENT",
+                "TATAMOTORS": "TMPV",
+                "HAVELLES": "HAVELLS",
+                "ETERNAL": "ZOMATO",
+                "UNITDSPR": "MCDOWELL-N",
+                "JINDALSTEL": "JSPL",
+            }
+            targets = {clean, alias_map.get(clean, clean)}
             for sec, syms in SECTOR_UNIVERSE.items():
-                if any(s.replace(".NS", "").upper() == clean for s in syms):
+                if any(s.replace(".NS", "").upper() in targets for s in syms):
                     return sec
         except Exception:
             pass

@@ -215,12 +215,12 @@ class AlphaScreener:
         history_task = self.fetcher.fetch_price_history(symbol)
         info, df = await asyncio.gather(info_task, history_task)
 
-        if info is None or df is None or df.empty:
-            logger.debug(f"[{run_id}] {symbol}: No data")
+        if df is None or df.empty:
+            logger.debug(f"[{run_id}] {symbol}: No OHLCV data")
             return None
 
-        # ── Step 2: Fundamental Analysis ──────────────────────────────────────
-        fund = self.fundamental.analyze(symbol, info)
+        # ── Step 2: Fundamental Analysis (resilient when .info times out) ─────
+        fund = self.fundamental.analyze(symbol, info or {})
 
         # ── Step 3: Technical Analysis ────────────────────────────────────────
         tech = self.technical.analyze(symbol, df)
@@ -271,16 +271,31 @@ class AlphaScreener:
                 "is_bullish": is_bullish,
             }
             
-            # The signal officially passes if the AI finds a pattern with high confidence
+            # The signal officially passes if the AI finds a pattern with high confidence,
+            # OR if it qualifies as a high-conviction Stage-2 Institutional Pullback.
             min_conf = self.cfg.MIN_PATTERN_CONFIDENCE
             if market_regime == "SIDEWAYS":
-                min_conf = min_conf + 0.15 # Stricter in sideways
-                
+                min_conf = min_conf + 0.05  # Calibrated for 46-class softmax
+
             if pattern_name != "no_pattern" and confidence >= min_conf:
                 if direction == "LONG" and is_bullish is True:
                     passed_all = True
                 elif direction == "SHORT" and is_bullish is False:
                     passed_all = True
+            elif (
+                direction == "LONG"
+                and fund.get("passed_roce", False)
+                and fund.get("passed_debt_to_equity", False)
+                and 30.0 <= float(tech.get("rsi") or 50.0) <= 46.0
+                and float(tech.get("mom_ex_1m") or 0.0) >= 15.0
+            ):
+                passed_all = True
+                pattern_data = {
+                    "pattern_name": "stage2_institutional_pullback",
+                    "pattern_confidence": 0.62,
+                    "chart_image_path": pattern_result.get("chart_path"),
+                    "is_bullish": True,
+                }
 
         signal = {
             "symbol": symbol,

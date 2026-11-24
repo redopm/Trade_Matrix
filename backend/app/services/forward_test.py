@@ -56,22 +56,22 @@ SCORING_WEIGHTS_FILES: List[str] = [
     "backend/models/expert_model_weights.pth",
 ]
 
-# Pre-registered Nifty 100 Eligible Universe (Top liquid, high-turnover blue chips)
+# Pre-registered Nifty 100 Eligible Universe (100 liquid, high-turnover NSE blue chips)
 NIFTY100_ELIGIBLE_UNIVERSE: List[str] = [
     "RELIANCE", "TCS", "HDFCBANK", "ICICIBANK", "BHARTIARTL", "INFY", "ITC", "SBIN",
     "LT", "HINDUNILVR", "BAJFINANCE", "M&M", "HCLTECH", "KOTAKBANK", "SUNPHARMA",
     "MARUTI", "AXISBANK", "TITAN", "ULTRACEMCO", "NTPC", "POWERGRID", "ONGC",
-    "TATAMOTORS", "ADANIENT", "TATASTEEL", "COALINDIA", "BAJAJFINSV", "JSWSTEEL",
+    "TMPV", "ADANIENT", "TATASTEEL", "COALINDIA", "BAJAJFINSV", "JSWSTEEL",
     "ASIANPAINT", "GRASIM", "TECHM", "LTIM", "ADANIPORTS", "WIPRO", "HINDALCO",
     "NESTLEIND", "BPCL", "HEROMOTOCO", "INDUSINDBK", "CIPLA", "APOLLOHOSP", "DIVISLAB",
     "EICHERMOT", "BRITANNIA", "TATACONSUM", "DRREDDY", "SHRIRAMFIN", "SBILIFE", "HDFCLIFE",
     "BEL", "HAL", "PERSISTENT", "TRENT", "DIXON", "KAYNES", "BSE", "MCX",
     "FEDERALBNK", "POLYCAB", "CUMMINSIND", "SIEMENS", "ABB", "VOLTAS", "CHOLAFIN",
     "MUTHOOTFIN", "TVSMOTOR", "BAJAJ-AUTO", "AMBUJACEM", "ACC", "DLF", "LODHA",
-    "GODREJCP", "DABUR", "MARICO", "COLPAL", "PIDILITIND", "BERGEPAINT", "HAVELLES",
+    "GODREJCP", "DABUR", "MARICO", "COLPAL", "PIDILITIND", "BERGEPAINT", "HAVELLS",
     "ASTRAL", "SUPREMEIND", "TORNTPHARM", "MANAPPURAM", "CANBK", "PNB", "BANKBARODA",
     "IDFCFIRSTB", "AUBANK", "MAXHEALTH", "LUPIN", "ALKEM", "AUROPHARMA", "ZYDUSLIFE",
-    "PIIND", "UPL", "COROMANDEL", "SRF", "DEEPAKNTR", "NAVINFLUOR", "PAGEIND"
+    "PIIND", "UPL", "COROMANDEL", "SRF", "DEEPAKNTR", "NAVINFLUOR", "PAGEIND", "PFC"
 ]
 
 
@@ -306,6 +306,7 @@ class ForwardTestEngine:
         for sym in NIFTY100_ELIGIBLE_UNIVERSE:
             try:
                 diag = await brain.diagnose_stock(sym, force_refresh=True, as_of_date=as_of_date)
+                await asyncio.sleep(0.12)
                 if not diag.get("error") and diag.get("current_price"):
                     pillars = diag.get("pillars") or {}
                     p1 = pillars.get("pillar_1_geometry") or {}
@@ -398,7 +399,7 @@ class ForwardTestEngine:
                 new_target = float(stock.get("target_2") or stock["target_price"])
                 if new_target > (existing_t.target_price or 0.0):
                     existing_t.target_price = round(new_target, 2)
-                if (existing_t.unrealized_pnl_pct or 0.0) >= 2.0 and (existing_t.stop_loss or 0.0) < existing_t.entry_price:
+                if (existing_t.unrealized_pnl_pct or 0.0) >= 12.0 and (existing_t.stop_loss or 0.0) < existing_t.entry_price:
                     existing_t.stop_loss = round(existing_t.entry_price * 1.005, 2)
                 runner_note = f"[Runner Rule {batch_id}: Re-ranked #{rank}, Target stretched & SL protected]"
                 if runner_note not in (existing_t.notes or ""):
